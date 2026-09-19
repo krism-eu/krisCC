@@ -100,6 +100,8 @@ require('args.size() == 2 && args.at(0) == QStringLiteral("-n")' in polkit_cpp,
         "UEFI BootNext invocation is not exact")
 require('args.size() == 1 && isSafeGrubEntry(args.at(0))' in polkit_cpp,
         "GRUB next-entry invocation is not exact")
+require('args.at(0) == QStringLiteral("forget")' in polkit_cpp,
+        "rk forget is not explicitly allowlisted")
 require('args.at(0) == QStringLiteral("config-manager")' in polkit_cpp,
         "DNF repository mutations are not restricted to config-manager")
 require("isSafeRepositoryId" in polkit_cpp and "isSafeRepositoryUrl" in polkit_cpp,
@@ -123,6 +125,7 @@ expected_actions = {
     "org.kriscc.controlcenter.rk.sync": ("/usr/bin/rk", "sync", "auth_admin"),
     "org.kriscc.controlcenter.rk.add": ("/usr/bin/rk", "add", "auth_admin"),
     "org.kriscc.controlcenter.rk.rm": ("/usr/bin/rk", "rm", "auth_admin"),
+    "org.kriscc.controlcenter.rk.forget": ("/usr/bin/rk", "forget", "auth_admin"),
     "org.kriscc.controlcenter.dnf.config-manager": ("/usr/bin/dnf5", "config-manager", "auth_admin"),
     "org.kriscc.controlcenter.bootc.upgrade": ("/usr/bin/bootc", "upgrade", "auth_admin"),
     "org.kriscc.controlcenter.boot.next-uefi": ("/usr/bin/efibootmgr", "-n", "auth_admin"),

@@ -15,6 +15,7 @@ Kirigami.ScrollablePage {
     property string restorePath: ""
     property string restoreName: ""
     property string restoreKind: ""
+    property bool ownRkAction: false
 
     function humanSize(bytes) {
         if (!bytes || bytes <= 0) return "0 B"
@@ -35,6 +36,17 @@ Kirigami.ScrollablePage {
         function onBackupStatusChanged() {
             if (!SystemBackend.backupBusy)
                 root.refreshBackups()
+        }
+    }
+
+    Connections {
+        target: PolkitHelper
+        function onFinished(success, output) {
+            if (!root.ownRkAction)
+                return
+            root.ownRkAction = false
+            utilityBackend.runBookmark("rk-status")
+            BootcBackend.refreshPackages()
         }
     }
 
@@ -232,6 +244,36 @@ Kirigami.ScrollablePage {
                         onClicked: syncDialog.open()
                     }
                 }
+                Controls.Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    opacity: 0.72
+                    text: qsTr("Se una richiesta persistente non è più disponibile, puoi dimenticarla senza disinstallare direttamente gli RPM già presenti.")
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    Controls.TextField {
+                        id: forgetPackageField
+                        Layout.fillWidth: true
+                        placeholderText: qsTr("Nome richiesta, es. pacchetto")
+                        validator: RegularExpressionValidator { regularExpression: /^[A-Za-z0-9][A-Za-z0-9._+:-]{0,127}$/ }
+                        onAccepted: {
+                            if (acceptableInput && !PolkitHelper.running) {
+                                forgetDialog.packageName = text.trim()
+                                forgetDialog.open()
+                            }
+                        }
+                    }
+                    Controls.Button {
+                        text: qsTr("Dimentica richiesta")
+                        icon.name: "edit-delete"
+                        enabled: forgetPackageField.acceptableInput && !PolkitHelper.running
+                        onClicked: {
+                            forgetDialog.packageName = forgetPackageField.text.trim()
+                            forgetDialog.open()
+                        }
+                    }
+                }
                 Controls.TextArea {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 150
@@ -286,6 +328,28 @@ Kirigami.ScrollablePage {
             wrapMode: Text.WordWrap
             text: qsTr("Esegue rk sync con autorizzazione amministrativa sulle richieste persistenti già salvate.")
         }
-        onAccepted: PolkitHelper.execute("/usr/bin/rk", ["sync"])
+        onAccepted: {
+            root.ownRkAction = true
+            PolkitHelper.execute("/usr/bin/rk", ["sync"])
+        }
+    }
+
+    Controls.Dialog {
+        id: forgetDialog
+        property string packageName: ""
+        modal: true
+        parent: Controls.Overlay.overlay
+        anchors.centerIn: parent
+        title: qsTr("Dimenticare la richiesta %1?").arg(packageName)
+        standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
+        contentItem: Controls.Label {
+            wrapMode: Text.WordWrap
+            text: qsTr("Rimuove solo la richiesta persistente salvata. Non disinstalla direttamente gli RPM già presenti; il layer verrà riallineato con la successiva sincronizzazione.")
+        }
+        onAccepted: {
+            root.ownRkAction = true
+            PolkitHelper.execute("/usr/bin/rk", ["forget", packageName])
+            forgetPackageField.clear()
+        }
     }
 }

@@ -81,7 +81,7 @@ Kirigami.ApplicationWindow {
                                 horizontalAlignment: Text.AlignHCenter
                                 verticalAlignment: Text.AlignVCenter
                                 font: parent.font
-                                color: parent.checked ? Kirigami.Theme.negativeTextColor : Kirigami.Theme.textColor
+                                color: parent.checked ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
                             }
                             background: Item {
                                 Rectangle {
@@ -90,7 +90,7 @@ Kirigami.ApplicationWindow {
                                     anchors.bottom: parent.bottom
                                     height: 2
                                     visible: parent.parent.checked
-                                    color: Kirigami.Theme.negativeTextColor
+                                    color: Kirigami.Theme.highlightColor
                                 }
                             }
                         }
@@ -100,7 +100,7 @@ Kirigami.ApplicationWindow {
 
             Controls.Label {
                 opacity: 0.72
-                text: qsTr("KrisOS · %1").arg(Qt.application.version)
+                text: qsTr("KrisOS Control Center · %1").arg(Qt.application.version)
             }
         }
     }

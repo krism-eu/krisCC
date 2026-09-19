@@ -122,7 +122,7 @@ Kirigami.ScrollablePage {
         Controls.TabBar {
             id: flatpakTabs
             Layout.fillWidth: true
-            palette.highlight: Kirigami.Theme.negativeTextColor
+            palette.highlight: Kirigami.Theme.highlightColor
             currentIndex: 0
             Controls.TabButton {
                 implicitHeight: Kirigami.Units.gridUnit * 2.1

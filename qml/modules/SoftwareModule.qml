@@ -125,7 +125,7 @@ Kirigami.ScrollablePage {
         Controls.TabBar {
             id: tabs
             Layout.fillWidth: true
-            palette.highlight: Kirigami.Theme.negativeTextColor
+            palette.highlight: Kirigami.Theme.highlightColor
             onCurrentIndexChanged: root.refreshCurrent()
             Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: checked; text: qsTr("Cerca") }
             Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: checked; text: qsTr("Installati") }

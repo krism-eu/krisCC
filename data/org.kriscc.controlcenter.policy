@@ -38,6 +38,14 @@
     <annotate key="org.freedesktop.policykit.exec.argv1">rm</annotate>
   </action>
 
+  <action id="org.kriscc.controlcenter.rk.forget">
+    <description>Forget a persistent package request</description>
+    <message>Authentication is required to forget a persistent package request</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/rk</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">forget</annotate>
+  </action>
+
   <action id="org.kriscc.controlcenter.dnf.config-manager">
     <description>Manage DNF repositories</description>
     <message>Authentication is required to manage software repositories</message>

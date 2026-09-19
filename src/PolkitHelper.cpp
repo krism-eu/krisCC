@@ -136,7 +136,9 @@ bool PolkitHelper::isPrivilegedInvocationAllowed(const QString &program, const Q
         if (args == QStringList{QStringLiteral("sync")})
             return true;
         if (args.size() == 2
-            && (args.at(0) == QStringLiteral("add") || args.at(0) == QStringLiteral("rm")))
+            && (args.at(0) == QStringLiteral("add")
+                || args.at(0) == QStringLiteral("rm")
+                || args.at(0) == QStringLiteral("forget")))
             return isValidPackageName(args.at(1));
         return false;
     }

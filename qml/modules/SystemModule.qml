@@ -152,7 +152,7 @@ Kirigami.ScrollablePage {
         Controls.TabBar {
             id: sections
             Layout.fillWidth: true
-            palette.highlight: Kirigami.Theme.negativeTextColor
+            palette.highlight: Kirigami.Theme.highlightColor
             Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: checked; text: qsTr("Aggiornamenti") }
             Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: checked; text: qsTr("Salute") }
             Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: checked; text: qsTr("Avvio e dischi") }
