@@ -193,7 +193,7 @@ Kirigami.ScrollablePage {
                         }
                         OutputCard {
                     embedded: true
-                    text: utilityBackend.output
+                    outputText: utilityBackend.output
                 }
                     }
                 }
@@ -330,7 +330,7 @@ Kirigami.ScrollablePage {
                         }
                         OutputCard {
                     embedded: true
-                    text: CustomActionsBackend.output
+                    outputText: CustomActionsBackend.output
                 }
                     }
                 }

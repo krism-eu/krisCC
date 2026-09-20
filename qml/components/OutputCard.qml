@@ -9,7 +9,7 @@ Kirigami.AbstractCard {
     background: null
     padding: embedded ? 0 : Kirigami.Units.largeSpacing
     property string title: qsTr("Output")
-    property alias text: output.text
+    property alias outputText: output.text
     Layout.fillWidth: true
     contentItem: ColumnLayout {
         spacing: Kirigami.Units.smallSpacing

@@ -270,7 +270,7 @@ Kirigami.ScrollablePage {
                             Controls.Button { icon.name: "media-playback-start"; text: qsTr("Avvia"); enabled: !utilityBackend.busy; onClicked: root.runAction("start", root.containerName(modelData)) }
                             Controls.Button { icon.name: "media-playback-stop"; text: qsTr("Ferma"); enabled: !utilityBackend.busy; onClicked: root.runAction("stop", root.containerName(modelData)) }
                             Controls.Button { icon.name: "view-refresh"; text: qsTr("Riavvia"); enabled: !utilityBackend.busy; onClicked: root.runAction("restart", root.containerName(modelData)) }
-                            Controls.Button { icon.name: "go-next";
+                            Controls.Button { icon.name: "edit-rename";
                                 text: qsTr("Rinomina")
                                 enabled: !utilityBackend.busy
                                 onClicked: {
@@ -356,7 +356,7 @@ Kirigami.ScrollablePage {
                 Controls.Label { font.bold: false; text: utilityBackend.title }
                 OutputCard {
                     embedded: true
-                    text: utilityBackend.output
+                    outputText: utilityBackend.output
                 }
             }
         }

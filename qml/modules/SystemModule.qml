@@ -226,7 +226,7 @@ Kirigami.ScrollablePage {
                             OutputCard {
                     visible: bootTechnicalDetails.checked
                     embedded: true
-                    text: BootcBackend.statusText
+                    outputText: BootcBackend.statusText
                 }
                         }
                     }
@@ -265,7 +265,7 @@ Kirigami.ScrollablePage {
                             OutputCard {
                     visible: utilityBackend.operationId.indexOf("flatpak.") === 0 && utilityBackend.output.length > 0
                     embedded: true
-                    text: utilityBackend.output
+                    outputText: utilityBackend.output
                 }
                         }
                     }
@@ -420,7 +420,7 @@ Kirigami.ScrollablePage {
                         }
                         OutputCard {
                     embedded: true
-                    text: utilityBackend.output
+                    outputText: utilityBackend.output
                 }
                     }
                 }
@@ -551,7 +551,7 @@ Kirigami.ScrollablePage {
                         Kirigami.Heading { level: 3; font.bold: true; text: utilityBackend.title }
                         OutputCard {
                     embedded: true
-                    text: utilityBackend.output
+                    outputText: utilityBackend.output
                 }
                     }
                 }
@@ -675,7 +675,7 @@ Kirigami.ScrollablePage {
                         Kirigami.Heading { level: 3; font.bold: true; text: utilityBackend.title }
                         OutputCard {
                     embedded: true
-                    text: utilityBackend.output
+                    outputText: utilityBackend.output
                 }
                     }
                 }

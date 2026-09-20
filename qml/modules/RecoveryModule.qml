@@ -374,7 +374,7 @@ Kirigami.ScrollablePage {
                 OutputCard {
                     visible: rkTechnicalDetails.checked
                     embedded: true
-                    text: RkBackend.statusText
+                    outputText: RkBackend.statusText
                 }
             }
         }

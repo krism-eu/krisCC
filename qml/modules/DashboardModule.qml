@@ -8,8 +8,6 @@ Kirigami.ScrollablePage {
     title: qsTr("Dashboard")
     signal openRequested(string pageId)
 
-    property int backupCount: 0
-
     function overlayLabel() {
         if (RkBackend.busy) return qsTr("Verifica…")
         if (!RkBackend.statusValid) return qsTr("Non disponibile")
@@ -56,18 +54,6 @@ Kirigami.ScrollablePage {
         return "drive-harddisk"
     }
 
-    function statusAccent(kind) {
-        if (kind === "overlay" && RkBackend.statusValid && RkBackend.overlayState === "ready")
-            return Kirigami.Theme.positiveTextColor
-        if (kind === "selinux" && SystemBackend.selinuxState === "Enforcing")
-            return Kirigami.Theme.positiveTextColor
-        if (kind === "sync" && RkBackend.statusValid && !RkBackend.needsSync && !RkBackend.pendingRecovery)
-            return Kirigami.Theme.highlightColor
-        if (kind === "storage")
-            return Kirigami.Theme.highlightColor
-        return Kirigami.Theme.neutralTextColor
-    }
-
     function moduleValue(id) {
         if (id === "software")
             return qsTr("%1 RPM persistenti").arg(BootcBackend.persistentPackageCount)
@@ -78,70 +64,10 @@ Kirigami.ScrollablePage {
         return SystemBackend.osName
     }
 
-    function moduleAccent(id) {
-        if (id === "flatpak") return Kirigami.Theme.positiveTextColor
-        if (id === "podman") return Kirigami.Theme.neutralTextColor
-        return Kirigami.Theme.highlightColor
-    }
-
-    function historyColor(state) {
-        if (state === "success") return Kirigami.Theme.positiveTextColor
-        if (state === "error") return Kirigami.Theme.negativeTextColor
-        if (state === "warning" || state === "cancelled") return Kirigami.Theme.neutralTextColor
-        return Kirigami.Theme.highlightColor
-    }
-
-    function suggestionTitle() {
-        if (!RkBackend.statusValid) return qsTr("Controllo stato richiesto")
-        if (RkBackend.pendingRecovery) return qsTr("Riavvio necessario")
-        if (RkBackend.overlayState === "degraded") return qsTr("Overlay da controllare")
-        if (RkBackend.needsSync) return qsTr("Sincronizzazione disponibile")
-        return qsTr("Sistema allineato")
-    }
-
-    function suggestionText() {
-        if (!RkBackend.statusValid) return qsTr("Aggiorna lo stato di rk per verificare il layer RPM.")
-        if (RkBackend.pendingRecovery) return qsTr("Completa il recovery con un riavvio prima di altre operazioni rk.")
-        if (RkBackend.overlayState === "degraded") return qsTr("Apri Recovery per i dettagli dell'overlay /usr.")
-        if (RkBackend.needsSync) return qsTr("Il deployment corrente può essere riallineato con le richieste persistenti.")
-        return qsTr("Overlay, richieste persistenti e deployment risultano coerenti.")
-    }
-
-    function suggestionColor() {
-        if (RkBackend.pendingRecovery || RkBackend.overlayState === "degraded")
-            return Kirigami.Theme.negativeTextColor
-        if (RkBackend.needsSync || !RkBackend.statusValid)
-            return Kirigami.Theme.neutralTextColor
-        return Kirigami.Theme.positiveTextColor
-    }
-
-    function refreshDashboard() {
-        root.backupCount = SystemBackend.backups().length
-    }
-
     Component.onCompleted: {
-        refreshDashboard()
         RkBackend.refreshStatus()
         BootcBackend.refreshStatus()
         BootcBackend.refreshPackages()
-    }
-
-    Connections {
-        target: RkBackend
-        function onOperationFinished() { root.refreshDashboard() }
-    }
-
-    Connections {
-        target: BootcBackend
-        function onOperationFinished() { root.refreshDashboard() }
-    }
-
-    Connections {
-        target: SystemBackend
-        function onBackupStatusChanged() {
-            if (!SystemBackend.backupBusy)
-                root.refreshDashboard()
-        }
     }
 
     ColumnLayout {
@@ -153,7 +79,7 @@ Kirigami.ScrollablePage {
             Controls.Button {
                 text: qsTr("Aggiorna stato"); icon.name: "view-refresh"
                 enabled: !RkBackend.busy && !BootcBackend.busy
-                onClicked: { RkBackend.refreshStatus(); BootcBackend.refreshStatus(); BootcBackend.refreshPackages(); root.refreshDashboard() }
+                onClicked: { RkBackend.refreshStatus(); BootcBackend.refreshStatus(); BootcBackend.refreshPackages() }
             }
         }
         Kirigami.InlineMessage {
