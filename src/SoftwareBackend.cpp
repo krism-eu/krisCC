@@ -77,7 +77,7 @@ bool SoftwareBackend::startPrivileged(const QStringList &args)
     m_operationLines.clear();
     setError({});
     emit operationStateChanged();
-    m_polkit->execute(QStringLiteral("/usr/bin/dnf5"), args);
+    m_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin"), args);
     return true;
 }
 
@@ -88,7 +88,7 @@ bool SoftwareBackend::enableRepository(const QString &repoId)
         setError(tr("Identificatore repository non valido."));
         return false;
     }
-    return startPrivileged({QStringLiteral("config-manager"), QStringLiteral("enable"), id});
+    return startPrivileged({QStringLiteral("repo-enable"), id});
 }
 
 bool SoftwareBackend::disableRepository(const QString &repoId)
@@ -98,7 +98,7 @@ bool SoftwareBackend::disableRepository(const QString &repoId)
         setError(tr("Identificatore repository non valido."));
         return false;
     }
-    return startPrivileged({QStringLiteral("config-manager"), QStringLiteral("disable"), id});
+    return startPrivileged({QStringLiteral("repo-disable"), id});
 }
 
 bool SoftwareBackend::addRepository(const QString &value)
@@ -108,8 +108,7 @@ bool SoftwareBackend::addRepository(const QString &value)
         setError(tr("Repository non aggiunto: usa un URL HTTPS valido."));
         return false;
     }
-    return startPrivileged({QStringLiteral("config-manager"), QStringLiteral("addrepo"),
-                            QStringLiteral("--from-repofile=") + url});
+    return startPrivileged({QStringLiteral("repo-add"), url});
 }
 
 void SoftwareBackend::refreshRepositories()

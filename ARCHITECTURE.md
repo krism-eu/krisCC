@@ -35,7 +35,7 @@ Backend krisCC
       |
       +--> API read-only di sistema
       |
-      +--> Polkit -> helper/operazione rigidamente allowlisted
+      +--> Polkit -> rk oppure /usr/libexec/kriscc/admin con operazioni semantiche allowlisted
       |
       v
 KrisOS / rk / bootc / systemd / DNF / filesystem
@@ -46,8 +46,10 @@ Regole:
 - QML non implementa logica di sistema.
 - QML non costruisce comandi privilegiati.
 - Un backend possiede un solo dominio funzionale.
-- Le mutazioni root passano esclusivamente da entry point allowlisted.
+- Le mutazioni root passano esclusivamente da `rk` oppure dal piccolo helper `/usr/libexec/kriscc/admin`.
+- Polkit autorizza l'entry point; la validazione completa degli argomenti avviene anche nel processo privilegiato, non solo nella policy.
 - Nessun helper privilegiato accetta shell libera, pipeline o path arbitrari forniti dalla UI.
+- Operazioni che non richiedono davvero root, come la pulizia dei cestini dell'utente, restano fuori da Polkit.
 
 ## 3. Fonte della verità
 
@@ -162,7 +164,8 @@ La sezione **Miei comandi** è separata dal contratto amministrativo: conserva i
 - non ricevono elevazione automatica;
 - non vengono eseguite quando krisCC gira come root;
 - operano dalla home con l'ambiente e i privilegi dell'utente;
-- hanno configurazione versionata, scrittura atomica, output limitato e cancellazione esplicita.
+- hanno configurazione versionata, fail-closed, privata (`0600`) e con scrittura atomica;
+- usano `/usr/bin/bash` a percorso fisso, output limitato e un process group dedicato, così annullamento e timeout terminano anche i processi figli.
 
 Un'azione personale che diventa una funzione amministrativa stabile deve essere promossa a backend ufficiale con capability detection, allowlist e test; non va resa privilegiata dentro il meccanismo custom.
 

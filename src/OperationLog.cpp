@@ -6,7 +6,39 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSaveFile>
 #include <QTextStream>
+
+namespace {
+constexpr qint64 kMaxLogBytes = 512 * 1024;
+constexpr qint64 kKeepLogBytes = 256 * 1024;
+
+void trimLogIfNeeded(const QString &path)
+{
+    QFile source(path);
+    if (!source.open(QIODevice::ReadOnly) || source.size() <= kMaxLogBytes)
+        return;
+
+    const qint64 start = qMax<qint64>(0, source.size() - kKeepLogBytes);
+    if (!source.seek(start))
+        return;
+
+    QByteArray tail = source.readAll();
+    if (start > 0) {
+        const qsizetype newline = tail.indexOf('\n');
+        if (newline >= 0)
+            tail.remove(0, newline + 1);
+    }
+    source.close();
+
+    QSaveFile destination(path);
+    if (!destination.open(QIODevice::WriteOnly)
+        || !destination.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner)
+        || destination.write(tail) != tail.size())
+        return;
+    destination.commit();
+}
+}
 
 QString OperationLog::filePath()
 {
@@ -18,10 +50,12 @@ void OperationLog::append(const QString &category, const QString &action,
 {
     const QString path = filePath();
     QDir().mkpath(QFileInfo(path).absolutePath());
+    trimLogIfNeeded(path);
 
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text))
         return;
+    file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner);
 
     QJsonObject object;
     object.insert(QStringLiteral("time"), QDateTime::currentDateTime().toString(Qt::ISODate));

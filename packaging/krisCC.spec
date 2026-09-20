@@ -1,6 +1,6 @@
 Name:           krisCC
 Version:        0.7.0
-Release:        2%{?dist}
+Release:        3%{?dist}
 Summary:        krisCC personal control center for KrisOS and Fedora bootc
 License:        MIT
 URL:            https://github.com/krism-eu/krisCC
@@ -44,6 +44,7 @@ Settings.
 %license LICENSE
 %doc README.md
 %{_bindir}/krisCC
+%{_libexecdir}/kriscc/admin
 %{_libexecdir}/kriscc/bootc-status
 %{_libexecdir}/kriscc/maintenance
 %{_datadir}/applications/krisCC.desktop
@@ -52,6 +53,12 @@ Settings.
 %{_datadir}/icons/hicolor/scalable/apps/krisCC.svg
 
 %changelog
+* Sun Sep 20 2026 krism-eu - 0.7.0-3
+- Harden privileged mutations behind one validated admin helper
+- Run trash cleanup without root privileges and bound privileged processes
+- Make personal scripts fail closed, private, and cancellable as process groups
+- Suspend dashboard hardware polling while hidden and harden logs and D-Bus authorization
+
 * Sun Sep 20 2026 krism-eu - 0.7.0-2
 - Add persistent per-user custom commands and multiline scripts
 - Show CPU usage, RAM used without swap and CPU temperature on the dashboard

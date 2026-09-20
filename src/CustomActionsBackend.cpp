@@ -7,11 +7,14 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
+#include <QRegularExpression>
 #include <QSaveFile>
+#include <QSet>
 #include <QStandardPaths>
 #include <QTimer>
 #include <QUuid>
 
+#include <signal.h>
 #include <unistd.h>
 
 namespace {
@@ -21,6 +24,7 @@ constexpr qsizetype kMaxDescription = 240;
 constexpr qsizetype kMaxScript = 64 * 1024;
 constexpr qsizetype kMaxOutput = 128 * 1024;
 constexpr int kActionTimeoutMs = 30 * 60 * 1000;
+const QString kShell = QStringLiteral("/usr/bin/bash");
 }
 
 CustomActionsBackend::CustomActionsBackend(QObject *parent)
@@ -29,10 +33,25 @@ CustomActionsBackend::CustomActionsBackend(QObject *parent)
     reload();
 }
 
+CustomActionsBackend::~CustomActionsBackend()
+{
+    if (m_process && m_process->state() != QProcess::NotRunning) {
+        signalProcess(true);
+        m_process->waitForFinished(1000);
+    }
+}
+
 QString CustomActionsBackend::storagePath() const
 {
     const QString root = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
     return QDir(root).filePath(QStringLiteral("custom-actions.json"));
+}
+
+bool CustomActionsBackend::validId(const QString &id) const
+{
+    static const QRegularExpression pattern(
+        QStringLiteral("^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$"));
+    return pattern.match(id).hasMatch();
 }
 
 void CustomActionsBackend::reload()
@@ -40,17 +59,29 @@ void CustomActionsBackend::reload()
     if (m_running)
         return;
 
-    m_actions.clear();
     m_errorText.clear();
     m_storageValid = true;
 
-    QFile file(storagePath());
+    const QString path = storagePath();
+    const QFileInfo fileInfo(path);
+    if (fileInfo.isSymLink()) {
+        m_actions.clear();
+        m_storageValid = false;
+        m_errorText = tr("Il file dei comandi personali è un collegamento simbolico e non verrà usato.");
+        emit actionsChanged();
+        emit stateChanged();
+        return;
+    }
+
+    QFile file(path);
     if (!file.exists()) {
+        m_actions.clear();
         emit actionsChanged();
         emit stateChanged();
         return;
     }
     if (!file.open(QIODevice::ReadOnly)) {
+        m_actions.clear();
         m_storageValid = false;
         m_errorText = tr("Impossibile leggere i comandi personali.");
         emit actionsChanged();
@@ -61,6 +92,7 @@ void CustomActionsBackend::reload()
     QJsonParseError parseError;
     const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &parseError);
     if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
+        m_actions.clear();
         m_storageValid = false;
         m_errorText = tr("Il file dei comandi personali non è valido e non verrà sovrascritto.");
         emit actionsChanged();
@@ -71,6 +103,7 @@ void CustomActionsBackend::reload()
     const QJsonObject root = document.object();
     if (root.value(QStringLiteral("schema")).toInt(-1) != 1
         || !root.value(QStringLiteral("actions")).isArray()) {
+        m_actions.clear();
         m_storageValid = false;
         m_errorText = tr("Versione del file dei comandi personali non supportata.");
         emit actionsChanged();
@@ -80,6 +113,7 @@ void CustomActionsBackend::reload()
 
     const QJsonArray array = root.value(QStringLiteral("actions")).toArray();
     if (array.size() > kMaxActions) {
+        m_actions.clear();
         m_storageValid = false;
         m_errorText = tr("Troppi comandi personali nel file di configurazione.");
         emit actionsChanged();
@@ -87,25 +121,51 @@ void CustomActionsBackend::reload()
         return;
     }
 
+    QVariantList loaded;
+    QSet<QString> ids;
     for (const QJsonValue &value : array) {
-        if (!value.isObject())
-            continue;
+        if (!value.isObject()) {
+            m_storageValid = false;
+            break;
+        }
+
         const QJsonObject object = value.toObject();
+        if (!object.value(QStringLiteral("id")).isString()
+            || !object.value(QStringLiteral("name")).isString()
+            || !object.value(QStringLiteral("description")).isString()
+            || !object.value(QStringLiteral("script")).isString()
+            || !object.value(QStringLiteral("confirm")).isBool()) {
+            m_storageValid = false;
+            break;
+        }
+
         const QString id = object.value(QStringLiteral("id")).toString();
         const QString name = object.value(QStringLiteral("name")).toString();
         const QString description = object.value(QStringLiteral("description")).toString();
         const QString script = object.value(QStringLiteral("script")).toString();
         QString validationError;
-        if (id.isEmpty() || !validateAction(name, description, script, &validationError))
-            continue;
+        if (!validId(id) || ids.contains(id)
+            || !validateAction(name, description, script, &validationError)) {
+            m_storageValid = false;
+            break;
+        }
 
+        ids.insert(id);
         QVariantMap action;
         action.insert(QStringLiteral("id"), id);
         action.insert(QStringLiteral("name"), name);
         action.insert(QStringLiteral("description"), description);
         action.insert(QStringLiteral("script"), script);
-        action.insert(QStringLiteral("confirm"), object.value(QStringLiteral("confirm")).toBool(false));
-        m_actions.append(action);
+        action.insert(QStringLiteral("confirm"), object.value(QStringLiteral("confirm")).toBool());
+        loaded.append(action);
+    }
+
+    if (!m_storageValid) {
+        m_actions.clear();
+        m_errorText = tr("Il file dei comandi personali contiene dati non validi o ID duplicati e non verrà sovrascritto.");
+    } else {
+        m_actions = loaded;
+        QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
     }
 
     emit actionsChanged();
@@ -176,6 +236,7 @@ bool CustomActionsBackend::persist()
 
     QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly)
+        || !file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner)
         || file.write(QJsonDocument(root).toJson(QJsonDocument::Indented)) < 0
         || !file.commit()) {
         m_errorText = tr("Impossibile salvare i comandi personali.");
@@ -202,18 +263,26 @@ bool CustomActionsBackend::saveAction(const QString &id, const QString &name,
         return false;
     }
 
-    QVariantMap action;
-    QString actionId = id.trimmed();
-    int index = actionId.isEmpty() ? -1 : indexForId(actionId);
-    if (index < 0) {
+    const QString requestedId = id.trimmed();
+    int index = -1;
+    QString actionId;
+    if (requestedId.isEmpty()) {
         if (m_actions.size() >= kMaxActions) {
             m_errorText = tr("Limite di %1 comandi personali raggiunto.").arg(kMaxActions);
             emit stateChanged();
             return false;
         }
         actionId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    } else {
+        if (!validId(requestedId) || (index = indexForId(requestedId)) < 0) {
+            m_errorText = tr("Comando personale da modificare non trovato.");
+            emit stateChanged();
+            return false;
+        }
+        actionId = requestedId;
     }
 
+    QVariantMap action;
     action.insert(QStringLiteral("id"), actionId);
     action.insert(QStringLiteral("name"), name.trimmed());
     action.insert(QStringLiteral("description"), description.trimmed());
@@ -266,14 +335,13 @@ bool CustomActionsBackend::runAction(const QString &id)
     const int index = indexForId(id);
     if (index < 0)
         return false;
-    const QVariantMap action = m_actions.at(index).toMap();
-    const QString shell = QStandardPaths::findExecutable(QStringLiteral("bash"));
-    if (shell.isEmpty()) {
-        m_errorText = tr("bash non è disponibile.");
+    if (!QFileInfo(kShell).isExecutable()) {
+        m_errorText = tr("/usr/bin/bash non è disponibile.");
         emit stateChanged();
         return false;
     }
 
+    const QVariantMap action = m_actions.at(index).toMap();
     auto *process = new QProcess(this);
     m_process = process;
     m_running = true;
@@ -287,6 +355,10 @@ bool CustomActionsBackend::runAction(const QString &id)
 
     process->setWorkingDirectory(QDir::homePath());
     process->setProcessChannelMode(QProcess::MergedChannels);
+    process->setChildProcessModifier([] {
+        (void)::setsid();
+    });
+
     connect(process, &QProcess::readyReadStandardOutput, this, [this, process] {
         if (process == m_process)
             appendOutput(process->readAllStandardOutput());
@@ -318,17 +390,18 @@ bool CustomActionsBackend::runAction(const QString &id)
         finish(QStringLiteral("error"), tr("Impossibile avviare lo script: %1").arg(reason));
     });
 
-    process->start(shell, {QStringLiteral("--noprofile"), QStringLiteral("--norc"),
-                           QStringLiteral("-c"), action.value(QStringLiteral("script")).toString()});
+    process->start(kShell, {QStringLiteral("--noprofile"), QStringLiteral("--norc"),
+                            QStringLiteral("-c"),
+                            action.value(QStringLiteral("script")).toString()});
 
     QTimer::singleShot(kActionTimeoutMs, process, [this, process] {
         if (process != m_process || process->state() == QProcess::NotRunning)
             return;
         m_timedOut = true;
-        process->terminate();
-        QTimer::singleShot(2000, process, [process] {
-            if (process->state() != QProcess::NotRunning)
-                process->kill();
+        signalProcess(false);
+        QTimer::singleShot(2000, process, [this, process] {
+            if (process == m_process && process->state() != QProcess::NotRunning)
+                signalProcess(true);
         });
     });
     return true;
@@ -357,15 +430,28 @@ void CustomActionsBackend::finish(const QString &state, const QString &message)
     emit stateChanged();
 }
 
+void CustomActionsBackend::signalProcess(bool force)
+{
+    if (!m_process || m_process->state() == QProcess::NotRunning)
+        return;
+    const qint64 pid = m_process->processId();
+    if (pid > 0 && ::kill(-pid, force ? SIGKILL : SIGTERM) == 0)
+        return;
+    if (force)
+        m_process->kill();
+    else
+        m_process->terminate();
+}
+
 void CustomActionsBackend::cancel()
 {
     if (!m_process || !m_running)
         return;
     m_cancelRequested = true;
-    m_process->terminate();
+    signalProcess(false);
     const QPointer<QProcess> process = m_process;
-    QTimer::singleShot(2000, this, [process] {
-        if (process && process->state() != QProcess::NotRunning)
-            process->kill();
+    QTimer::singleShot(2000, this, [this, process] {
+        if (process && process == m_process && process->state() != QProcess::NotRunning)
+            signalProcess(true);
     });
 }

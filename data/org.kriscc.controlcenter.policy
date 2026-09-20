@@ -4,9 +4,6 @@
   <vendor>krisCC</vendor>
   <vendor_url>https://github.com/krism-eu/krisCC</vendor_url>
 
-  <!-- Read-only bootc status is allowed for the active local session so the
-       UI never asks for a password just to display system state. Mutating
-       operations still require fresh administrator authorization. -->
   <action id="org.kriscc.controlcenter.bootc.status">
     <description>Read bootc system status</description>
     <message>Read bootc system status</message>
@@ -46,58 +43,10 @@
     <annotate key="org.freedesktop.policykit.exec.argv1">forget</annotate>
   </action>
 
-  <action id="org.kriscc.controlcenter.maintenance.trash-home">
-    <description>Empty the current user's home trash</description>
-    <message>Authentication is required to empty the home trash</message>
+  <action id="org.kriscc.controlcenter.admin">
+    <description>Perform an allowlisted krisCC system operation</description>
+    <message>Authentication is required to change this system setting</message>
     <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/maintenance</annotate>
-    <annotate key="org.freedesktop.policykit.exec.argv1">trash-home</annotate>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/admin</annotate>
   </action>
-
-  <action id="org.kriscc.controlcenter.maintenance.trash-system">
-    <description>Empty the current user's trash on mounted system volumes</description>
-    <message>Authentication is required to empty trash on mounted volumes</message>
-    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/maintenance</annotate>
-    <annotate key="org.freedesktop.policykit.exec.argv1">trash-system</annotate>
-  </action>
-
-  <action id="org.kriscc.controlcenter.maintenance.trash-all">
-    <description>Empty the current user's trash everywhere</description>
-    <message>Authentication is required to empty all trash locations</message>
-    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/maintenance</annotate>
-    <annotate key="org.freedesktop.policykit.exec.argv1">trash-all</annotate>
-  </action>
-
-  <action id="org.kriscc.controlcenter.dnf.config-manager">
-    <description>Manage DNF repositories</description>
-    <message>Authentication is required to manage software repositories</message>
-    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/dnf5</annotate>
-    <annotate key="org.freedesktop.policykit.exec.argv1">config-manager</annotate>
-  </action>
-
-  <action id="org.kriscc.controlcenter.bootc.upgrade">
-    <description>Manage bootc upgrades</description>
-    <message>Authentication is required to update the operating system</message>
-    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/bootc</annotate>
-    <annotate key="org.freedesktop.policykit.exec.argv1">upgrade</annotate>
-  </action>
-  <action id="org.kriscc.controlcenter.boot.next-uefi">
-    <description>Select the one-shot UEFI boot entry</description>
-    <message>Authentication is required to select the next UEFI boot entry</message>
-    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/efibootmgr</annotate>
-    <annotate key="org.freedesktop.policykit.exec.argv1">-n</annotate>
-  </action>
-
-  <action id="org.kriscc.controlcenter.boot.next-grub">
-    <description>Select the one-shot GRUB boot entry</description>
-    <message>Authentication is required to select the next GRUB boot entry</message>
-    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/grub2-reboot</annotate>
-  </action>
-
 </policyconfig>

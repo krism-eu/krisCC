@@ -13,15 +13,15 @@ Le regole di stabilità, compatibilità e integrazione sono definite in [ARCHITE
 - **Flatpak**: ricerca strutturata, installati, aggiornamenti, update singolo o completo del profilo utente, remote e integrazione Flathub senza dipendere da Discover.
 - **Container / Podman**: elenco container e immagini locali, stato, nome/tag, dimensione, informazioni, log, start/stop/restart, rinomina e rimozione esplicita delle immagini senza force.
 - **Sistema**: centro aggiornamenti BootC/Flatpak/rk, salute e sicurezza read-only, storage, voci UEFI e GRUB/BLS, selezione one-shot del prossimo avvio e strumenti KDE essenziali.
-- **Comandi**: diagnostica read-only pronta per systemd, journal, rete, spazio, inode, mount e avvio, più **Miei comandi** per salvare comandi o script Bash multilinea personali in `~/.config/krisCC/custom-actions.json`. Le azioni personali girano soltanto con i privilegi dell'utente corrente.
+- **Comandi**: diagnostica read-only pronta per systemd, journal, rete, spazio, inode, mount e avvio, più **Miei comandi** per salvare comandi o script Bash multilinea personali in `~/.config/krisCC/custom-actions.json`. Il file è privato (`0600`), versionato e fail-closed; le azioni girano soltanto con i privilegi dell'utente corrente e Annulla/timeout termina l'intero gruppo di processi dello script.
 - **Backup e recovery**: creazione, anteprima precisa di inclusioni/esclusioni, elenco, verifica e ripristino degli snapshot `tar.gz`, più stato RK strutturato, sync e forget di recovery. Il backup home esclude runtime/app Flatpak e storage Podman ricostruibili, mantenendo i dati Flatpak in `~/.var/app`.
-- **Cronologia**: registro locale delle operazioni mutanti eseguite da krisCC. Non vengono salvati output completi dei comandi.
+- **Cronologia**: registro locale privato e limitato delle operazioni mutanti eseguite da krisCC. Non vengono salvati output completi né argomenti sensibili delle operazioni amministrative.
 
 ## Sicurezza
 
-Le modifiche privilegiate passano da `pkexec` con una allowlist C++ stretta. La policy non usa `auth_admin_keep`. Sono ammesse soltanto le combinazioni previste per `rk`, `bootc`, `dnf5 config-manager`, la manutenzione cestini a scope fisso e la selezione one-shot del prossimo boot. La gestione repository accetta solo add da URL HTTPS validato e enable/disable di ID validi; krisCC non esegue shell root generiche.
+Le mutazioni KrisOS passano da pochi confini espliciti. `rk sync/add/rm/forget` resta il contratto privilegiato proprietario di KrisOS. BootC, gestione repository e selezione one-shot del prossimo boot passano invece da un solo `/usr/libexec/kriscc/admin`: Polkit autorizza l'helper e l'helper root valida l'operazione semantica e **tutti** gli argomenti prima di eseguire un binario a percorso fisso, senza shell. La policy usa `auth_admin` senza retention (`auth_admin_keep` è vietato).
 
-Le query DNF5 leggono i repository attualmente abilitati nel sistema. L'aggiunta usa esclusivamente URL HTTPS e l'abilitazione/disabilitazione passa dal plugin `dnf5 config-manager`; l'anteprima e ogni installazione/rimozione RPM persistente continuano invece a passare da `rk plan/add/rm`. rk usa i repository abilitati dall'amministratore, forza la verifica delle firme RPM e resta il gate finale della policy KrisOS. Le operazioni Flatpak e Podman restano rootless nel profilo utente.
+La pulizia dei cestini non è privilegiata: l'helper `maintenance` gira come utente e rifiuta esplicitamente l'esecuzione come root. La gestione repository accetta soltanto URL HTTPS validati e ID validi. L'anteprima e ogni installazione/rimozione RPM persistente continuano a passare da `rk plan/add/rm`; rk resta il gate finale della policy KrisOS. Flatpak, Podman e comandi personali restano rootless nel profilo utente.
 
 ## Compatibilità KrisOS
 

@@ -1,9 +1,9 @@
 #pragma once
 
 #include <QObject>
+#include <QPointer>
+#include <QProcess>
 #include <QString>
-
-class PolkitHelper;
 
 class MaintenanceBackend : public QObject
 {
@@ -15,7 +15,7 @@ class MaintenanceBackend : public QObject
     Q_PROPERTY(QString scope READ scope NOTIFY stateChanged)
 
 public:
-    explicit MaintenanceBackend(PolkitHelper *polkit, QObject *parent = nullptr);
+    explicit MaintenanceBackend(QObject *parent = nullptr);
 
     bool running() const { return m_running; }
     bool available() const;
@@ -24,15 +24,19 @@ public:
     const QString &scope() const { return m_scope; }
 
     Q_INVOKABLE bool cleanTrash(const QString &scope);
+    Q_INVOKABLE void cancel();
 
 signals:
     void stateChanged();
     void finished(bool success, const QString &output);
 
 private:
-    PolkitHelper *m_polkit = nullptr;
-    bool m_ownedOperation = false;
+    void complete(const QString &state, const QString &output, bool success);
+
+    QPointer<QProcess> m_process;
     bool m_running = false;
+    bool m_cancelRequested = false;
+    bool m_timedOut = false;
     QString m_resultState = QStringLiteral("idle");
     QString m_output;
     QString m_scope;

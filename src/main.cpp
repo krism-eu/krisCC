@@ -73,7 +73,7 @@ int main(int argc, char *argv[])
     PolkitHelper polkitHelper;
     BootcBackend bootcBackend(&polkitHelper);
     RkBackend rkBackend(&polkitHelper);
-    MaintenanceBackend maintenanceBackend(&polkitHelper);
+    MaintenanceBackend maintenanceBackend;
     SoftwareBackend softwareBackend(&polkitHelper);
     SystemBackend systemBackend(&polkitHelper);
     CustomActionsBackend customActionsBackend;

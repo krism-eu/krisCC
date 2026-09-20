@@ -123,23 +123,22 @@ bool BootcBackend::canOperate() const
 
 bool BootcBackend::checkUpgrade()
 {
-    return startPrivileged({QStringLiteral("upgrade"), QStringLiteral("--check")});
+    return startPrivileged({QStringLiteral("bootc-check")});
 }
 
 bool BootcBackend::downloadUpgrade()
 {
-    return startPrivileged({QStringLiteral("upgrade"), QStringLiteral("--download-only")});
+    return startPrivileged({QStringLiteral("bootc-download")});
 }
 
 bool BootcBackend::prepareUpgrade()
 {
-    return startPrivileged({QStringLiteral("upgrade")});
+    return startPrivileged({QStringLiteral("bootc-prepare")});
 }
 
 bool BootcBackend::applyDownloaded()
 {
-    return startPrivileged({QStringLiteral("upgrade"), QStringLiteral("--from-downloaded"),
-                            QStringLiteral("--apply")});
+    return startPrivileged({QStringLiteral("bootc-apply-downloaded")});
 }
 
 bool BootcBackend::startPrivileged(const QStringList &args)
@@ -151,7 +150,7 @@ bool BootcBackend::startPrivileged(const QStringList &args)
     m_operationState = QStringLiteral("running");
     m_operationLines.clear();
     emit operationStateChanged();
-    m_polkit->execute(QStringLiteral("/usr/bin/bootc"), args);
+    m_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin"), args);
     return true;
 }
 

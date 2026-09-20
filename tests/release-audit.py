@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "0.7.0"
-RELEASE = "2"
+RELEASE = "3"
 RPM_EVR = f"{VERSION}-{RELEASE}.fc44"
 RPM_FILE = f"krisCC-{RPM_EVR}.x86_64.rpm"
 TAG = f"v{VERSION}-{RELEASE}"
@@ -29,6 +29,8 @@ workflow = read(".github/workflows/build.yml")
 promotion_workflow = read(".github/workflows/promote-stable.yml")
 system_cpp = read("src/SystemBackend.cpp")
 polkit_cpp = read("src/PolkitHelper.cpp")
+admin_cpp = read("src/AdminHelper.cpp")
+operation_log_cpp = read("src/OperationLog.cpp")
 rk_cpp = read("src/RkBackend.cpp")
 maintenance_backend_cpp = read("src/MaintenanceBackend.cpp")
 maintenance_helper_cpp = read("src/MaintenanceHelper.cpp")
@@ -97,11 +99,7 @@ require(not missing, f"QML bookmark(s) without backend implementation: {missing}
 # Privileged entry points are deliberately tiny, explicit and owned by typed backends.
 expected_programs = {
     "/usr/bin/rk",
-    "/usr/bin/bootc",
-    "/usr/bin/dnf5",
-    "/usr/bin/efibootmgr",
-    "/usr/bin/grub2-reboot",
-    "/usr/libexec/kriscc/maintenance",
+    "/usr/libexec/kriscc/admin",
 }
 for qml_path in ("qml/modules/SystemModule.qml", "qml/modules/RecoveryModule.qml",
                  "qml/modules/SoftwareModule.qml"):
@@ -115,7 +113,7 @@ require('setContextProperty(QStringLiteral("PolkitHelper")' not in main_cpp,
         "PolkitHelper must not be exposed to QML")
 
 privileged_programs = set()
-for backend in (rk_cpp, maintenance_backend_cpp, bootc_cpp, software_cpp, system_cpp):
+for backend in (rk_cpp, bootc_cpp, software_cpp, system_cpp):
     privileged_programs.update(re.findall(
         r'm_polkit->execute\(QStringLiteral\("([^"]+)"\)', backend))
 require(privileged_programs == expected_programs,
@@ -123,31 +121,50 @@ require(privileged_programs == expected_programs,
 for program in expected_programs:
     require(f'program == QStringLiteral("{program}")' in polkit_cpp,
             f"PolkitHelper does not explicitly allowlist {program}")
-require('args.size() == 2 && args.at(0) == QStringLiteral("-n")' in polkit_cpp,
-        "UEFI BootNext invocation is not exact")
-require('args.size() == 1 && isSafeGrubEntry(args.at(0))' in polkit_cpp,
-        "GRUB next-entry invocation is not exact")
-require('args.at(0) == QStringLiteral("forget")' in polkit_cpp,
-        "rk forget is not explicitly allowlisted")
-for maintenance_mode in ("trash-home", "trash-system", "trash-all"):
-    require(f'QStringLiteral("{maintenance_mode}")' in polkit_cpp,
-            f"maintenance mode not explicitly allowlisted: {maintenance_mode}")
-require('program == QStringLiteral("/usr/libexec/kriscc/maintenance")' in polkit_cpp,
-        "maintenance helper is not a dedicated privileged entry point")
-require('args.at(0) == QStringLiteral("config-manager")' in polkit_cpp,
-        "DNF repository mutations are not restricted to config-manager")
+
+for token in (
+    'QStringLiteral("bootc-check")',
+    'QStringLiteral("bootc-download")',
+    'QStringLiteral("bootc-prepare")',
+    'QStringLiteral("bootc-apply-downloaded")',
+    'QStringLiteral("repo-enable")',
+    'QStringLiteral("repo-disable")',
+    'QStringLiteral("repo-add")',
+    'QStringLiteral("boot-next-uefi")',
+    'QStringLiteral("boot-next-grub")',
+):
+    require(token in polkit_cpp, f"semantic admin operation missing from PolkitHelper: {token}")
 require("isSafeRepositoryId" in polkit_cpp and "isSafeRepositoryUrl" in polkit_cpp,
-        "DNF repository validators are missing")
+        "repository validators are missing from the client-side allowlist")
 require('url.scheme() == QStringLiteral("https")' in polkit_cpp
-        and 'url.userInfo().isEmpty()' in polkit_cpp
-        and 'QStringLiteral("http")' not in polkit_cpp,
-        "DNF repository URLs must be HTTPS-only and reject embedded credentials")
-require("entry.startsWith(QLatin1Char('-'))" in polkit_cpp,
+        and 'url.userInfo().isEmpty()' in polkit_cpp,
+        "repository URLs must be HTTPS-only and reject embedded credentials")
+
+require("geteuid() != 0" in admin_cpp and "execv(" in admin_cpp,
+        "root admin helper does not enforce privileged execution via exact exec")
+for token in (
+    'execProgram("/usr/bin/bootc"',
+    'execProgram("/usr/bin/dnf5"',
+    'execProgram("/usr/bin/efibootmgr"',
+    'execProgram("/usr/bin/grub2-reboot"',
+    "validRepositoryId",
+    "validRepositoryUrl",
+    "validBootToken",
+    "validGrubEntry",
+):
+    require(token in admin_cpp, f"admin helper invariant missing: {token}")
+require("/usr/bin/bash" not in admin_cpp and "/usr/bin/sh" not in admin_cpp,
+        "admin helper must never execute a shell")
+require("value.startsWith(QLatin1Char('-'))" in admin_cpp,
         "GRUB entry validator does not reject option-shaped values")
 for forbidden in ('QStringLiteral("-o")', 'QStringLiteral("-O")', "--bootorder"):
-    require(forbidden not in polkit_cpp, f"permanent UEFI ordering primitive exposed: {forbidden}")
-require("/usr/bin/bash" not in polkit_cpp and "/usr/bin/sh" not in polkit_cpp,
-        "privileged helper must never execute a shell")
+    require(forbidden not in admin_cpp, f"permanent UEFI ordering primitive exposed: {forbidden}")
+
+require("kLongTimeoutMs = 30 * 60 * 1000" in polkit_cpp
+        and "kMaxOutput = 256 * 1024" in polkit_cpp
+        and "setChildProcessModifier" in polkit_cpp
+        and "operationLabel()" in polkit_cpp,
+        "privileged process bounding/redaction is incomplete")
 
 # Policy shape is checked structurally, not by grep.
 policy_root = ET.parse(ROOT / "data/org.kriscc.controlcenter.policy").getroot()
@@ -158,13 +175,7 @@ expected_actions = {
     "org.kriscc.controlcenter.rk.add": ("/usr/bin/rk", "add", "auth_admin"),
     "org.kriscc.controlcenter.rk.rm": ("/usr/bin/rk", "rm", "auth_admin"),
     "org.kriscc.controlcenter.rk.forget": ("/usr/bin/rk", "forget", "auth_admin"),
-    "org.kriscc.controlcenter.maintenance.trash-home": ("/usr/libexec/kriscc/maintenance", "trash-home", "auth_admin"),
-    "org.kriscc.controlcenter.maintenance.trash-system": ("/usr/libexec/kriscc/maintenance", "trash-system", "auth_admin"),
-    "org.kriscc.controlcenter.maintenance.trash-all": ("/usr/libexec/kriscc/maintenance", "trash-all", "auth_admin"),
-    "org.kriscc.controlcenter.dnf.config-manager": ("/usr/bin/dnf5", "config-manager", "auth_admin"),
-    "org.kriscc.controlcenter.bootc.upgrade": ("/usr/bin/bootc", "upgrade", "auth_admin"),
-    "org.kriscc.controlcenter.boot.next-uefi": ("/usr/bin/efibootmgr", "-n", "auth_admin"),
-    "org.kriscc.controlcenter.boot.next-grub": ("/usr/bin/grub2-reboot", None, "auth_admin"),
+    "org.kriscc.controlcenter.admin": ("/usr/libexec/kriscc/admin", None, "auth_admin"),
 }
 require(set(actions) == set(expected_actions), "Polkit action set changed unexpectedly")
 for action_id, (path, argv1, allow_active) in expected_actions.items():
@@ -193,14 +204,19 @@ require("bootc-status.sh" in cmake,
         "bootc status wrapper is not installed by CMake")
 require("%{_libexecdir}/kriscc/bootc-status" in spec,
         "bootc status wrapper is missing from RPM files")
+require("src/AdminHelper.cpp" in cmake
+        and "install(TARGETS kriscc-admin kriscc-maintenance" in cmake,
+        "admin helper is not built and installed by CMake")
+require("%{_libexecdir}/kriscc/admin" in spec,
+        "admin helper is missing from RPM files")
 require("src/MaintenanceHelper.cpp" in cmake
-        and "install(TARGETS kriscc-maintenance" in cmake,
+        and "install(TARGETS kriscc-admin kriscc-maintenance" in cmake,
         "maintenance helper is not built and installed by CMake")
 require("%{_libexecdir}/kriscc/maintenance" in spec,
         "maintenance helper is missing from RPM files")
 for token in (
-    "geteuid() != 0",
-    'qEnvironmentVariable("PKEXEC_UID")',
+    "geteuid() == 0",
+    "esecuzione come root rifiutata",
     "arguments.size() != 2",
     'QStringLiteral("trash-home")',
     'QStringLiteral("trash-system")',
@@ -209,6 +225,12 @@ for token in (
     'storage.device().startsWith("/dev/")',
 ):
     require(token in maintenance_helper_cpp, f"maintenance safety invariant missing: {token}")
+require("PolkitHelper" not in maintenance_backend_cpp
+        and "pkexec" not in maintenance_backend_cpp
+        and "PKEXEC_UID" not in maintenance_helper_cpp,
+        "trash cleanup must remain unprivileged")
+require('process->start(QStringLiteral("/usr/libexec/kriscc/maintenance")' in maintenance_backend_cpp,
+        "maintenance backend must execute the helper directly as the user")
 require("isSymLink()" in maintenance_trash_cpp
         and "Mount annidato ignorato per sicurezza" in maintenance_trash_cpp,
         "trash cleanup must reject symlink/mount traversal")
@@ -332,10 +354,11 @@ require('QStringLiteral("downloadOnly")' in bootc_cpp
         "System BootC staged actions do not match the typed backend state")
 require('QStringLiteral("--format-version=1")' in bootc_cpp,
         "root BootC JSON status path does not pin schema version 1")
-require('QStringLiteral("--from-downloaded")' in polkit_cpp,
-        "BootC allowlist is missing the fixed from-downloaded forms")
-require('{QStringLiteral("upgrade"), QStringLiteral("--apply")}' not in polkit_cpp,
-        "BootC allowlist still exposes the obsolete direct apply form")
+require('QStringLiteral("--from-downloaded")' in admin_cpp
+        and 'QStringLiteral("bootc-apply-downloaded")' in admin_cpp,
+        "admin helper is missing the fixed from-downloaded BootC form")
+require('{QStringLiteral("upgrade"), QStringLiteral("--apply")}' not in admin_cpp,
+        "admin helper exposes the obsolete direct apply form")
 require("constexpr int kInteractiveTimeoutMs = 30 * 60 * 1000;" in utility_cpp
         and utility_cpp.count("kInteractiveTimeoutMs") >= 7,
         "Flatpak mutations are not consistently bounded by the interactive timeout")
@@ -363,7 +386,7 @@ require("function uefiEntries()" not in system_qml
         and "function grubEntries()" not in system_qml,
         "system-text parsing remains in QML")
 
-# Dashboard keeps lightweight always-visible local resource state.
+# Dashboard keeps lightweight local resource state only while the visible overview needs it.
 for token in (
     "Q_PROPERTY(int cpuUsagePercent",
     "Q_PROPERTY(qint64 memoryUsedMiB",
@@ -375,6 +398,13 @@ require("MemAvailable:" in system_cpp,
         "RAM usage must use MemAvailable rather than swap or free-only accounting")
 require('/sys/class/hwmon' in system_cpp and "k10temp" in system_cpp and "coretemp" in system_cpp,
         "CPU temperature must use local hwmon capability detection")
+require("acpitz" not in system_cpp
+        and 'sensorName.contains(QStringLiteral("soc"))' not in system_cpp,
+        "CPU temperature accepts a non-CPU fallback sensor")
+require("Q_INVOKABLE void setResourceMonitoringEnabled" in system_h
+        and "if (!m_resourceMonitoringEnabled)" in system_cpp
+        and "SystemBackend.setResourceMonitoringEnabled(root.visible && root.currentSection === 0)" in main_qml,
+        "resource polling must stop while krisCC/dashboard is not visible")
 for token in ("SystemBackend.cpuUsagePercent", "SystemBackend.memoryUsedMiB",
               "SystemBackend.cpuTemperatureC", "swap esclusa"):
     require(token in dashboard_qml, f"dashboard resource box missing: {token}")
@@ -389,8 +419,15 @@ require("QStandardPaths::AppConfigLocation" in custom_cpp
 require("geteuid() == 0" in custom_cpp,
         "personal commands must refuse execution when krisCC itself is root")
 require('QStringLiteral("--noprofile")' in custom_cpp
-        and 'QStringLiteral("--norc")' in custom_cpp,
-        "personal Bash scripts do not use the bounded execution wrapper")
+        and 'QStringLiteral("--norc")' in custom_cpp
+        and 'const QString kShell = QStringLiteral("/usr/bin/bash")' in custom_cpp,
+        "personal Bash scripts do not use the fixed bounded execution wrapper")
+require("setChildProcessModifier" in custom_cpp and "setsid()" in custom_cpp
+        and "kill(-pid" in custom_cpp,
+        "personal script cancellation does not terminate the complete process group")
+require("ids.contains(id)" in custom_cpp
+        and "ReadOwner | QFileDevice::WriteOwner" in custom_cpp,
+        "personal command file is not fail-closed/private")
 require("PolkitHelper" not in custom_cpp and "pkexec" not in custom_cpp,
         "personal commands crossed the privileged boundary")
 require("Miei comandi" in commands_qml
@@ -400,6 +437,13 @@ require("Miei comandi" in commands_qml
 for removed in ("top-cpu", "top-memory", "flatpak-list", "podman-images"):
     require(f'id: "{removed}"' not in commands_qml,
             f"duplicated predefined command remains: {removed}")
+
+# Local history is bounded/private and D-Bus mutations can request interactive authorization.
+require("kMaxLogBytes" in operation_log_cpp
+        and "ReadOwner | QFileDevice::WriteOwner" in operation_log_cpp,
+        "operation history is not bounded/private")
+require(system_cpp.count("setInteractiveAuthorizationAllowed(true)") >= 2,
+        "systemd/logind mutations cannot request interactive authorization")
 
 # Current main supports only KrisOS runtime state paths; migration fallbacks are gone.
 require("/usr/share/krisos/owned-packages.txt" in package_cpp

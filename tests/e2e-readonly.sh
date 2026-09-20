@@ -43,11 +43,15 @@ if grep -RniE 'bootc[^\n]*rollback|"rollback"|Rollback \+ apply|Prepara rollback
   echo "ERROR: unsupported BootC rollback remains exposed" >&2
   exit 1
 fi
-grep -q 'QStringLiteral("/usr/bin/dnf5")' src/PolkitHelper.cpp
-grep -q 'QStringLiteral("config-manager")' src/PolkitHelper.cpp
+grep -q 'QStringLiteral("/usr/libexec/kriscc/admin")' src/PolkitHelper.cpp
+grep -q 'QStringLiteral("repo-enable")' src/PolkitHelper.cpp
+grep -q 'QStringLiteral("repo-disable")' src/PolkitHelper.cpp
+grep -q 'QStringLiteral("repo-add")' src/PolkitHelper.cpp
 grep -q 'isSafeRepositoryId' src/PolkitHelper.cpp
 grep -q 'isSafeRepositoryUrl' src/PolkitHelper.cpp
-grep -q 'org.kriscc.controlcenter.dnf.config-manager' data/org.kriscc.controlcenter.policy
+grep -q 'org.kriscc.controlcenter.admin' data/org.kriscc.controlcenter.policy
+grep -q '/usr/libexec/kriscc/admin' data/org.kriscc.controlcenter.policy
+grep -q 'execProgram("/usr/bin/dnf5"' src/AdminHelper.cpp
 grep -q 'Aggiungi repository' qml/modules/SoftwareModule.qml
 grep -q 'url.scheme() == QStringLiteral("https")' src/PolkitHelper.cpp
 grep -q 'url.userInfo().isEmpty()' src/PolkitHelper.cpp
@@ -126,7 +130,12 @@ grep -q 'BootcBackend.refreshStatus()' qml/modules/SystemModule.qml
 grep -q '/usr/libexec/kriscc/bootc-status humanreadable' src/UtilityBackend.cpp
 grep -q 'QStringLiteral("downloadOnly")' src/BootcBackend.cpp
 grep -q 'SystemBackend.requestReboot()' qml/modules/SystemModule.qml
-grep -q 'm_polkit->execute(QStringLiteral("/usr/bin/bootc")' src/BootcBackend.cpp
+grep -q 'm_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin")' src/BootcBackend.cpp
+grep -q 'QStringLiteral("bootc-check")' src/BootcBackend.cpp
+grep -q 'QStringLiteral("bootc-download")' src/BootcBackend.cpp
+grep -q 'QStringLiteral("bootc-prepare")' src/BootcBackend.cpp
+grep -q 'QStringLiteral("bootc-apply-downloaded")' src/BootcBackend.cpp
+grep -q 'execProgram("/usr/bin/bootc"' src/AdminHelper.cpp
 grep -q 'org.freedesktop.login1.Manager' src/SystemBackend.cpp
 grep -q 'constexpr int kInteractiveTimeoutMs = 30 \* 60 \* 1000;' src/UtilityBackend.cpp
 grep -q 'constexpr int kPodmanActionTimeoutMs = 5 \* 60 \* 1000;' src/UtilityBackend.cpp
@@ -175,7 +184,7 @@ test ! -e data/org.kcontrolc.KControlC.metainfo.xml
 
 grep -q '^Name:[[:space:]]*krisCC$' packaging/krisCC.spec
 grep -Fxq 'Version:        0.7.0' packaging/krisCC.spec
-grep -Fxq 'Release:        2%{?dist}' packaging/krisCC.spec
+grep -Fxq 'Release:        3%{?dist}' packaging/krisCC.spec
 if grep -Eq '^Provides:[[:space:]]*(kcc|k-controlc)([[:space:]=]|$)|^Obsoletes:[[:space:]]*(kcc|k-controlc)([[:space:]<=>]|$)' packaging/krisCC.spec; then
   echo "ERROR: krisCC must not provide or obsolete experimental legacy identities" >&2
   exit 1
@@ -187,7 +196,9 @@ grep -q 'install(TARGETS krisCC' CMakeLists.txt
 grep -q 'data/krisCC.desktop' CMakeLists.txt
 grep -q 'data/icons/hicolor/scalable/apps/krisCC.svg' CMakeLists.txt
 grep -q 'data/org.kriscc.controlcenter.policy' CMakeLists.txt
+grep -q 'src/AdminHelper.cpp' CMakeLists.txt
 grep -q 'src/bootc-status.sh' CMakeLists.txt
+grep -Fq '%{_libexecdir}/kriscc/admin' packaging/krisCC.spec
 grep -Fq '%{_libexecdir}/kriscc/bootc-status' packaging/krisCC.spec
 grep -q 'data/org.kriscc.KrisCC.metainfo.xml' CMakeLists.txt
 grep -q '^Name=krisCC$' data/krisCC.desktop
@@ -280,19 +291,20 @@ if grep -q 'launchUnprivileged\|isUnprivilegedInvocationAllowed' src/PolkitHelpe
   exit 1
 fi
 
-# Next-boot selection is one-shot and owned by SystemBackend, never by QML.
-grep -q 'QStringLiteral("/usr/bin/efibootmgr")' src/PolkitHelper.cpp
-grep -q 'QStringLiteral("-n")' src/PolkitHelper.cpp
-grep -q 'QStringLiteral("/usr/bin/grub2-reboot")' src/PolkitHelper.cpp
-grep -q "entry.startsWith(QLatin1Char('-'))" src/PolkitHelper.cpp
+# Next-boot selection is one-shot and the root helper validates the complete argv.
+grep -q 'QStringLiteral("boot-next-uefi")' src/SystemBackend.cpp
+grep -q 'QStringLiteral("boot-next-grub")' src/SystemBackend.cpp
+grep -q 'execProgram("/usr/bin/efibootmgr"' src/AdminHelper.cpp
+grep -q 'execProgram("/usr/bin/grub2-reboot"' src/AdminHelper.cpp
+grep -q 'validBootToken' src/AdminHelper.cpp
+grep -q 'validGrubEntry' src/AdminHelper.cpp
+grep -q "value.startsWith(QLatin1Char('-'))" src/AdminHelper.cpp
 grep -q 'SystemBackend.selectNextUefi' qml/modules/SystemModule.qml
 grep -q 'SystemBackend.selectNextGrub' qml/modules/SystemModule.qml
 grep -q 'Q_PROPERTY(QVariantList uefiEntries' src/SystemBackend.h
 grep -q 'Q_PROPERTY(QVariantList grubEntries' src/SystemBackend.h
-grep -q 'org.kriscc.controlcenter.boot.next-uefi' data/org.kriscc.controlcenter.policy
-grep -q 'org.kriscc.controlcenter.boot.next-grub' data/org.kriscc.controlcenter.policy
 grep -q 'BootNext vale per un solo riavvio' qml/modules/SystemModule.qml
-if grep -q 'efibootmgr.*-[Oo]' src/PolkitHelper.cpp qml/modules/SystemModule.qml; then
+if grep -q 'efibootmgr.*-[Oo]' src/AdminHelper.cpp qml/modules/SystemModule.qml; then
   echo "ERROR: permanent UEFI BootOrder mutation must not be exposed" >&2
   exit 1
 fi
@@ -309,10 +321,9 @@ if grep -R -n 'PolkitHelper\|/usr/bin/bootc\|/usr/bin/dnf5\|/usr/bin/efibootmgr\
   exit 1
 fi
 grep -q 'm_polkit->execute(QStringLiteral("/usr/bin/rk")' src/RkBackend.cpp
-grep -q 'm_polkit->execute(QStringLiteral("/usr/bin/dnf5")' src/SoftwareBackend.cpp
-grep -q 'm_polkit->execute(QStringLiteral("/usr/bin/bootc")' src/BootcBackend.cpp
-grep -q 'm_polkit->execute(QStringLiteral("/usr/bin/efibootmgr")' src/SystemBackend.cpp
-grep -q 'm_polkit->execute(QStringLiteral("/usr/bin/grub2-reboot")' src/SystemBackend.cpp
+grep -q 'm_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin")' src/SoftwareBackend.cpp
+grep -q 'm_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin")' src/BootcBackend.cpp
+grep -q 'm_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin")' src/SystemBackend.cpp
 grep -q 'QStringLiteral("status"), QStringLiteral("--json")' src/RkBackend.cpp
 grep -q 'object.value(QStringLiteral("schema")).toInt(-1) != 1' src/RkBackend.cpp
 
@@ -326,6 +337,13 @@ grep -q 'SystemBackend.cpuUsagePercent' qml/modules/DashboardModule.qml
 grep -q 'SystemBackend.memoryUsedMiB' qml/modules/DashboardModule.qml
 grep -q 'SystemBackend.cpuTemperatureC' qml/modules/DashboardModule.qml
 grep -q 'swap esclusa' qml/modules/DashboardModule.qml
+grep -q 'Q_INVOKABLE void setResourceMonitoringEnabled' src/SystemBackend.h
+grep -q 'if (!m_resourceMonitoringEnabled)' src/SystemBackend.cpp
+grep -q 'SystemBackend.setResourceMonitoringEnabled(root.visible && root.currentSection === 0)' qml/Main.qml
+if grep -q 'acpitz\|sensorName.contains(QStringLiteral("soc"))' src/SystemBackend.cpp; then
+  echo "ERROR: CPU temperature accepts a non-CPU fallback sensor" >&2
+  exit 1
+fi
 
 # Personal commands are versioned user configuration and never cross the privilege boundary.
 grep -q 'src/CustomActionsBackend.cpp src/CustomActionsBackend.h' CMakeLists.txt
@@ -335,6 +353,12 @@ grep -q 'QSaveFile' src/CustomActionsBackend.cpp
 grep -q 'geteuid() == 0' src/CustomActionsBackend.cpp
 grep -q 'QStringLiteral("--noprofile")' src/CustomActionsBackend.cpp
 grep -q 'QStringLiteral("--norc")' src/CustomActionsBackend.cpp
+grep -q 'const QString kShell = QStringLiteral("/usr/bin/bash")' src/CustomActionsBackend.cpp
+grep -q 'setChildProcessModifier' src/CustomActionsBackend.cpp
+grep -q 'setsid()' src/CustomActionsBackend.cpp
+grep -q 'kill(-pid' src/CustomActionsBackend.cpp
+grep -q 'ids.contains(id)' src/CustomActionsBackend.cpp
+grep -q 'ReadOwner | QFileDevice::WriteOwner' src/CustomActionsBackend.cpp
 if grep -q 'PolkitHelper\|pkexec' src/CustomActionsBackend.cpp src/CustomActionsBackend.h; then
   echo "ERROR: personal commands must never use the privileged path" >&2
   exit 1
@@ -348,6 +372,39 @@ for removed in top-cpu top-memory flatpak-list podman-images; do
     exit 1
   fi
 done
+
+# Maintenance is deliberately unprivileged: even manual root execution is refused.
+grep -q 'geteuid() == 0' src/MaintenanceHelper.cpp
+grep -q 'esecuzione come root rifiutata' src/MaintenanceHelper.cpp
+grep -q 'process->start(QStringLiteral("/usr/libexec/kriscc/maintenance")' src/MaintenanceBackend.cpp
+if grep -q 'PolkitHelper\|pkexec\|PKEXEC_UID' src/MaintenanceBackend.cpp src/MaintenanceBackend.h src/MaintenanceHelper.cpp; then
+  echo "ERROR: trash maintenance crossed back into the privileged path" >&2
+  exit 1
+fi
+
+# The root helper is a one-purpose validator/executor; direct mutable tools never reach Polkit.
+grep -q 'src/AdminHelper.cpp' CMakeLists.txt
+grep -q 'geteuid() != 0' src/AdminHelper.cpp
+grep -q 'execv(' src/AdminHelper.cpp
+if grep -q '/usr/bin/bash\|/usr/bin/sh' src/AdminHelper.cpp; then
+  echo "ERROR: admin helper must never execute a shell" >&2
+  exit 1
+fi
+if grep -E 'org\.kriscc\.controlcenter\.(maintenance|dnf|boot\.next|bootc\.upgrade)' data/org.kriscc.controlcenter.policy; then
+  echo "ERROR: obsolete direct-tool Polkit actions remain" >&2
+  exit 1
+fi
+
+# Privileged processes are bounded and history does not retain full sensitive argv.
+grep -q 'kLongTimeoutMs = 30 \* 60 \* 1000' src/PolkitHelper.cpp
+grep -q 'kMaxOutput = 256 \* 1024' src/PolkitHelper.cpp
+grep -q 'setChildProcessModifier' src/PolkitHelper.cpp
+grep -q 'operationLabel()' src/PolkitHelper.cpp
+grep -q 'kMaxLogBytes' src/OperationLog.cpp
+grep -q 'ReadOwner | QFileDevice::WriteOwner' src/OperationLog.cpp
+
+# D-Bus mutations must be allowed to trigger interactive Polkit authorization.
+test "$(grep -c 'setInteractiveAuthorizationAllowed(true)' src/SystemBackend.cpp)" -ge 2
 
 # --background must be a single activatable session instance, not an unreachable duplicate.
 grep -q 'org.kriscc.ControlCenter' src/main.cpp

@@ -7,32 +7,10 @@
 #include <QStorageInfo>
 #include <QTextStream>
 
-#include <limits>
-#include <optional>
-
-#include <pwd.h>
 #include <sys/types.h>
 #include <unistd.h>
 
 namespace {
-
-std::optional<uid_t> invokingUid()
-{
-    bool ok = false;
-    const qulonglong raw = qEnvironmentVariable("PKEXEC_UID").toULongLong(&ok);
-    if (!ok || raw > std::numeric_limits<uid_t>::max())
-        return std::nullopt;
-    return static_cast<uid_t>(raw);
-}
-
-QString homeForUid(uid_t uid)
-{
-    const passwd *entry = getpwuid(uid);
-    if (!entry || !entry->pw_dir)
-        return {};
-    const QString home = QString::fromLocal8Bit(entry->pw_dir);
-    return home.startsWith(QLatin1Char('/')) ? QDir::cleanPath(home) : QString();
-}
 
 bool isSafeComponent(const QString &path)
 {
@@ -76,10 +54,10 @@ bool safeHomeTrash(const QString &home, QString *trashRoot)
     return true;
 }
 
-KrisccMaintenance::TrashCleanupResult cleanHome(uid_t uid)
+KrisccMaintenance::TrashCleanupResult cleanHome()
 {
     KrisccMaintenance::TrashCleanupResult result;
-    const QString home = homeForUid(uid);
+    const QString home = QDir::homePath();
     QString trashRoot;
     if (home.isEmpty() || !safeHomeTrash(home, &trashRoot)) {
         result.errors.append(QStringLiteral("Home o cestino utente non sicuro; pulizia annullata."));
@@ -96,8 +74,7 @@ KrisccMaintenance::TrashCleanupResult cleanSystem(uid_t uid)
     const QString uidText = QString::number(qulonglong(uid));
     QSet<QString> roots;
 
-    const QList<QStorageInfo> volumes = QStorageInfo::mountedVolumes();
-    for (const QStorageInfo &storage : volumes) {
+    for (const QStorageInfo &storage : QStorageInfo::mountedVolumes()) {
         if (!storage.isValid() || !storage.isReady() || storage.isReadOnly())
             continue;
         if (!storage.device().startsWith("/dev/"))
@@ -112,14 +89,15 @@ KrisccMaintenance::TrashCleanupResult cleanSystem(uid_t uid)
         const QString sharedBase = QDir(root).filePath(QStringLiteral(".Trash"));
         const QFileInfo sharedInfo(sharedBase);
         if (sharedInfo.exists() && !sharedInfo.isSymLink() && sharedInfo.isDir()) {
-            const QString sharedUser = QDir(sharedBase).filePath(uidText);
-            result.merge(KrisccMaintenance::cleanTrashRoot(sharedUser));
+            result.merge(KrisccMaintenance::cleanTrashRoot(
+                QDir(sharedBase).filePath(uidText)));
         } else if (sharedInfo.isSymLink()) {
-            result.errors.append(QStringLiteral("Cestino condiviso symlink ignorato: %1").arg(sharedBase));
+            result.errors.append(
+                QStringLiteral("Cestino condiviso symlink ignorato: %1").arg(sharedBase));
         }
 
-        const QString privateTrash = QDir(root).filePath(QStringLiteral(".Trash-") + uidText);
-        result.merge(KrisccMaintenance::cleanTrashRoot(privateTrash));
+        result.merge(KrisccMaintenance::cleanTrashRoot(
+            QDir(root).filePath(QStringLiteral(".Trash-") + uidText)));
     }
 
     return result;
@@ -146,8 +124,8 @@ int main(int argc, char *argv[])
     QTextStream out(stdout);
     QTextStream err(stderr);
 
-    if (geteuid() != 0) {
-        err << "kriscc-maintenance: l'helper deve essere eseguito come root.\n";
+    if (::geteuid() == 0) {
+        err << "kriscc-maintenance: esecuzione come root rifiutata.\n";
         return 77;
     }
 
@@ -165,17 +143,11 @@ int main(int argc, char *argv[])
         return 64;
     }
 
-    const std::optional<uid_t> uid = invokingUid();
-    if (!uid.has_value()) {
-        err << "kriscc-maintenance: PKEXEC_UID assente o non valido.\n";
-        return 77;
-    }
-
     KrisccMaintenance::TrashCleanupResult result;
     if (mode == QStringLiteral("trash-home") || mode == QStringLiteral("trash-all"))
-        result.merge(cleanHome(*uid));
+        result.merge(cleanHome());
     if (mode == QStringLiteral("trash-system") || mode == QStringLiteral("trash-all"))
-        result.merge(cleanSystem(*uid));
+        result.merge(cleanSystem(::geteuid()));
 
     out << "Pulizia cestini completata: " << result.entriesRemoved
         << " elementi rimossi, " << humanSize(result.bytesRemoved)

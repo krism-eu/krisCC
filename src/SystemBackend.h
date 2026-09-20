@@ -81,6 +81,7 @@ public:
     Q_INVOKABLE QString serviceState(const QString &service) const;
     Q_INVOKABLE bool restartService(const QString &service);
     Q_INVOKABLE void requestReboot();
+    Q_INVOKABLE void setResourceMonitoringEnabled(bool enabled);
     Q_INVOKABLE void refreshUefiEntries();
     Q_INVOKABLE void refreshGrubEntries();
     Q_INVOKABLE bool selectNextUefi(const QString &token);
@@ -130,6 +131,7 @@ private:
     bool m_bootEntriesBusy = false;
     QString m_bootEntriesError;
     QTimer *m_resourceTimer = nullptr;
+    bool m_resourceMonitoringEnabled = false;
     quint64 m_previousCpuTotal = 0;
     quint64 m_previousCpuIdle = 0;
     int m_cpuUsagePercent = -1;

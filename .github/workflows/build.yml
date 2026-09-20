@@ -56,7 +56,7 @@ jobs:
         run: |
           rpmspec -P packaging/krisCC.spec >/dev/null
           test "$(rpmspec -q --qf '%{NAME}\n' packaging/krisCC.spec | head -n1)" = "krisCC"
-          test "$(rpmspec -q --qf '%{VERSION}-%{RELEASE}\n' packaging/krisCC.spec | head -n1)" = "0.7.0-2.fc44"
+          test "$(rpmspec -q --qf '%{VERSION}-%{RELEASE}\n' packaging/krisCC.spec | head -n1)" = "0.7.0-3.fc44"
           ! rpmspec -P packaging/krisCC.spec | grep -Eq '^Provides:[[:space:]]+(kcc|k-controlc)([[:space:]=]|$)'
           ! rpmspec -P packaging/krisCC.spec | grep -Eq '^Obsoletes:[[:space:]]+(kcc|k-controlc)([[:space:]<=>]|$)'
           rpmspec -P packaging/krisCC.spec | grep -Eq '^Requires:[[:space:]]+dnf5-plugins([[:space:]]|$)'
@@ -65,6 +65,7 @@ jobs:
         run: |
           DESTDIR="$PWD/stage" cmake --install build --prefix /usr
           test -x stage/usr/bin/krisCC
+          test -x stage/usr/libexec/kriscc/admin
           test -x stage/usr/libexec/kriscc/bootc-status
           test -x stage/usr/libexec/kriscc/maintenance
           test -f stage/usr/share/applications/krisCC.desktop
@@ -97,18 +98,19 @@ jobs:
             cp "$GITHUB_WORKSPACE/krisCC-stage.tar.gz" "$GITHUB_WORKSPACE/artifacts/stage/"
             cd "$GITHUB_WORKSPACE/artifacts/rpm"
             sha256sum krisCC-*.rpm > SHA256SUMS
-            grep -Eq '^[0-9a-f]{64}[[:space:]]+krisCC-0[.]7[.]0-2.*[.]rpm' SHA256SUMS
+            grep -Eq '^[0-9a-f]{64}[[:space:]]+krisCC-0[.]7[.]0-3.*[.]rpm' SHA256SUMS
           ) 2>&1 | tee "$GITHUB_WORKSPACE/artifacts/logs/rpmbuild.log"
 
       - name: Inspect built RPM artifact
         shell: bash
         run: |
           set -euxo pipefail
-          rpm_file='artifacts/rpm/krisCC-0.7.0-2.fc44.x86_64.rpm'
+          rpm_file='artifacts/rpm/krisCC-0.7.0-3.fc44.x86_64.rpm'
           test -f "$rpm_file"
           test "$(rpm -qp --qf '%{NAME}\n' "$rpm_file")" = "krisCC"
-          test "$(rpm -qp --qf '%{VERSION}-%{RELEASE}\n' "$rpm_file")" = "0.7.0-2.fc44"
+          test "$(rpm -qp --qf '%{VERSION}-%{RELEASE}\n' "$rpm_file")" = "0.7.0-3.fc44"
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/bin/krisCC'
+          rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/admin'
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/bootc-status'
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/maintenance'
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/share/applications/krisCC.desktop'
@@ -202,15 +204,17 @@ jobs:
           KRISCC_SMOKE_TEST: "1"
         run: |
           set -euxo pipefail
-          rpm_file="$GITHUB_WORKSPACE/artifacts/rpm/krisCC-0.7.0-2.fc44.x86_64.rpm"
+          rpm_file="$GITHUB_WORKSPACE/artifacts/rpm/krisCC-0.7.0-3.fc44.x86_64.rpm"
           test -f "$rpm_file"
           (cd "$GITHUB_WORKSPACE/artifacts/rpm" && sha256sum -c SHA256SUMS)
           dnf -y install "$rpm_file"
           rpm -q krisCC
           rpm -V krisCC
+          test -x /usr/libexec/kriscc/admin
           test -x /usr/libexec/kriscc/bootc-status
           test -x /usr/libexec/kriscc/maintenance
-          ! env -u PKEXEC_UID /usr/libexec/kriscc/maintenance trash-home
+          ! /usr/libexec/kriscc/admin invalid-operation
+          ! /usr/libexec/kriscc/maintenance trash-home
           /usr/bin/krisCC
 
 

@@ -113,8 +113,6 @@ SystemBackend::SystemBackend(PolkitHelper *polkit, QObject *parent)
     m_resourceTimer = new QTimer(this);
     m_resourceTimer->setInterval(2000);
     connect(m_resourceTimer, &QTimer::timeout, this, &SystemBackend::refreshResources);
-    refreshResources();
-    m_resourceTimer->start();
 }
 
 bool SystemBackend::canSelectNextBoot() const
@@ -330,8 +328,8 @@ bool SystemBackend::selectNextUefi(const QString &value)
     m_bootSelectionKind = QStringLiteral("uefi");
     m_bootSelectionState = QStringLiteral("running");
     emit bootSelectionStateChanged();
-    m_polkit->execute(QStringLiteral("/usr/bin/efibootmgr"),
-                      {QStringLiteral("-n"), token});
+    m_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin"),
+                      {QStringLiteral("boot-next-uefi"), token});
     return true;
 }
 
@@ -352,7 +350,8 @@ bool SystemBackend::selectNextGrub(const QString &value)
     m_bootSelectionKind = QStringLiteral("grub");
     m_bootSelectionState = QStringLiteral("running");
     emit bootSelectionStateChanged();
-    m_polkit->execute(QStringLiteral("/usr/bin/grub2-reboot"), {entry});
+    m_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin"),
+                      {QStringLiteral("boot-next-grub"), entry});
     return true;
 }
 
@@ -608,6 +607,7 @@ bool SystemBackend::restartService(const QString &service)
                            QDBusConnection::systemBus());
     if (!manager.isValid())
         return false;
+    manager.setInteractiveAuthorizationAllowed(true);
 
     auto *watcher = new QDBusPendingCallWatcher(
         manager.asyncCall(QStringLiteral("RestartUnit"), service, QStringLiteral("replace")), this);
@@ -627,6 +627,7 @@ void SystemBackend::requestReboot()
                            QStringLiteral("/org/freedesktop/login1"),
                            QStringLiteral("org.freedesktop.login1.Manager"),
                            QDBusConnection::systemBus());
+    manager.setInteractiveAuthorizationAllowed(true);
     if (!manager.isValid()) {
         emit rebootFinished(false, tr("Il servizio di riavvio logind non è disponibile."));
         return;
@@ -1118,8 +1119,33 @@ void SystemBackend::setBackupResult(const QString &status, const QString &path, 
     emit backupStatusChanged();
 }
 
+void SystemBackend::setResourceMonitoringEnabled(bool enabled)
+{
+    if (m_resourceMonitoringEnabled == enabled)
+        return;
+
+    m_resourceMonitoringEnabled = enabled;
+    if (!enabled) {
+        m_resourceTimer->stop();
+        m_previousCpuTotal = 0;
+        m_previousCpuIdle = 0;
+        return;
+    }
+
+    m_previousCpuTotal = 0;
+    m_previousCpuIdle = 0;
+    if (m_cpuUsagePercent != -1) {
+        m_cpuUsagePercent = -1;
+        emit resourcesChanged();
+    }
+    refreshResources();
+    m_resourceTimer->start();
+}
+
 void SystemBackend::refreshResources()
 {
+    if (!m_resourceMonitoringEnabled)
+        return;
     int nextCpuUsage = m_cpuUsagePercent;
     QFile stat(QStringLiteral("/proc/stat"));
     if (stat.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -1207,11 +1233,8 @@ double SystemBackend::readCpuTemperature() const
             || sensorName == QStringLiteral("coretemp")
             || sensorName == QStringLiteral("zenpower"))
             baseScore = 100;
-        else if (sensorName.contains(QStringLiteral("cpu"))
-                 || sensorName.contains(QStringLiteral("soc")))
+        else if (sensorName.contains(QStringLiteral("cpu")))
             baseScore = 70;
-        else if (sensorName == QStringLiteral("acpitz"))
-            baseScore = 20;
 
         const QStringList inputs = directory.entryList(
             QStringList{QStringLiteral("temp*_input")}, QDir::Files);
@@ -1236,7 +1259,7 @@ double SystemBackend::readCpuTemperature() const
                 || label.contains(QStringLiteral("tdie"))
                 || label.contains(QStringLiteral("package"))
                 || label.contains(QStringLiteral("cpu")))
-                score += 30;
+                score = qMax(score, 80);
             if (score < 0)
                 continue;
 

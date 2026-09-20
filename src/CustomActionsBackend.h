@@ -18,6 +18,7 @@ class CustomActionsBackend : public QObject
 
 public:
     explicit CustomActionsBackend(QObject *parent = nullptr);
+    ~CustomActionsBackend() override;
 
     const QVariantList &actions() const { return m_actions; }
     bool running() const { return m_running; }
@@ -43,9 +44,11 @@ private:
     bool persist();
     bool validateAction(const QString &name, const QString &description,
                         const QString &script, QString *error) const;
+    bool validId(const QString &id) const;
     int indexForId(const QString &id) const;
     void appendOutput(const QByteArray &data);
     void finish(const QString &state, const QString &message = QString());
+    void signalProcess(bool force);
 
     QVariantList m_actions;
     QPointer<QProcess> m_process;

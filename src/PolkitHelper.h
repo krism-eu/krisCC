@@ -12,8 +12,7 @@ class PolkitHelper : public QObject
 public:
     explicit PolkitHelper(QObject *parent = nullptr);
 
-    Q_INVOKABLE void execute(const QString &program, const QStringList &args);
-
+    void execute(const QString &program, const QStringList &args);
     bool running() const { return m_running; }
 
 signals:
@@ -33,10 +32,14 @@ private:
     bool isSafeGrubEntry(const QString &entry) const;
     bool isSafeRepositoryId(const QString &repoId) const;
     bool isSafeRepositoryUrl(const QString &url) const;
+    int timeoutFor(const QString &program, const QStringList &args) const;
+    QString operationLabel() const;
     void consumeOutput(const QByteArray &data, bool flushPartial = false);
+    void terminateProcessGroup(bool force);
     void finishWithError(const QString &message);
 
     bool m_running = false;
+    bool m_timedOut = false;
     QProcess *m_process = nullptr;
     QString m_allOutput;
     QByteArray m_lineBuffer;

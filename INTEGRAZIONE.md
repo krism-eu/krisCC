@@ -35,7 +35,7 @@ krisCC legge lo stato del layer persistente esclusivamente tramite `rk status --
 
 ## Privilegi
 
-Non aggiungere wrapper shell generici. `PolkitHelper` valida programma e argomenti completi. La policy usa `auth_admin` senza retention e restringe le mutazioni a `rk sync/add/rm`, `dnf5 config-manager` con forme allowlistate e URL addrepo HTTPS-only, alle operazioni BootC di aggiornamento supportate e alla sola selezione one-shot del prossimo boot tramite `efibootmgr -n` o `grub2-reboot`. Il rollback BootC non è esposto.
+Non aggiungere wrapper shell generici. `rk sync/add/rm/forget` resta un entry point privilegiato KrisOS autonomo. Tutte le altre mutazioni amministrative di krisCC passano da `/usr/libexec/kriscc/admin`: `PolkitHelper` accetta soltanto operazioni semantiche enumerate, Polkit autorizza il percorso dell'helper con `auth_admin` senza retention e l'helper root rivalida operazione e argomenti completi prima di fare `execv` verso `bootc`, `dnf5`, `efibootmgr` o `grub2-reboot`. Nessuna shell root è ammessa. La pulizia cestini è invece intenzionalmente user-level e l'helper rifiuta l'esecuzione come root. Il rollback BootC non è esposto.
 
 ## Pipeline immagine
 

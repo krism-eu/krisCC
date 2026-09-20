@@ -774,7 +774,7 @@ Kirigami.ScrollablePage {
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label {
             wrapMode: Text.WordWrap
-            text: qsTr("Verranno svuotati %1. L'operazione è irreversibile e richiede autorizzazione amministrativa.").arg(trashDialog.scopeLabel)
+            text: qsTr("Verranno svuotati %1 con i privilegi del tuo utente. L'operazione è irreversibile.").arg(trashDialog.scopeLabel)
         }
         onAccepted: MaintenanceBackend.cleanTrash(scope)
     }

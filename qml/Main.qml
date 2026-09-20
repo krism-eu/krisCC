@@ -16,6 +16,14 @@ Kirigami.ApplicationWindow {
 
     pageStack.globalToolBar.style: Kirigami.ApplicationHeaderStyle.None
 
+    function syncResourceMonitoring() {
+        SystemBackend.setResourceMonitoringEnabled(root.visible && root.currentSection === 0)
+    }
+
+    onVisibleChanged: syncResourceMonitoring()
+    onCurrentSectionChanged: syncResourceMonitoring()
+    Component.onCompleted: syncResourceMonitoring()
+
     function showIndex(index) {
         if (index >= 0 && index <= 6)
             root.currentSection = index
