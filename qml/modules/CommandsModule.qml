@@ -344,7 +344,6 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
-        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         width: Math.min(root.width - 48, 760)
         height: Math.min(root.height - 48, 650)
         title: actionId.length > 0 ? qsTr("Modifica comando personale") : qsTr("Nuovo comando personale")
