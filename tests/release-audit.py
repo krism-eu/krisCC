@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "0.7.0"
-RELEASE = "4"
+RELEASE = "5"
 RPM_EVR = f"{VERSION}-{RELEASE}.fc44"
 RPM_FILE = f"krisCC-{RPM_EVR}.x86_64.rpm"
 TAG = f"v{VERSION}-{RELEASE}"
