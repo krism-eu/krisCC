@@ -6,13 +6,23 @@ import org.kriscc
 
 Kirigami.ApplicationWindow {
     id: root
-    width: 1120
-    height: 780
-    minimumWidth: 820
-    minimumHeight: 600
+    width: 1280
+    height: 820
+    minimumWidth: 920
+    minimumHeight: 640
     visible: !KrisccStartHidden
     title: qsTr("krisCC")
     property int currentSection: 0
+
+    readonly property var navigationModel: [
+        { section: 0, label: qsTr("Dashboard"), icon: "go-home" },
+        { section: 1, label: qsTr("Software"), icon: "package-x-generic" },
+        { section: 2, label: qsTr("Flatpak"), icon: "applications-all" },
+        { section: 3, label: qsTr("Container"), icon: "package" },
+        { section: 4, label: qsTr("Sistema"), icon: "computer" },
+        { section: 6, label: qsTr("Backup e Recovery"), icon: "document-save-all" },
+        { section: 5, label: qsTr("Comandi"), icon: "utilities-terminal" }
+    ]
 
     pageStack.globalToolBar.style: Kirigami.ApplicationHeaderStyle.None
 
@@ -29,6 +39,14 @@ Kirigami.ApplicationWindow {
             root.currentSection = index
     }
 
+    function sectionTitle(index) {
+        for (let i = 0; i < root.navigationModel.length; ++i) {
+            if (root.navigationModel[i].section === index)
+                return root.navigationModel[i].label
+        }
+        return qsTr("krisCC")
+    }
+
     function openById(pageId) {
         if (pageId === "software") showIndex(1)
         else if (pageId === "flatpak") showIndex(2)
@@ -39,99 +57,218 @@ Kirigami.ApplicationWindow {
         else showIndex(0)
     }
 
-    header: Controls.ToolBar {
-        implicitHeight: Kirigami.Units.gridUnit * 2.6
-        contentItem: RowLayout {
-            spacing: Kirigami.Units.smallSpacing
+    pageStack.initialPage: Kirigami.Page {
+        title: ""
+        padding: 0
 
-            Controls.Label {
-                font.bold: true
-                font.pointSize: Kirigami.Theme.defaultFont.pointSize + 2
-                text: qsTr("krisCC")
-            }
+        background: Rectangle {
+            color: Kirigami.Theme.backgroundColor
+        }
 
-            Flickable {
-                id: navigationFlick
-                Layout.fillWidth: true
+        RowLayout {
+            anchors.fill: parent
+            spacing: 0
+
+            Rectangle {
+                id: sidebar
+                Layout.preferredWidth: root.width < 1080 ? 205 : 228
                 Layout.fillHeight: true
-                clip: true
-                contentWidth: navigationRow.implicitWidth
-                contentHeight: height
-                boundsBehavior: Flickable.StopAtBounds
-                flickableDirection: Flickable.HorizontalFlick
+                color: Kirigami.Theme.alternateBackgroundColor
 
-                RowLayout {
-                    id: navigationRow
-                    height: parent.height
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: Kirigami.Units.largeSpacing
                     spacing: Kirigami.Units.smallSpacing
 
-                    Repeater {
-                        model: [
-                            qsTr("Panoramica"),
-                            qsTr("RPM"),
-                            qsTr("Flatpak"),
-                            qsTr("Container"),
-                            qsTr("Sistema"),
-                            qsTr("Comandi"),
-                            qsTr("Backup")
-                        ]
-                        delegate: Controls.ToolButton {
-                            required property int index
-                            required property string modelData
-                            checkable: true
-                            checked: root.currentSection === index
-                            text: modelData
-                            font.bold: checked
-                            onClicked: root.showIndex(index)
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.bottomMargin: Kirigami.Units.largeSpacing
+                        spacing: Kirigami.Units.smallSpacing
 
-                            contentItem: Controls.Label {
-                                text: parent.text
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                                font: parent.font
-                                color: parent.checked ? Kirigami.Theme.highlightColor : Kirigami.Theme.textColor
+                        Kirigami.Icon {
+                            Layout.preferredWidth: 46
+                            Layout.preferredHeight: 46
+                            source: "krisCC"
+                            fallback: "security-high"
+                        }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 0
+                            Controls.Label {
+                                text: qsTr("krisCC")
+                                font.bold: true
+                                font.pointSize: Kirigami.Theme.defaultFont.pointSize + 4
                             }
-                            background: Item {
+                            Controls.Label {
+                                Layout.fillWidth: true
+                                text: qsTr("Centro di controllo KrisOS")
+                                opacity: 0.72
+                                elide: Text.ElideRight
+                            }
+                        }
+                    }
+
+                    Repeater {
+                        model: root.navigationModel
+                        delegate: Controls.ItemDelegate {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 46
+                            checkable: true
+                            checked: root.currentSection === modelData.section
+                            hoverEnabled: true
+                            leftPadding: Kirigami.Units.largeSpacing
+                            rightPadding: Kirigami.Units.largeSpacing
+                            onClicked: root.showIndex(modelData.section)
+
+                            contentItem: RowLayout {
+                                spacing: Kirigami.Units.largeSpacing
+                                Kirigami.Icon {
+                                    Layout.preferredWidth: 22
+                                    Layout.preferredHeight: 22
+                                    source: modelData.icon
+                                    color: parent.parent.checked
+                                           ? Kirigami.Theme.highlightColor
+                                           : Kirigami.Theme.textColor
+                                }
+                                Controls.Label {
+                                    Layout.fillWidth: true
+                                    text: modelData.label
+                                    font.bold: parent.parent.checked
+                                    color: parent.parent.checked
+                                           ? Kirigami.Theme.highlightColor
+                                           : Kirigami.Theme.textColor
+                                }
+                            }
+
+                            background: Rectangle {
+                                radius: 9
+                                color: parent.checked
+                                     ? Qt.rgba(Kirigami.Theme.highlightColor.r,
+                                               Kirigami.Theme.highlightColor.g,
+                                               Kirigami.Theme.highlightColor.b, 0.12)
+                                     : parent.hovered
+                                       ? Qt.rgba(Kirigami.Theme.textColor.r,
+                                                 Kirigami.Theme.textColor.g,
+                                                 Kirigami.Theme.textColor.b, 0.05)
+                                       : "transparent"
+
                                 Rectangle {
                                     anchors.left: parent.left
-                                    anchors.right: parent.right
-                                    anchors.bottom: parent.bottom
-                                    height: 2
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 3
+                                    height: parent.height - 12
+                                    radius: 2
                                     visible: parent.parent.checked
                                     color: Kirigami.Theme.highlightColor
                                 }
                             }
                         }
                     }
+
+                    Item { Layout.fillHeight: true }
+
+                    Controls.ItemDelegate {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 42
+                        text: qsTr("Impostazioni Plasma")
+                        icon.name: "settings-configure"
+                        onClicked: SystemBackend.launchTool("systemsettings")
+                    }
+
+                    Controls.ItemDelegate {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 42
+                        text: qsTr("Informazioni")
+                        icon.name: "help-about"
+                        onClicked: root.showIndex(4)
+                    }
                 }
             }
 
-            Controls.Label {
-                opacity: 0.72
-                text: qsTr("KrisOS Control Center · %1").arg(Qt.application.version)
+            Rectangle {
+                Layout.preferredWidth: 1
+                Layout.fillHeight: true
+                color: Qt.rgba(Kirigami.Theme.textColor.r,
+                               Kirigami.Theme.textColor.g,
+                               Kirigami.Theme.textColor.b, 0.10)
             }
-        }
-    }
 
-    pageStack.initialPage: Kirigami.Page {
-        title: ""
-        padding: 0
-
-        StackLayout {
-            anchors.fill: parent
-            currentIndex: root.currentSection
-
-            DashboardModule {
+            ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                onOpenRequested: function(pageId) { root.openById(pageId) }
+                spacing: 0
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 72
+                    color: Kirigami.Theme.backgroundColor
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: Kirigami.Units.largeSpacing * 1.5
+                        anchors.rightMargin: Kirigami.Units.largeSpacing * 1.5
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 1
+                            Controls.Label {
+                                text: root.sectionTitle(root.currentSection)
+                                font.bold: true
+                                font.pointSize: Kirigami.Theme.defaultFont.pointSize + 3
+                            }
+                            Controls.Label {
+                                text: qsTr("KrisOS Control Center")
+                                opacity: 0.66
+                            }
+                        }
+
+                        ColumnLayout {
+                            spacing: 1
+                            Controls.Label {
+                                Layout.alignment: Qt.AlignRight
+                                text: qsTr("v%1").arg(Qt.application.version)
+                                opacity: 0.72
+                            }
+                            Controls.Label {
+                                Layout.alignment: Qt.AlignRight
+                                text: qsTr("Sistema sicuro. Sempre tuo.")
+                                color: Kirigami.Theme.highlightColor
+                                font.bold: true
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.bottom: parent.bottom
+                        height: 1
+                        color: Qt.rgba(Kirigami.Theme.textColor.r,
+                                       Kirigami.Theme.textColor.g,
+                                       Kirigami.Theme.textColor.b, 0.10)
+                    }
+                }
+
+                StackLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    currentIndex: root.currentSection
+
+                    DashboardModule {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        onOpenRequested: function(pageId) { root.openById(pageId) }
+                    }
+                    SoftwareModule { Layout.fillWidth: true; Layout.fillHeight: true }
+                    FlatpakModule { Layout.fillWidth: true; Layout.fillHeight: true }
+                    PodmanModule { Layout.fillWidth: true; Layout.fillHeight: true }
+                    SystemModule { Layout.fillWidth: true; Layout.fillHeight: true }
+                    CommandsModule { Layout.fillWidth: true; Layout.fillHeight: true }
+                    RecoveryModule { Layout.fillWidth: true; Layout.fillHeight: true }
+                }
             }
-            SoftwareModule { Layout.fillWidth: true; Layout.fillHeight: true }
-            FlatpakModule { Layout.fillWidth: true; Layout.fillHeight: true }
-            PodmanModule { Layout.fillWidth: true; Layout.fillHeight: true }
-            SystemModule { Layout.fillWidth: true; Layout.fillHeight: true }
-            CommandsModule { Layout.fillWidth: true; Layout.fillHeight: true }
-            RecoveryModule { Layout.fillWidth: true; Layout.fillHeight: true }
         }
     }
 

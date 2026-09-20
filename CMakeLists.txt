@@ -58,7 +58,7 @@ target_link_libraries(krisCC PRIVATE
     Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::DBus
     KF6::Kirigami
 )
-target_compile_definitions(krisCC PRIVATE KRISCC_VERSION="${PROJECT_VERSION}")
+target_compile_definitions(krisCC PRIVATE KRISCC_VERSION="${PROJECT_VERSION}-5")
 
 add_executable(kriscc-admin
     src/AdminHelper.cpp
