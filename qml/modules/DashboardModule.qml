@@ -194,6 +194,7 @@ Kirigami.ScrollablePage {
     }
     Controls.Dialog {
         id: quickTrashDialog
+        implicitHeight: Kirigami.Units.gridUnit * 14
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
         width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)

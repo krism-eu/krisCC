@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as Controls
+import QtQuick.Controls.Basic as Basic
 import org.kde.kirigami as Kirigami
 import org.kriscc
 
@@ -389,7 +390,8 @@ Kirigami.ScrollablePage {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.minimumHeight: 260
-                Controls.TextArea {
+                // Breeze currently attaches a TextInput-only helper to multiline TextEdit.
+                Basic.TextArea {
                     id: actionScript
                     wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere
                     font.family: Kirigami.Theme.fixedWidthFont.family
