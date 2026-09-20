@@ -15,7 +15,6 @@ Kirigami.ScrollablePage {
     property string restorePath: ""
     property string restoreName: ""
     property string restoreKind: ""
-    property bool ownRkAction: false
 
     function humanSize(bytes) {
         if (!bytes || bytes <= 0) return "0 B"
@@ -29,24 +28,22 @@ Kirigami.ScrollablePage {
         root.backupFiles = SystemBackend.backups()
     }
 
-    Component.onCompleted: refreshBackups()
+    function overlayLabel() {
+        if (RkBackend.busy) return qsTr("Verifica…")
+        if (!RkBackend.statusValid) return qsTr("Non disponibile")
+        return RkBackend.overlayState === "ready" ? qsTr("Pronto") : qsTr("Degradato")
+    }
+
+    Component.onCompleted: {
+        refreshBackups()
+        RkBackend.refreshStatus()
+    }
 
     Connections {
         target: SystemBackend
         function onBackupStatusChanged() {
             if (!SystemBackend.backupBusy)
                 root.refreshBackups()
-        }
-    }
-
-    Connections {
-        target: PolkitHelper
-        function onFinished(success, output) {
-            if (!root.ownRkAction)
-                return
-            root.ownRkAction = false
-            utilityBackend.runBookmark("rk-status")
-            BootcBackend.refreshPackages()
         }
     }
 
@@ -223,65 +220,169 @@ Kirigami.ScrollablePage {
         Kirigami.AbstractCard {
             Layout.fillWidth: true
             contentItem: ColumnLayout {
-                Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Recovery KrisOS") }
+                RowLayout {
+                    Layout.fillWidth: true
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+                        Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Recovery layer RPM") }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            opacity: 0.72
+                            text: qsTr("Stato strutturato di rk. Le azioni vengono abilitate solo quando il contratto KrisOS le consente.")
+                        }
+                    }
+                    Controls.Button {
+                        text: qsTr("Aggiorna")
+                        icon.name: "view-refresh"
+                        enabled: !RkBackend.busy && !RkBackend.operationRunning
+                        onClicked: RkBackend.refreshStatus()
+                    }
+                }
+
+                Kirigami.InlineMessage {
+                    Layout.fillWidth: true
+                    visible: RkBackend.errorText.length > 0
+                    type: Kirigami.MessageType.Error
+                    text: RkBackend.errorText
+                }
+
+                GridLayout {
+                    Layout.fillWidth: true
+                    columns: width > 760 ? 3 : 1
+                    columnSpacing: Kirigami.Units.smallSpacing
+                    rowSpacing: Kirigami.Units.smallSpacing
+
+                    Kirigami.AbstractCard {
+                        Layout.fillWidth: true
+                        contentItem: ColumnLayout {
+                            Controls.Label { font.bold: true; text: qsTr("Overlay /usr") }
+                            Controls.Label { font.bold: true; text: root.overlayLabel() }
+                        }
+                    }
+                    Kirigami.AbstractCard {
+                        Layout.fillWidth: true
+                        contentItem: ColumnLayout {
+                            Controls.Label { font.bold: true; text: qsTr("Recovery pendente") }
+                            Controls.Label {
+                                font.bold: true
+                                text: !RkBackend.statusValid ? qsTr("Non disponibile")
+                                      : RkBackend.pendingRecovery ? qsTr("Sì · riavvio richiesto") : qsTr("No")
+                            }
+                        }
+                    }
+                    Kirigami.AbstractCard {
+                        Layout.fillWidth: true
+                        contentItem: ColumnLayout {
+                            Controls.Label { font.bold: true; text: qsTr("Needs sync") }
+                            Controls.Label {
+                                font.bold: true
+                                text: !RkBackend.statusValid ? qsTr("Non disponibile")
+                                      : RkBackend.needsSync ? qsTr("Sì") : qsTr("No")
+                            }
+                        }
+                    }
+                }
+
+                Kirigami.InlineMessage {
+                    Layout.fillWidth: true
+                    visible: RkBackend.statusValid
+                          && (RkBackend.overlayState === "degraded"
+                              || RkBackend.pendingRecovery
+                              || RkBackend.needsSync)
+                    type: RkBackend.overlayState === "degraded" || RkBackend.pendingRecovery
+                          ? Kirigami.MessageType.Error : Kirigami.MessageType.Warning
+                    text: RkBackend.pendingRecovery
+                          ? qsTr("È presente una transazione interrotta. Riavvia il sistema prima di eseguire altre operazioni rk.")
+                          : RkBackend.overlayState === "degraded"
+                            ? qsTr("L'overlay /usr è degradato: sync e forget restano disabilitati finché il layer non torna sano.")
+                            : qsTr("Il deployment richiede il ripristino delle richieste RPM persistenti.")
+                }
+
                 Controls.Label {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
-                    opacity: 0.72
-                    text: qsTr("KrisOS mantiene un solo deployment supportato. Il recovery del layer RPM usa il contratto rk: stato e risincronizzazione delle richieste persistenti, senza reset distruttivi automatici.")
+                    text: RkBackend.statusValid && RkBackend.requests.length > 0
+                          ? qsTr("Richieste persistenti: %1").arg(RkBackend.requests.join(", "))
+                          : qsTr("Nessuna richiesta persistente rilevata.")
                 }
-                RowLayout {
+
+                Flow {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
                     Controls.Button {
-                        text: qsTr("Mostra stato rk")
-                        icon.name: "documentinfo"
-                        enabled: !utilityBackend.busy
-                        onClicked: utilityBackend.runBookmark("rk-status")
-                    }
-                    Controls.Button {
-                        text: qsTr("Risincronizza pacchetti")
+                        text: qsTr("Sincronizza")
                         icon.name: "view-refresh"
-                        enabled: !PolkitHelper.running
+                        enabled: RkBackend.canSync && !RkBackend.operationRunning
                         onClicked: syncDialog.open()
                     }
+                    Controls.BusyIndicator {
+                        visible: RkBackend.busy || RkBackend.operationRunning
+                        running: visible
+                    }
                 }
+
                 Controls.Label {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
                     opacity: 0.72
-                    text: qsTr("Se una richiesta persistente non è più disponibile, puoi dimenticarla senza disinstallare direttamente gli RPM già presenti.")
+                    text: qsTr("Se rk sync segnala una richiesta non più disponibile, puoi dimenticare solo quella richiesta. L'operazione non disinstalla direttamente RPM già presenti.")
                 }
+
                 RowLayout {
                     Layout.fillWidth: true
                     Controls.TextField {
                         id: forgetPackageField
                         Layout.fillWidth: true
-                        placeholderText: qsTr("Nome richiesta, es. pacchetto")
+                        placeholderText: qsTr("Nome richiesta non disponibile")
                         validator: RegularExpressionValidator { regularExpression: /^[A-Za-z0-9][A-Za-z0-9._+:-]{0,127}$/ }
+                        enabled: RkBackend.canForget && !RkBackend.operationRunning
                         onAccepted: {
-                            if (acceptableInput && !PolkitHelper.running) {
+                            if (acceptableInput) {
                                 forgetDialog.packageName = text.trim()
                                 forgetDialog.open()
                             }
                         }
                     }
                     Controls.Button {
-                        text: qsTr("Dimentica richiesta")
+                        text: qsTr("Dimentica")
                         icon.name: "edit-delete"
-                        enabled: forgetPackageField.acceptableInput && !PolkitHelper.running
+                        enabled: forgetPackageField.acceptableInput
+                              && RkBackend.canForget
+                              && !RkBackend.operationRunning
                         onClicked: {
                             forgetDialog.packageName = forgetPackageField.text.trim()
                             forgetDialog.open()
                         }
                     }
                 }
+
+                Kirigami.InlineMessage {
+                    Layout.fillWidth: true
+                    visible: RkBackend.operationState !== "idle"
+                    type: RkBackend.operationState === "success" ? Kirigami.MessageType.Positive
+                          : RkBackend.operationState === "error" ? Kirigami.MessageType.Error
+                          : Kirigami.MessageType.Information
+                    text: RkBackend.operationRunning
+                          ? qsTr("Operazione amministrativa in corso…")
+                          : (RkBackend.operationOutput.length > 0
+                             ? RkBackend.operationOutput
+                             : qsTr("Operazione completata."))
+                }
+
+                Controls.CheckBox {
+                    id: rkTechnicalDetails
+                    text: qsTr("Dettagli tecnici rk")
+                }
                 Controls.TextArea {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 150
-                    visible: utilityBackend.operationId === "bookmark.rk-status"
+                    Layout.preferredHeight: 170
+                    visible: rkTechnicalDetails.checked
                     readOnly: true
                     wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere
                     font.family: Kirigami.Theme.defaultFixedWidthFont.family
-                    text: utilityBackend.output
+                    text: RkBackend.statusText
                 }
             }
         }
@@ -326,12 +427,9 @@ Kirigami.ScrollablePage {
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label {
             wrapMode: Text.WordWrap
-            text: qsTr("Esegue rk sync con autorizzazione amministrativa sulle richieste persistenti già salvate.")
+            text: qsTr("Esegue rk sync con autorizzazione amministrativa. È disponibile solo con overlay sano, needs-sync attivo e nessuna transazione interrotta.")
         }
-        onAccepted: {
-            root.ownRkAction = true
-            PolkitHelper.execute("/usr/bin/rk", ["sync"])
-        }
+        onAccepted: RkBackend.sync()
     }
 
     Controls.Dialog {
@@ -344,11 +442,10 @@ Kirigami.ScrollablePage {
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label {
             wrapMode: Text.WordWrap
-            text: qsTr("Rimuove solo la richiesta persistente salvata. Non disinstalla direttamente gli RPM già presenti; il layer verrà riallineato con la successiva sincronizzazione.")
+            text: qsTr("Rimuove solo la richiesta persistente salvata. Non disinstalla direttamente RPM già presenti e non chiude il recovery: dopo va eseguita la sincronizzazione.")
         }
         onAccepted: {
-            root.ownRkAction = true
-            PolkitHelper.execute("/usr/bin/rk", ["forget", packageName])
+            RkBackend.forget(packageName)
             forgetPackageField.clear()
         }
     }

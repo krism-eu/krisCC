@@ -30,6 +30,7 @@ public:
     Q_INVOKABLE bool addFlathubUser();
     Q_INVOKABLE bool runPodman(const QString &mode, const QString &container = QString(), const QString &value = QString());
     Q_INVOKABLE bool cancel();
+    Q_INVOKABLE void clearResult();
 
 signals:
     void stateChanged();

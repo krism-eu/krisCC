@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "0.6.0"
-RELEASE = "1"
+RELEASE = "2"
 RPM_EVR = f"{VERSION}-{RELEASE}.fc44"
 RPM_FILE = f"krisCC-{RPM_EVR}.x86_64.rpm"
 TAG = f"v{VERSION}-{RELEASE}"
@@ -28,6 +28,10 @@ spec = read("packaging/krisCC.spec")
 workflow = read(".github/workflows/build.yml")
 system_cpp = read("src/SystemBackend.cpp")
 polkit_cpp = read("src/PolkitHelper.cpp")
+rk_cpp = read("src/RkBackend.cpp")
+maintenance_backend_cpp = read("src/MaintenanceBackend.cpp")
+maintenance_helper_cpp = read("src/MaintenanceHelper.cpp")
+maintenance_trash_cpp = read("src/MaintenanceTrash.cpp")
 utility_cpp = read("src/UtilityBackend.cpp")
 main_cpp = read("src/main.cpp")
 package_cpp = read("src/PackageSearch.cpp")
@@ -83,16 +87,20 @@ expected_programs = {
     "/usr/bin/dnf5",
     "/usr/bin/efibootmgr",
     "/usr/bin/grub2-reboot",
+    "/usr/libexec/kriscc/maintenance",
 }
-qml_privileged_programs = set()
+privileged_programs = set()
 for qml_path in ("qml/modules/SystemModule.qml", "qml/modules/RecoveryModule.qml",
                  "qml/modules/SoftwareModule.qml"):
     qml = read(qml_path)
-    qml_privileged_programs.update(re.findall(r'PolkitHelper\.execute\("([^"]+)"', qml))
-    qml_privileged_programs.update(re.findall(r'root\.runPrivileged\("([^"]+)"', qml))
-    qml_privileged_programs.update(re.findall(r'root\.requestPrivileged\(\s*"([^"]+)"', qml))
-require(qml_privileged_programs == expected_programs,
-        f"unexpected privileged QML programs: {sorted(qml_privileged_programs)}")
+    privileged_programs.update(re.findall(r'PolkitHelper\.execute\("([^"]+)"', qml))
+    privileged_programs.update(re.findall(r'root\.runPrivileged\("([^"]+)"', qml))
+    privileged_programs.update(re.findall(r'root\.requestPrivileged\(\s*"([^"]+)"', qml))
+for backend in (rk_cpp, maintenance_backend_cpp):
+    privileged_programs.update(re.findall(
+        r'm_polkit->execute\(QStringLiteral\("([^"]+)"\)', backend))
+require(privileged_programs == expected_programs,
+        f"unexpected privileged entry points: {sorted(privileged_programs)}")
 for program in expected_programs:
     require(f'program == QStringLiteral("{program}")' in polkit_cpp,
             f"PolkitHelper does not explicitly allowlist {program}")
@@ -102,6 +110,11 @@ require('args.size() == 1 && isSafeGrubEntry(args.at(0))' in polkit_cpp,
         "GRUB next-entry invocation is not exact")
 require('args.at(0) == QStringLiteral("forget")' in polkit_cpp,
         "rk forget is not explicitly allowlisted")
+for maintenance_mode in ("trash-home", "trash-system", "trash-all"):
+    require(f'QStringLiteral("{maintenance_mode}")' in polkit_cpp,
+            f"maintenance mode not explicitly allowlisted: {maintenance_mode}")
+require('program == QStringLiteral("/usr/libexec/kriscc/maintenance")' in polkit_cpp,
+        "maintenance helper is not a dedicated privileged entry point")
 require('args.at(0) == QStringLiteral("config-manager")' in polkit_cpp,
         "DNF repository mutations are not restricted to config-manager")
 require("isSafeRepositoryId" in polkit_cpp and "isSafeRepositoryUrl" in polkit_cpp,
@@ -126,6 +139,9 @@ expected_actions = {
     "org.kriscc.controlcenter.rk.add": ("/usr/bin/rk", "add", "auth_admin"),
     "org.kriscc.controlcenter.rk.rm": ("/usr/bin/rk", "rm", "auth_admin"),
     "org.kriscc.controlcenter.rk.forget": ("/usr/bin/rk", "forget", "auth_admin"),
+    "org.kriscc.controlcenter.maintenance.trash-home": ("/usr/libexec/kriscc/maintenance", "trash-home", "auth_admin"),
+    "org.kriscc.controlcenter.maintenance.trash-system": ("/usr/libexec/kriscc/maintenance", "trash-system", "auth_admin"),
+    "org.kriscc.controlcenter.maintenance.trash-all": ("/usr/libexec/kriscc/maintenance", "trash-all", "auth_admin"),
     "org.kriscc.controlcenter.dnf.config-manager": ("/usr/bin/dnf5", "config-manager", "auth_admin"),
     "org.kriscc.controlcenter.bootc.upgrade": ("/usr/bin/bootc", "upgrade", "auth_admin"),
     "org.kriscc.controlcenter.boot.next-uefi": ("/usr/bin/efibootmgr", "-n", "auth_admin"),
@@ -158,6 +174,25 @@ require("bootc-status.sh" in cmake,
         "bootc status wrapper is not installed by CMake")
 require("%{_libexecdir}/kriscc/bootc-status" in spec,
         "bootc status wrapper is missing from RPM files")
+require("src/MaintenanceHelper.cpp" in cmake
+        and "install(TARGETS kriscc-maintenance" in cmake,
+        "maintenance helper is not built and installed by CMake")
+require("%{_libexecdir}/kriscc/maintenance" in spec,
+        "maintenance helper is missing from RPM files")
+for token in (
+    "geteuid() != 0",
+    'qEnvironmentVariable("PKEXEC_UID")',
+    "arguments.size() != 2",
+    'QStringLiteral("trash-home")',
+    'QStringLiteral("trash-system")',
+    'QStringLiteral("trash-all")',
+    "QStorageInfo::mountedVolumes()",
+    'storage.device().startsWith("/dev/")',
+):
+    require(token in maintenance_helper_cpp, f"maintenance safety invariant missing: {token}")
+require("isSymLink()" in maintenance_trash_cpp
+        and "Mount annidato ignorato per sicurezza" in maintenance_trash_cpp,
+        "trash cleanup must reject symlink/mount traversal")
 
 # Backup contract: canonical path validation, safe extraction and all async start failures
 # must leave the UI out of the busy state.
@@ -178,6 +213,17 @@ require('QStringLiteral(".local/share/flatpak")' in system_cpp,
         "home backup must exclude Flatpak runtime/application store")
 require('QStringLiteral(".local/share/containers")' in system_cpp,
         "home backup must exclude Podman container store")
+
+# RK recovery state is parsed once in C++ and QML consumes typed properties.
+for token in ("Overlay:", "Pending recovery:", "Needs sync:"):
+    require(f'QStringLiteral("{token}")' in rk_cpp,
+            f"RkBackend parser is missing contract marker: {token}")
+require('m_polkit->execute(QStringLiteral("/usr/bin/rk"), args)' in rk_cpp,
+        "RkBackend does not own privileged rk recovery actions")
+require('utilityBackend.runBookmark("rk-status")' not in recovery_qml,
+        "Recovery still parses rk through the generic command backend")
+require("RkBackend.needsSync" in recovery_qml and "RkBackend.overlayState" in dashboard_qml,
+        "structured RK state is not wired into Recovery/Dashboard")
 
 # Flatpak stays entirely in user scope and installs from the remote returned
 # by search instead of forcing Flathub for every result.
@@ -210,6 +256,15 @@ for qml in (software_qml, flatpak_qml, podman_qml, system_qml, commands_qml, rec
     require("UtilityBackend { id: utilityBackend }" in qml,
             "each active page must own an isolated UtilityBackend")
 require("#c62828" not in main_qml, "hard-coded red accent must not override the desktop theme")
+for rare_id in ("rk-status", "uefi", "grub-entries", "fstab-order"):
+    require(f'id: "{rare_id}"' not in commands_qml,
+            f"rare system command leaked back into daily Commands page: {rare_id}")
+for daily_id in ("journal-size", "inodes", "user-failed-units"):
+    require(f'id: "{daily_id}"' in commands_qml,
+            f"daily diagnostic command missing: {daily_id}")
+require("utilityBackend.clearResult()" in commands_qml
+        and "Q_INVOKABLE void clearResult()" in read("src/UtilityBackend.h"),
+        "command output clear action is missing")
 
 # Dialogs that live inside ScrollablePage must be reparented to the window overlay.
 for name, qml in {
@@ -257,6 +312,9 @@ require("constexpr int kPodmanActionTimeoutMs = 5 * 60 * 1000;" in utility_cpp
         "Podman actions are not consistently bounded by the action timeout")
 require("launchQuickAction" not in system_cpp and "sessionAction" not in system_cpp,
         "dead SystemBackend APIs remain")
+require("Q_PROPERTY(QString selinuxState" in read("src/SystemBackend.h")
+        and "SystemBackend.selinuxState" in dashboard_qml,
+        "Dashboard SELinux state is not backed by SystemBackend")
 require("launchUnprivileged" not in polkit_cpp,
         "dead Polkit unprivileged launcher remains")
 

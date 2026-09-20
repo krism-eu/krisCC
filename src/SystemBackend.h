@@ -16,6 +16,7 @@ class SystemBackend : public QObject
     Q_PROPERTY(QString memorySummary READ memorySummary CONSTANT)
     Q_PROPERTY(QString storageSummary READ storageSummary CONSTANT)
     Q_PROPERTY(QString desktopSession READ desktopSession CONSTANT)
+    Q_PROPERTY(QString selinuxState READ selinuxState CONSTANT)
     Q_PROPERTY(bool backupBusy READ backupBusy NOTIFY backupBusyChanged)
     Q_PROPERTY(QString backupStatus READ backupStatus NOTIFY backupStatusChanged)
     Q_PROPERTY(QString backupPath READ backupPath NOTIFY backupStatusChanged)
@@ -32,6 +33,7 @@ public:
     QString memorySummary() const;
     QString storageSummary() const;
     QString desktopSession() const;
+    QString selinuxState() const;
 
     bool backupBusy() const { return m_backupBusy; }
     const QString &backupStatus() const { return m_backupStatus; }

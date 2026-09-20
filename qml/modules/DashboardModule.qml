@@ -8,22 +8,47 @@ Kirigami.ScrollablePage {
     title: qsTr("Panoramica")
     signal openRequested(string pageId)
 
+    function overlayLabel() {
+        if (RkBackend.busy) return qsTr("Verifica…")
+        if (!RkBackend.statusValid) return qsTr("Non disponibile")
+        return RkBackend.overlayState === "ready" ? qsTr("Pronto") : qsTr("Degradato")
+    }
+
+    function syncLabel() {
+        if (RkBackend.busy) return qsTr("Verifica…")
+        if (!RkBackend.statusValid) return qsTr("Non disponibile")
+        if (RkBackend.pendingRecovery) return qsTr("Riavvio richiesto")
+        return RkBackend.needsSync ? qsTr("Da sincronizzare") : qsTr("Allineato")
+    }
+
     ColumnLayout {
         width: parent.width
         spacing: Kirigami.Units.largeSpacing
 
         RowLayout {
             Layout.fillWidth: true
-            Kirigami.Heading {
+            ColumnLayout {
                 Layout.fillWidth: true
-                level: 1
-                font.bold: true
-                text: qsTr("Panoramica")
+                spacing: 2
+                Kirigami.Heading {
+                    level: 1
+                    font.bold: true
+                    text: qsTr("Panoramica")
+                }
+                Controls.Label {
+                    opacity: 0.72
+                    text: qsTr("Stato essenziale di KrisOS e accesso rapido alle attività quotidiane.")
+                }
             }
             Controls.Button {
-                text: qsTr("Sistema")
-                icon.name: "preferences-system"
-                onClicked: root.openRequested("system")
+                text: qsTr("Aggiorna stato")
+                icon.name: "view-refresh"
+                enabled: !RkBackend.busy && !BootcBackend.busy
+                onClicked: {
+                    RkBackend.refreshStatus()
+                    BootcBackend.refreshStatus()
+                    BootcBackend.refreshPackages()
+                }
             }
         }
 
@@ -32,6 +57,107 @@ Kirigami.ScrollablePage {
             visible: !BootcBackend.bootcAvailable
             type: Kirigami.MessageType.Warning
             text: qsTr("bootc non è disponibile in questo ambiente. Le funzioni image-based sono disabilitate.")
+        }
+
+        Kirigami.InlineMessage {
+            Layout.fillWidth: true
+            visible: RkBackend.errorText.length > 0
+            type: Kirigami.MessageType.Warning
+            text: qsTr("Stato del layer RPM non disponibile: %1").arg(RkBackend.errorText)
+        }
+
+        Kirigami.InlineMessage {
+            Layout.fillWidth: true
+            visible: RkBackend.statusValid
+                  && (RkBackend.overlayState === "degraded"
+                      || RkBackend.pendingRecovery
+                      || RkBackend.needsSync)
+            type: RkBackend.overlayState === "degraded" || RkBackend.pendingRecovery
+                  ? Kirigami.MessageType.Error : Kirigami.MessageType.Warning
+            text: RkBackend.pendingRecovery
+                  ? qsTr("È presente una transazione RPM interrotta: riavvia prima di altre operazioni rk.")
+                  : RkBackend.overlayState === "degraded"
+                    ? qsTr("L'overlay /usr è degradato. Apri Recovery per i dettagli.")
+                    : qsTr("Il layer RPM richiede una sincronizzazione sul deployment corrente.")
+            actions: [
+                Kirigami.Action {
+                    text: qsTr("Apri Recovery")
+                    icon.name: "edit-undo"
+                    onTriggered: root.openRequested("recovery")
+                }
+            ]
+        }
+
+        GridLayout {
+            Layout.fillWidth: true
+            columns: width > 1000 ? 4 : width > 620 ? 2 : 1
+            columnSpacing: Kirigami.Units.smallSpacing
+            rowSpacing: Kirigami.Units.smallSpacing
+
+            Kirigami.AbstractCard {
+                Layout.fillWidth: true
+                contentItem: RowLayout {
+                    Kirigami.Icon { Layout.preferredWidth: 32; Layout.preferredHeight: 32; source: "drive-multidisk" }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 1
+                        Controls.Label { font.bold: true; text: qsTr("Overlay /usr") }
+                        Controls.Label { font.bold: true; text: root.overlayLabel() }
+                        Controls.Label {
+                            opacity: 0.65
+                            text: RkBackend.statusValid && RkBackend.overlayState === "ready"
+                                  ? qsTr("Layer RPM operativo") : qsTr("Controlla Recovery")
+                        }
+                    }
+                }
+            }
+
+            Kirigami.AbstractCard {
+                Layout.fillWidth: true
+                contentItem: RowLayout {
+                    Kirigami.Icon { Layout.preferredWidth: 32; Layout.preferredHeight: 32; source: "security-high" }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 1
+                        Controls.Label { font.bold: true; text: qsTr("SELinux") }
+                        Controls.Label { font.bold: true; text: SystemBackend.selinuxState }
+                        Controls.Label { opacity: 0.65; text: qsTr("Protezione del sistema") }
+                    }
+                }
+            }
+
+            Kirigami.AbstractCard {
+                Layout.fillWidth: true
+                contentItem: RowLayout {
+                    Kirigami.Icon { Layout.preferredWidth: 32; Layout.preferredHeight: 32; source: "view-refresh" }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 1
+                        Controls.Label { font.bold: true; text: qsTr("Sincronizzazione") }
+                        Controls.Label { font.bold: true; text: root.syncLabel() }
+                        Controls.Label {
+                            opacity: 0.65
+                            text: RkBackend.statusValid
+                                  ? qsTr("%1 richieste persistenti").arg(RkBackend.requests.length)
+                                  : qsTr("Stato rk non disponibile")
+                        }
+                    }
+                }
+            }
+
+            Kirigami.AbstractCard {
+                Layout.fillWidth: true
+                contentItem: RowLayout {
+                    Kirigami.Icon { Layout.preferredWidth: 32; Layout.preferredHeight: 32; source: "drive-harddisk" }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 1
+                        Controls.Label { font.bold: true; text: qsTr("Spazio") }
+                        Controls.Label { font.bold: true; text: qsTr("Storage dati") }
+                        Controls.Label { Layout.fillWidth: true; opacity: 0.65; elide: Text.ElideRight; text: SystemBackend.storageSummary }
+                    }
+                }
+            }
         }
 
         GridLayout {

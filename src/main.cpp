@@ -14,6 +14,8 @@
 #include "InstanceController.h"
 #include "PackageSearch.h"
 #include "PolkitHelper.h"
+#include "RkBackend.h"
+#include "MaintenanceBackend.h"
 #include "SoftwareBackend.h"
 #include "SystemBackend.h"
 #include "UtilityBackend.h"
@@ -69,8 +71,15 @@ int main(int argc, char *argv[])
 
     PolkitHelper polkitHelper;
     BootcBackend bootcBackend;
+    RkBackend rkBackend(&polkitHelper);
+    MaintenanceBackend maintenanceBackend(&polkitHelper);
     SoftwareBackend softwareBackend;
     SystemBackend systemBackend;
+
+    QObject::connect(&rkBackend, &RkBackend::operationFinished, &bootcBackend,
+                     [&bootcBackend](bool, const QString &) {
+        bootcBackend.refreshPackages();
+    });
 
     QObject::connect(&polkitHelper, &PolkitHelper::finished, &systemBackend,
                      [&systemBackend](bool success, const QString &output) {
@@ -83,6 +92,8 @@ int main(int argc, char *argv[])
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty(QStringLiteral("PolkitHelper"), &polkitHelper);
     engine.rootContext()->setContextProperty(QStringLiteral("BootcBackend"), &bootcBackend);
+    engine.rootContext()->setContextProperty(QStringLiteral("RkBackend"), &rkBackend);
+    engine.rootContext()->setContextProperty(QStringLiteral("MaintenanceBackend"), &maintenanceBackend);
     engine.rootContext()->setContextProperty(QStringLiteral("SoftwareBackend"), &softwareBackend);
     engine.rootContext()->setContextProperty(QStringLiteral("SystemBackend"), &systemBackend);
     engine.rootContext()->setContextProperty(QStringLiteral("KrisccStartHidden"), startHidden);

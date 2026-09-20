@@ -163,10 +163,23 @@ bool UtilityBackend::cancel()
     return true;
 }
 
+void UtilityBackend::clearResult()
+{
+    if (m_busy)
+        return;
+    m_title.clear();
+    m_output.clear();
+    m_operationId.clear();
+    m_resultState = QStringLiteral("idle");
+    emit stateChanged();
+}
+
 bool UtilityBackend::runBookmark(const QString &id)
 {
     if (id == QStringLiteral("failed-units"))
         return start(QStringLiteral("systemctl"), {QStringLiteral("--failed"), QStringLiteral("--no-pager"), QStringLiteral("--plain")}, tr("Unità systemd fallite"), QStringLiteral("bookmark.failed-units"), kShortQueryTimeoutMs);
+    if (id == QStringLiteral("user-failed-units"))
+        return start(QStringLiteral("systemctl"), {QStringLiteral("--user"), QStringLiteral("--failed"), QStringLiteral("--no-pager"), QStringLiteral("--plain")}, tr("Unità utente fallite"), QStringLiteral("bookmark.user-failed-units"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("timers"))
         return start(QStringLiteral("systemctl"), {QStringLiteral("list-timers"), QStringLiteral("--all"), QStringLiteral("--no-pager")}, tr("Timer systemd"), QStringLiteral("bookmark.timers"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("ports"))
@@ -191,6 +204,10 @@ bool UtilityBackend::runBookmark(const QString &id)
         return start(QStringLiteral("systemd-analyze"), {QStringLiteral("blame")}, tr("Servizi più lenti all'avvio"), QStringLiteral("bookmark.blame"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("disk-space"))
         return start(QStringLiteral("df"), {QStringLiteral("-hT"), QStringLiteral("-x"), QStringLiteral("tmpfs"), QStringLiteral("-x"), QStringLiteral("devtmpfs")}, tr("Spazio filesystem"), QStringLiteral("bookmark.disk-space"), kShortQueryTimeoutMs);
+    if (id == QStringLiteral("inodes"))
+        return start(QStringLiteral("df"), {QStringLiteral("-hi"), QStringLiteral("-x"), QStringLiteral("tmpfs"), QStringLiteral("-x"), QStringLiteral("devtmpfs")}, tr("Inode filesystem"), QStringLiteral("bookmark.inodes"), kShortQueryTimeoutMs);
+    if (id == QStringLiteral("journal-size"))
+        return start(QStringLiteral("journalctl"), {QStringLiteral("--disk-usage")}, tr("Spazio journal"), QStringLiteral("bookmark.journal-size"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("partitions") || id == QStringLiteral("block-devices"))
         return start(QStringLiteral("lsblk"), {QStringLiteral("-e"), QStringLiteral("7"), QStringLiteral("-o"), QStringLiteral("NAME,PARTN,SIZE,FSTYPE,FSVER,LABEL,UUID,MOUNTPOINTS")}, tr("Dischi e partizioni"), QStringLiteral("bookmark.partitions"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("network"))
@@ -203,8 +220,6 @@ bool UtilityBackend::runBookmark(const QString &id)
         return start(QStringLiteral("journalctl"), {QStringLiteral("-b"), QStringLiteral("-p"), QStringLiteral("warning"), QStringLiteral("--no-pager"), QStringLiteral("-n"), QStringLiteral("200")}, tr("Warning ed errori dell'avvio"), QStringLiteral("bookmark.journal-errors"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("kernel-errors"))
         return start(QStringLiteral("journalctl"), {QStringLiteral("-k"), QStringLiteral("-b"), QStringLiteral("-p"), QStringLiteral("warning"), QStringLiteral("--no-pager"), QStringLiteral("-n"), QStringLiteral("200")}, tr("Warning kernel"), QStringLiteral("bookmark.kernel-errors"), kShortQueryTimeoutMs);
-    if (id == QStringLiteral("rk-status"))
-        return start(QStringLiteral("/usr/bin/rk"), {QStringLiteral("status")}, tr("Stato layer RPM persistente"), QStringLiteral("bookmark.rk-status"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("flatpak-list"))
         return start(QStringLiteral("/usr/bin/flatpak"), {QStringLiteral("list"), QStringLiteral("--user"), QStringLiteral("--app")}, tr("Flatpak utente"), QStringLiteral("bookmark.flatpak-list"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("unneeded-rpms"))

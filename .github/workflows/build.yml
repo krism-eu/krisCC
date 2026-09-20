@@ -56,7 +56,7 @@ jobs:
         run: |
           rpmspec -P packaging/krisCC.spec >/dev/null
           test "$(rpmspec -q --qf '%{NAME}\n' packaging/krisCC.spec | head -n1)" = "krisCC"
-          test "$(rpmspec -q --qf '%{VERSION}-%{RELEASE}\n' packaging/krisCC.spec | head -n1)" = "0.6.0-1.fc44"
+          test "$(rpmspec -q --qf '%{VERSION}-%{RELEASE}\n' packaging/krisCC.spec | head -n1)" = "0.6.0-2.fc44"
           ! rpmspec -P packaging/krisCC.spec | grep -Eq '^Provides:[[:space:]]+(kcc|k-controlc)([[:space:]=]|$)'
           ! rpmspec -P packaging/krisCC.spec | grep -Eq '^Obsoletes:[[:space:]]+(kcc|k-controlc)([[:space:]<=>]|$)'
           rpmspec -P packaging/krisCC.spec | grep -Eq '^Requires:[[:space:]]+dnf5-plugins([[:space:]]|$)'
@@ -66,6 +66,7 @@ jobs:
           DESTDIR="$PWD/stage" cmake --install build --prefix /usr
           test -x stage/usr/bin/krisCC
           test -x stage/usr/libexec/kriscc/bootc-status
+          test -x stage/usr/libexec/kriscc/maintenance
           test -f stage/usr/share/applications/krisCC.desktop
           test -f stage/usr/share/icons/hicolor/scalable/apps/krisCC.svg
           test -f stage/usr/share/polkit-1/actions/org.kriscc.controlcenter.policy
@@ -103,12 +104,13 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          rpm_file='artifacts/rpm/krisCC-0.6.0-1.fc44.x86_64.rpm'
+          rpm_file='artifacts/rpm/krisCC-0.6.0-2.fc44.x86_64.rpm'
           test -f "$rpm_file"
           test "$(rpm -qp --qf '%{NAME}\n' "$rpm_file")" = "krisCC"
-          test "$(rpm -qp --qf '%{VERSION}-%{RELEASE}\n' "$rpm_file")" = "0.6.0-1.fc44"
+          test "$(rpm -qp --qf '%{VERSION}-%{RELEASE}\n' "$rpm_file")" = "0.6.0-2.fc44"
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/bin/krisCC'
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/bootc-status'
+          rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/maintenance'
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/share/applications/krisCC.desktop'
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/share/polkit-1/actions/org.kriscc.controlcenter.policy'
           rpm -qpR "$rpm_file" | grep -Eq '^polkit([[:space:]<=>]|$)'
@@ -200,13 +202,15 @@ jobs:
           KRISCC_SMOKE_TEST: "1"
         run: |
           set -euxo pipefail
-          rpm_file="$GITHUB_WORKSPACE/artifacts/rpm/krisCC-0.6.0-1.fc44.x86_64.rpm"
+          rpm_file="$GITHUB_WORKSPACE/artifacts/rpm/krisCC-0.6.0-2.fc44.x86_64.rpm"
           test -f "$rpm_file"
           (cd "$GITHUB_WORKSPACE/artifacts/rpm" && sha256sum -c SHA256SUMS)
           dnf -y install "$rpm_file"
           rpm -q krisCC
           rpm -V krisCC
           test -x /usr/libexec/kriscc/bootc-status
+          test -x /usr/libexec/kriscc/maintenance
+          ! env -u PKEXEC_UID /usr/libexec/kriscc/maintenance trash-home
           /usr/bin/krisCC
 
 
@@ -232,11 +236,11 @@ jobs:
           cd artifacts/rpm
           sha256sum -c SHA256SUMS
 
-          rpm_file='krisCC-0.6.0-1.fc44.x86_64.rpm'
-          tag='v0.6.0-1'
+          rpm_file='krisCC-0.6.0-2.fc44.x86_64.rpm'
+          tag='v0.6.0-2'
           test -f "$rpm_file"
           test "$(rpm -qp --qf '%{NAME}' "$rpm_file")" = 'krisCC'
-          test "$(rpm -qp --qf '%{VERSION}-%{RELEASE}' "$rpm_file")" = '0.6.0-1.fc44'
+          test "$(rpm -qp --qf '%{VERSION}-%{RELEASE}' "$rpm_file")" = '0.6.0-2.fc44'
 
           checksum="$(awk -v f="$rpm_file" '$2 == f || $2 == "./" f {print $1}' SHA256SUMS)"
           [[ "$checksum" =~ ^[0-9a-f]{64}$ ]]
@@ -254,7 +258,7 @@ jobs:
               sha256sum -c SHA256SUMS
               test "$(awk 'END {print NR}' SHA256SUMS)" -eq 1
               test "$(rpm -qp --qf '%{NAME}' "$rpm_file")" = 'krisCC'
-              test "$(rpm -qp --qf '%{VERSION}-%{RELEASE}' "$rpm_file")" = '0.6.0-1.fc44'
+              test "$(rpm -qp --qf '%{VERSION}-%{RELEASE}' "$rpm_file")" = '0.6.0-2.fc44'
               existing_checksum="$(sha256sum "$rpm_file" | awk '{print $1}')"
               test "$existing_checksum" = "$checksum"
             )

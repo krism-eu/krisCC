@@ -165,6 +165,24 @@ QString SystemBackend::desktopSession() const
     return desktop + QStringLiteral(" · ") + session;
 }
 
+QString SystemBackend::selinuxState() const
+{
+    const QFileInfo info(QStringLiteral("/sys/fs/selinux/enforce"));
+    if (!info.exists())
+        return tr("Disabilitato");
+
+    QFile file(info.absoluteFilePath());
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+        return tr("Sconosciuto");
+
+    const QByteArray value = file.readAll().trimmed();
+    if (value == "1")
+        return tr("Enforcing");
+    if (value == "0")
+        return tr("Permissive");
+    return tr("Sconosciuto");
+}
+
 QString SystemBackend::quickSystemInfo() const
 {
     QString text;
@@ -177,6 +195,7 @@ QString SystemBackend::quickSystemInfo() const
     out << tr("RAM: ") << memorySummary() << '\n';
     out << tr("Storage dati: ") << storageSummary() << '\n';
     out << tr("Desktop: ") << desktopSession() << '\n';
+    out << tr("SELinux: ") << selinuxState() << '\n';
     out << tr("Fuso orario: ") << systemTimeZoneName() << '\n';
     out << tr("Modalità di avvio: ") << (QFileInfo::exists(QStringLiteral("/sys/firmware/efi")) ? "UEFI" : "BIOS") << '\n';
     out << "Qt: " << qVersion() << '\n';

@@ -169,6 +169,15 @@ bool PolkitHelper::isPrivilegedInvocationAllowed(const QString &program, const Q
         return false;
     }
 
+    if (program == QStringLiteral("/usr/libexec/kriscc/maintenance")) {
+        static const QList<QStringList> allowed = {
+            {QStringLiteral("trash-home")},
+            {QStringLiteral("trash-system")},
+            {QStringLiteral("trash-all")}
+        };
+        return allowed.contains(args);
+    }
+
     if (program == QStringLiteral("/usr/bin/efibootmgr"))
         return args.size() == 2 && args.at(0) == QStringLiteral("-n")
             && isSafeBootToken(args.at(1));

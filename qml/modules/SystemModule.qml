@@ -266,7 +266,7 @@ Kirigami.ScrollablePage {
                                 Controls.Button {
                                     text: qsTr("Risincronizza RPM")
                                     icon.name: "view-refresh"
-                                    enabled: !PolkitHelper.running && SystemBackend.programAvailable("rk")
+                                    enabled: RkBackend.canSync && !RkBackend.operationRunning
                                     onClicked: syncDialog.open()
                                 }
                             }
@@ -674,6 +674,52 @@ Kirigami.ScrollablePage {
                         Layout.fillWidth: true
                         contentItem: ColumnLayout {
                             Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Pulizia") }
+                            Controls.Label {
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                opacity: 0.72
+                                text: qsTr("Le pulizie dei cestini sono sempre autorizzate come amministratore e operano solo sugli scope predefiniti.")
+                            }
+                            Controls.Button {
+                                text: qsTr("Svuota cestino home")
+                                icon.name: "user-trash"
+                                enabled: MaintenanceBackend.available
+                                onClicked: {
+                                    trashDialog.scope = "home"
+                                    trashDialog.scopeLabel = qsTr("il cestino della home")
+                                    trashDialog.open()
+                                }
+                            }
+                            Controls.Button {
+                                text: qsTr("Svuota cestini altre partizioni")
+                                icon.name: "drive-harddisk"
+                                enabled: MaintenanceBackend.available
+                                onClicked: {
+                                    trashDialog.scope = "system"
+                                    trashDialog.scopeLabel = qsTr("i cestini delle partizioni montate")
+                                    trashDialog.open()
+                                }
+                            }
+                            Controls.Button {
+                                text: qsTr("Svuota tutti i cestini")
+                                icon.name: "edit-delete"
+                                enabled: MaintenanceBackend.available
+                                onClicked: {
+                                    trashDialog.scope = "all"
+                                    trashDialog.scopeLabel = qsTr("tutti i cestini dell'utente")
+                                    trashDialog.open()
+                                }
+                            }
+                            Kirigami.InlineMessage {
+                                Layout.fillWidth: true
+                                visible: MaintenanceBackend.resultState !== "idle"
+                                type: MaintenanceBackend.resultState === "success" ? Kirigami.MessageType.Positive
+                                      : MaintenanceBackend.resultState === "error" ? Kirigami.MessageType.Error
+                                      : Kirigami.MessageType.Information
+                                text: MaintenanceBackend.running
+                                      ? qsTr("Pulizia amministrativa in corso…")
+                                      : MaintenanceBackend.output
+                            }
                             Controls.Button {
                                 text: qsTr("Flatpak inutilizzati")
                                 enabled: SystemBackend.programAvailable("flatpak") && !utilityBackend.busy
@@ -775,7 +821,23 @@ Kirigami.ScrollablePage {
             wrapMode: Text.WordWrap
             text: qsTr("Esegue rk sync sul layer persistente corrente. Non modifica la lista dei pacchetti richiesti.")
         }
-        onAccepted: PolkitHelper.execute("/usr/bin/rk", ["sync"])
+        onAccepted: RkBackend.sync()
+    }
+
+    Controls.Dialog {
+        id: trashDialog
+        property string scope: ""
+        property string scopeLabel: ""
+        modal: true
+        parent: Controls.Overlay.overlay
+        anchors.centerIn: parent
+        title: qsTr("Confermare la pulizia?")
+        standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
+        contentItem: Controls.Label {
+            wrapMode: Text.WordWrap
+            text: qsTr("Verranno svuotati %1. L'operazione è irreversibile e richiede autorizzazione amministrativa.").arg(trashDialog.scopeLabel)
+        }
+        onAccepted: MaintenanceBackend.cleanTrash(scope)
     }
 
     Controls.Dialog {

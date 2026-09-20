@@ -1,6 +1,6 @@
 Name:           krisCC
 Version:        0.6.0
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        krisCC personal control center for KrisOS and Fedora bootc
 License:        MIT
 URL:            https://github.com/krism-eu/krisCC
@@ -45,12 +45,18 @@ Settings.
 %doc README.md
 %{_bindir}/krisCC
 %{_libexecdir}/kriscc/bootc-status
+%{_libexecdir}/kriscc/maintenance
 %{_datadir}/applications/krisCC.desktop
 %{_datadir}/polkit-1/actions/org.kriscc.controlcenter.policy
 %{_datadir}/metainfo/org.kriscc.KrisCC.metainfo.xml
 %{_datadir}/icons/hicolor/scalable/apps/krisCC.svg
 
 %changelog
+* Sun Sep 20 2026 krism-eu - 0.6.0-2
+- Add structured rk recovery state shared by Dashboard and Recovery
+- Add tightly allowlisted root trash maintenance for home and mounted volumes
+- Refocus command bookmarks on daily diagnostics and harden the release contract
+
 * Sat Sep 19 2026 krism-eu - 0.6.0-1
 - Make BootC staged-update actions match download-only and ready-to-boot states
 - Pin the BootC JSON v1 contract and validate supported flags in CI

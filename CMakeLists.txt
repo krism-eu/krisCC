@@ -22,6 +22,8 @@ qt_add_executable(krisCC
     src/SoftwareBackend.cpp src/SoftwareBackend.h
     src/PackageSearch.cpp src/PackageSearch.h
     src/PolkitHelper.cpp src/PolkitHelper.h
+    src/RkBackend.cpp src/RkBackend.h
+    src/MaintenanceBackend.cpp src/MaintenanceBackend.h
     src/UtilityBackend.cpp src/UtilityBackend.h
     src/InstanceController.cpp src/InstanceController.h
     src/OperationLog.cpp src/OperationLog.h
@@ -57,7 +59,15 @@ target_link_libraries(krisCC PRIVATE
 )
 target_compile_definitions(krisCC PRIVATE KRISCC_VERSION="${PROJECT_VERSION}")
 
+add_executable(kriscc-maintenance
+    src/MaintenanceHelper.cpp
+    src/MaintenanceTrash.cpp src/MaintenanceTrash.h
+)
+set_target_properties(kriscc-maintenance PROPERTIES OUTPUT_NAME maintenance)
+target_link_libraries(kriscc-maintenance PRIVATE Qt6::Core)
+
 install(TARGETS krisCC RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(TARGETS kriscc-maintenance RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/kriscc)
 install(PROGRAMS src/bootc-status.sh DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/kriscc RENAME bootc-status)
 install(FILES data/krisCC.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 install(FILES data/org.kriscc.controlcenter.policy DESTINATION ${CMAKE_INSTALL_DATADIR}/polkit-1/actions)
