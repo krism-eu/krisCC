@@ -34,12 +34,14 @@ jobs:
           QT_QUICK_BACKEND: software
           QT_QUICK_CONTROLS_STYLE: Basic
           KRISCC_SMOKE_TEST: "1"
+          QT_FORCE_STDERR_LOGGING: "1"
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p artifacts/logs
           for style in Basic org.kde.breeze; do
-            QT_QUICK_CONTROLS_STYLE="$style" ./build/krisCC 2>&1 | tee /tmp/kriscc-qml-smoke.log
-            if grep -Ei 'Binding loop detected|Unable to assign|ReferenceError:|TypeError:|Created graphical object was not placed in the graphics scene|QQmlApplicationEngine failed|Type .* unavailable' /tmp/kriscc-qml-smoke.log; then
+            QT_QUICK_CONTROLS_STYLE="$style" ./build/krisCC 2>&1 | tee artifacts/logs/kriscc-qml-smoke-$style.log
+            if grep -Ei 'Binding loop detected|Unable to assign|ReferenceError:|TypeError:|Created graphical object was not placed in the graphics scene|QQmlApplicationEngine failed|Type .* unavailable' artifacts/logs/kriscc-qml-smoke-$style.log; then
               echo "ERROR: QML runtime smoke failed for $style" >&2
               exit 1
             fi
@@ -204,6 +206,7 @@ jobs:
           QT_QUICK_BACKEND: software
           QT_QUICK_CONTROLS_STYLE: Basic
           KRISCC_SMOKE_TEST: "1"
+          QT_FORCE_STDERR_LOGGING: "1"
         run: |
           set -euxo pipefail
           rpm_file="$GITHUB_WORKSPACE/artifacts/rpm/krisCC-0.7.0-6.fc44.x86_64.rpm"

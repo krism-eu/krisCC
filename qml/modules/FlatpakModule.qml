@@ -236,8 +236,9 @@ Kirigami.ScrollablePage {
                         Layout.fillWidth: true
 
                         Kirigami.Icon {
-                            Layout.preferredWidth: 48
-                            Layout.preferredHeight: 48
+                            Layout.preferredWidth: Kirigami.Units.iconSizes.large
+                            Layout.preferredHeight: Kirigami.Units.iconSizes.large
+                            Layout.alignment: Qt.AlignTop
                             source: {
                                 var appId = root.mode === "search" ? (modelData[2] || "") : (modelData[1] || "")
                                 var resolved = SystemBackend.flatpakIconPath(appId)
@@ -263,6 +264,18 @@ Kirigami.ScrollablePage {
                                 maximumLineCount: 2
                                 elide: Text.ElideRight
                                 opacity: 0.82
+                            }
+                            Controls.Label {
+                                Layout.fillWidth: true
+                                opacity: UiMetrics.secondaryOpacity
+                                elide: Text.ElideRight
+                                text: {
+                                    if (root.mode === "search")
+                                        return [modelData[2], modelData[3], modelData[4], modelData[5]].filter(function(x) { return !!x }).join(" · ")
+                                    if (root.mode === "installed" || root.mode === "updates")
+                                        return [modelData[1], modelData[2], modelData[3]].filter(function(x) { return !!x }).join(" · ")
+                                    return [modelData[1], modelData[2], modelData[3]].filter(function(x) { return !!x }).join(" · ")
+                                }
                             }
                         }
 
@@ -291,18 +304,7 @@ Kirigami.ScrollablePage {
                         }
                     }
 
-                    Controls.Label {
-                        Layout.fillWidth: true
-                        opacity: UiMetrics.secondaryOpacity
-                        elide: Text.ElideRight
-                        text: {
-                            if (root.mode === "search")
-                                return [modelData[2], modelData[3], modelData[4], modelData[5]].filter(function(x) { return !!x }).join(" · ")
-                            if (root.mode === "installed" || root.mode === "updates")
-                                return [modelData[1], modelData[2], modelData[3]].filter(function(x) { return !!x }).join(" · ")
-                            return [modelData[1], modelData[2], modelData[3]].filter(function(x) { return !!x }).join(" · ")
-                        }
-                    }
+
                 }
             }
         }
