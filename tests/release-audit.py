@@ -57,6 +57,8 @@ require(m and m.group(1) == RELEASE, "RPM Release mismatch")
 require(RPM_FILE in workflow, "workflow does not pin the expected runtime RPM filename")
 require(RPM_EVR in workflow, "workflow does not validate the expected RPM EVR")
 require(TAG in workflow, "workflow does not publish the expected immutable tag")
+require("0[.]6[.]0-1" not in workflow,
+        "workflow still contains the previous release in an escaped regex")
 require(f'<release version="{VERSION}"' in read("data/org.kriscc.KrisCC.metainfo.xml"),
         "AppStream metadata is missing the current version")
 require(f"krisCC-{VERSION}-*.rpm" in readme, "README RPM version mismatch")
