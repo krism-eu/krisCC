@@ -2,6 +2,10 @@
 
 krisCC è un **Control Center personale Kirigami per KrisOS / Fedora bootc**. Non vuole sostituire Plasma System Settings: rete, utenti, firewall, display, audio e preferenze desktop restano agli strumenti KDE già presenti. L'interfaccia resta volutamente nello stile Breeze/Plasma, usando componenti Kirigami e icone KDE senza introdurre un tema proprietario.
 
+## Architettura
+
+Le regole di stabilità, compatibilità e integrazione sono definite in [ARCHITECTURE.md](ARCHITECTURE.md). Il documento è normativo per le nuove funzionalità: krisCC deve restare piccolo, capability-driven e con logica di sistema confinata nei backend.
+
 ## Cosa gestisce
 
 - **Panoramica**: stato essenziale di sistema, aggiornamenti, storage e Quick System Info.

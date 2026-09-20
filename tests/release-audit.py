@@ -34,6 +34,7 @@ maintenance_helper_cpp = read("src/MaintenanceHelper.cpp")
 maintenance_trash_cpp = read("src/MaintenanceTrash.cpp")
 utility_cpp = read("src/UtilityBackend.cpp")
 main_cpp = read("src/main.cpp")
+architecture = read("ARCHITECTURE.md")
 package_cpp = read("src/PackageSearch.cpp")
 main_qml = read("qml/Main.qml")
 dashboard_qml = read("qml/modules/DashboardModule.qml")
@@ -329,5 +330,14 @@ require("bootc" in spec and "dnf5" in spec and "dnf5-plugins" in spec and "tar" 
 require("sudo rk sync" not in recovery_qml, "UI incorrectly claims sudo is used")
 require("bootc" in readme.lower() and "rk" in integration_doc,
         "integration documentation lost KrisOS contracts")
+
+for token in (
+    "**Integrazione forte, dipendenze deboli.**",
+    "QML non implementa logica di sistema.",
+    "Le letture devono fallire in modo morbido",
+    "Le mutazioni devono fallire in modo chiuso",
+    "Definition of Done",
+):
+    require(token in architecture, f"architectural contract is missing: {token}")
 
 print(f"krisCC release audit passed: {VERSION}-{RELEASE}")

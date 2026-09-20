@@ -1,0 +1,216 @@
+# krisCC — Contratto architetturale
+
+**Stato:** normativo  
+**Obiettivo:** mantenere krisCC snello, integrato con KrisOS e stabile nel tempo, riducendo al minimo la manutenzione richiesta.
+
+krisCC non deve diventare una raccolta di wrapper grafici per comandi di sistema. Deve essere un livello di controllo piccolo e prevedibile sopra contratti KrisOS espliciti e stabili.
+
+## 1. Principio guida
+
+**Integrazione forte, dipendenze deboli.**
+
+La UI conosce il significato dello stato del sistema, non il dettaglio con cui quello stato viene ricavato.
+
+Esempio corretto:
+
+```text
+QML -> RkBackend.needsSync
+```
+
+Esempio da evitare:
+
+```text
+QML -> grep/findmnt/file marker/output testuale
+```
+
+Quando cambia un componente sottostante, l'adattamento deve rimanere confinato nel backend responsabile.
+
+## 2. Strati consentiti
+
+```text
+QML / Kirigami
+      |
+      v
+Backend krisCC
+      |
+      +--> API read-only di sistema
+      |
+      +--> Polkit -> helper/operazione rigidamente allowlisted
+      |
+      v
+KrisOS / rk / bootc / systemd / DNF / filesystem
+```
+
+Regole:
+
+- QML non implementa logica di sistema.
+- QML non costruisce comandi privilegiati.
+- Un backend possiede un solo dominio funzionale.
+- Le mutazioni root passano esclusivamente da entry point allowlisted.
+- Nessun helper privilegiato accetta shell libera, pipeline o path arbitrari forniti dalla UI.
+
+## 3. Fonte della verità
+
+krisCC non duplica la logica di KrisOS.
+
+Sono fonti della verità i componenti proprietari del dominio, per esempio:
+
+- `rk` per il layer RPM persistente;
+- `bootc` per lo stato e gli aggiornamenti image-based;
+- systemd per unità, timer e sessioni;
+- DNF5 per informazioni repository;
+- Flatpak e Podman per i rispettivi profili utente.
+
+krisCC legge e presenta lo stato; non reimplementa solver, recovery, deployment o policy.
+
+## 4. Contratti stabili
+
+Ogni integrazione deve avere un confine piccolo e documentabile.
+
+Ordine di preferenza:
+
+1. output machine-readable e versionato;
+2. API o file di stato con formato stabile;
+3. output testuale solo se il contratto è intenzionalmente stabile e il parser è centralizzato e coperto da fixture.
+
+Non è consentito distribuire parsing dello stesso contratto in più moduli o in QML.
+
+Per `rk`, il solo punto autorizzato a interpretare `rk status` è `RkBackend`. Dashboard, Recovery e altre viste consumano esclusivamente proprietà tipizzate.
+
+Se in futuro `rk` espone un formato JSON/versionato, la migrazione deve interessare `RkBackend`, non le viste.
+
+## 5. Compatibilità e cambiamenti futuri
+
+Una funzionalità non deve presumere che un comando o una capability esista per sempre.
+
+Le letture devono fallire in modo morbido:
+
+- `available=false` o stato equivalente;
+- messaggio breve e non tecnico nella UI;
+- dettaglio tecnico separato quando utile;
+- il resto dell'applicazione continua a funzionare.
+
+Le mutazioni devono fallire in modo chiuso:
+
+- se programma, argomenti o stato non corrispondono all'allowlist, l'operazione non parte;
+- nessun fallback più permissivo;
+- nessun passaggio automatico a shell generiche.
+
+I fallback legacy sono temporanei, read-only e devono essere rimossi quando termina la migrazione che li giustifica.
+
+## 6. Privilegi
+
+Ogni operazione amministrativa segue:
+
+```text
+stato -> conferma -> autorizzazione -> operazione -> verifica -> refresh
+```
+
+Un codice di uscita zero non è sufficiente quando esiste uno stato verificabile.
+
+Esempi:
+
+- dopo `rk sync` o `rk forget`, rileggere lo stato RK;
+- dopo una manutenzione filesystem, rileggere lo stato pertinente quando disponibile.
+
+Gli helper privilegiati devono:
+
+- fare una sola cosa;
+- accettare un insieme chiuso di modalità;
+- validare nuovamente gli input;
+- non seguire symlink o mount inattesi quando operano sul filesystem;
+- essere direttamente testabili fuori dalla UI.
+
+## 7. UI stabile e nativa
+
+krisCC usa Plasma/Kirigami e il tema dell'utente.
+
+Non deve introdurre:
+
+- tema proprietario completo;
+- palette hardcoded che sostituiscono i colori semantici;
+- componenti grafici custom quando Kirigami offre già l'equivalente;
+- stato applicativo codificato solo tramite colore.
+
+La Dashboard mostra eccezioni e salute, non dettagli tecnici rari.
+
+Le funzioni specialistiche rimangono nelle pagine appropriate. krisCC non deve diventare il posto da cui si può fare qualunque cosa.
+
+## 8. Criterio per aggiungere una funzione
+
+Una funzione entra in krisCC solo se sono definiti tutti questi elementi:
+
+1. fonte della verità;
+2. stato iniziale leggibile;
+3. capability detection;
+4. operazione ammessa;
+5. comportamento in errore;
+6. recovery o comportamento dopo errore;
+7. verifica post-operazione quando possibile;
+8. test automatici;
+9. ownership chiara del backend.
+
+Se uno di questi elementi manca, la funzione non è ancora pronta per il Control Center.
+
+## 9. Comandi diagnostici
+
+La pagina Comandi è una cassetta degli attrezzi read-only per l'uso quotidiano.
+
+Sono ammessi comandi:
+
+- frequenti;
+- utili per diagnosi locale;
+- con argomenti fissi;
+- senza input libero;
+- senza `sudo`;
+- senza shell costruita dall'utente.
+
+Le funzioni rare o specifiche di un sottosistema restano nella pagina del sottosistema invece di moltiplicare i bookmark.
+
+## 10. Test come contratto di compatibilità
+
+La CI deve proteggere sia il comportamento sia i confini architetturali.
+
+Per ogni contratto strutturato sono richiesti, dove applicabile:
+
+- fixture valide;
+- fixture incomplete o future/non riconosciute;
+- test di capability assente;
+- test degli stati degradati;
+- test positivi e negativi delle allowlist;
+- build strict;
+- QML lint;
+- smoke test runtime;
+- build e installazione dell'RPM;
+- smoke test dell'RPM installato.
+
+Una modifica che richiede di allentare l'allowlist o spostare parsing nel QML deve essere considerata una regressione architetturale salvo motivazione esplicita.
+
+## 11. Politica di manutenzione
+
+L'obiettivo non è supportare indefinitamente ogni implementazione storica.
+
+Preferenze:
+
+- meno compatibilità implicita;
+- più capability detection;
+- pochi adattatori centrali;
+- rimozione dei fallback conclusa la migrazione;
+- contratti versionati invece di euristiche.
+
+Il codice migliore per krisCC è quello che continuerà a funzionare anche quando cambiano dettagli interni di KrisOS, perché quei dettagli non attraversano il confine del backend.
+
+## 12. Definition of Done
+
+Una modifica strutturale è pronta solo quando:
+
+- il QML non conosce dettagli inutili dell'implementazione;
+- il backend espone stato tipizzato;
+- le operazioni privilegiate sono allowlisted in modo stretto;
+- gli errori di lettura non rompono l'app;
+- gli errori di mutazione non degradano verso comportamenti più permissivi;
+- la CI protegge il nuovo contratto;
+- l'RPM installato passa lo smoke test;
+- la modifica non introduce una nuova dipendenza di manutenzione evitabile.
+
+Queste regole hanno precedenza sulla comodità di implementare rapidamente una nuova funzione.
