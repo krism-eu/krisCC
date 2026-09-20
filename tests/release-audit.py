@@ -7,8 +7,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "0.6.0"
-RELEASE = "2"
+VERSION = "0.7.0"
+RELEASE = "1"
 RPM_EVR = f"{VERSION}-{RELEASE}.fc44"
 RPM_FILE = f"krisCC-{RPM_EVR}.x86_64.rpm"
 TAG = f"v{VERSION}-{RELEASE}"
@@ -26,6 +26,7 @@ def require(condition: bool, message: str) -> None:
 cmake = read("CMakeLists.txt")
 spec = read("packaging/krisCC.spec")
 workflow = read(".github/workflows/build.yml")
+promotion_workflow = read(".github/workflows/promote-stable.yml")
 system_cpp = read("src/SystemBackend.cpp")
 polkit_cpp = read("src/PolkitHelper.cpp")
 rk_cpp = read("src/RkBackend.cpp")
@@ -57,9 +58,14 @@ m = re.search(r"^Release:\s*([0-9]+)%\{\?dist\}", spec, re.M)
 require(m and m.group(1) == RELEASE, "RPM Release mismatch")
 require(RPM_FILE in workflow, "workflow does not pin the expected runtime RPM filename")
 require(RPM_EVR in workflow, "workflow does not validate the expected RPM EVR")
-require(TAG in workflow, "workflow does not publish the expected immutable tag")
-require("0[.]6[.]0-1" not in workflow,
-        "workflow still contains the previous release in an escaped regex")
+require('tag="v${BASH_REMATCH[1]}-${BASH_REMATCH[2]}"' in workflow,
+        "workflow does not derive the immutable tag from the validated RPM")
+require("0.6.0" not in workflow and "0[.]6[.]0" not in workflow,
+        "main workflow still contains 0.6 release literals")
+require("branches: [main]" in workflow
+        and "k1.0-ui-restyle" not in workflow
+        and "kriscc-0.5-minimal" not in workflow,
+        "main workflow still carries obsolete development branches")
 require(f'<release version="{VERSION}"' in read("data/org.kriscc.KrisCC.metainfo.xml"),
         "AppStream metadata is missing the current version")
 require(f"krisCC-{VERSION}-*.rpm" in readme, "README RPM version mismatch")
@@ -324,12 +330,25 @@ require("launchUnprivileged" not in polkit_cpp,
 # Keep the intended minimal scope and immutable KrisOS update contract.
 combined_ui = system_qml + recovery_qml + dashboard_qml
 require(not re.search(r"fwupdmgr|firmware|welcome|first.?run", combined_ui, re.I),
-        "firmware/welcome scope leaked into 0.6.0")
+        "firmware/welcome scope leaked into 0.7.0")
 require("bootc" in spec and "dnf5" in spec and "dnf5-plugins" in spec and "tar" in spec,
         "mandatory runtime requirements missing from RPM spec")
 require("sudo rk sync" not in recovery_qml, "UI incorrectly claims sudo is used")
 require("bootc" in readme.lower() and "rk" in integration_doc,
         "integration documentation lost KrisOS contracts")
+
+require("workflow_dispatch:" in promotion_workflow,
+        "stable promotion must be an explicit manual action")
+require("host_acceptance_confirmed" in promotion_workflow,
+        "stable promotion lacks the KrisOS host acceptance gate")
+require('gh release edit "$TAG"' in promotion_workflow
+        and "--prerelease=false" in promotion_workflow,
+        "stable promotion must change the existing candidate instead of rebuilding it")
+require("sha256sum -c SHA256SUMS" in promotion_workflow
+        and "rpm -qp --qf" in promotion_workflow,
+        "stable promotion does not verify the released RPM")
+require("stable/0.6" in readme,
+        "README does not preserve the frozen previous line")
 
 for token in (
     "**Integrazione forte, dipendenze deboli.**",

@@ -214,3 +214,18 @@ Una modifica strutturale è pronta solo quando:
 - la modifica non introduce una nuova dipendenza di manutenzione evitabile.
 
 Queste regole hanno precedenza sulla comodità di implementare rapidamente una nuova funzione.
+
+
+## 13. Ciclo di release
+
+`main` è l'unica linea di sviluppo supportata. I rami `stable/X.Y` sono fotografie congelate di una linea precedente, non rami di manutenzione continua.
+
+Una release segue questo percorso:
+
+```text
+main -> CI completa -> RPM candidato immutabile -> acceptance host KrisOS -> promozione stable dello stesso artefatto
+```
+
+La promozione stable non deve ricompilare il pacchetto. Deve verificare checksum, identità EVR e appartenenza del commit a `main`, quindi cambiare soltanto lo stato della release già validata.
+
+Una vecchia stable resta disponibile tramite tag, release e ramo congelato. Non si introducono fallback nel codice corrente solo per mantenerla compatibile.

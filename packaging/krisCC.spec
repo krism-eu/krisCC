@@ -1,6 +1,6 @@
 Name:           krisCC
-Version:        0.6.0
-Release:        2%{?dist}
+Version:        0.7.0
+Release:        1%{?dist}
 Summary:        krisCC personal control center for KrisOS and Fedora bootc
 License:        MIT
 URL:            https://github.com/krism-eu/krisCC
@@ -52,6 +52,11 @@ Settings.
 %{_datadir}/icons/hicolor/scalable/apps/krisCC.svg
 
 %changelog
+* Sun Sep 20 2026 krism-eu - 0.7.0-1
+- Introduce structured RK and maintenance backends with tighter privilege boundaries
+- Refresh the Plasma/Kirigami dashboard and daily diagnostics around typed system state
+- Establish the long-term architecture contract and stable promotion workflow
+
 * Sun Sep 20 2026 krism-eu - 0.6.0-2
 - Add structured rk recovery state shared by Dashboard and Recovery
 - Add tightly allowlisted root trash maintenance for home and mounted volumes
