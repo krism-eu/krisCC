@@ -129,13 +129,7 @@ Kirigami.ScrollablePage {
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 2
-            Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Pacchetti RPM") }
-            Controls.Label {
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                opacity: 0.72
-                text: qsTr("Base immutabile, pacchetti persistenti gestiti da rk e pacchetti locali vengono distinti chiaramente. La ricerca usa i repository DNF abilitati; l'installazione persistente resta validata dalla policy rk.")
-            }
+            PageIntro { title: root.title; subtitle: qsTr("Base immutabile, pacchetti persistenti gestiti da rk e pacchetti locali vengono distinti chiaramente. La ricerca usa i repository DNF abilitati; l'installazione persistente resta validata dalla policy rk.") }
         }
 
         Controls.TabBar {
@@ -143,11 +137,11 @@ Kirigami.ScrollablePage {
             Layout.fillWidth: true
             palette.highlight: Kirigami.Theme.highlightColor
             onCurrentIndexChanged: root.refreshCurrent()
-            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: checked; text: qsTr("Cerca") }
-            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: checked; text: qsTr("Installati") }
-            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: checked; text: qsTr("Aggiornabili") }
-            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: checked; text: qsTr("Novità repository") }
-            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: checked; text: qsTr("Repository") }
+            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: true; text: qsTr("Cerca") }
+            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: true; text: qsTr("Installati") }
+            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: true; text: qsTr("Aggiornabili") }
+            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: true; text: qsTr("Novità repository") }
+            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: true; text: qsTr("Repository") }
         }
 
         Kirigami.InlineMessage {
@@ -195,7 +189,7 @@ Kirigami.ScrollablePage {
                                 Layout.fillWidth: true
                                 Controls.Label {
                                     Layout.fillWidth: true
-                                    font.bold: true
+                                    font.bold: false
                                     font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
                                     text: model.name
                                     elide: Text.ElideRight
@@ -203,8 +197,8 @@ Kirigami.ScrollablePage {
                                 Controls.Label {
                                     visible: root.packageState(model).length > 0
                                     text: root.packageState(model)
-                                    font.bold: true
-                                    opacity: 0.7
+                                    font.bold: false
+                                    opacity: UiMetrics.secondaryOpacity
                                 }
                             }
                             Controls.Label {
@@ -217,14 +211,14 @@ Kirigami.ScrollablePage {
                             }
                             Controls.Label {
                                 Layout.fillWidth: true
-                                opacity: 0.72
+                                opacity: UiMetrics.secondaryOpacity
                                 elide: Text.ElideRight
                                 text: [model.version, model.arch, model.repository].filter(function(x) { return !!x }).join(" · ")
                             }
                             RowLayout {
                                 Layout.fillWidth: true
-                                Controls.Label { opacity: 0.72; text: qsTr("Download: %1").arg(root.humanSize(model.downloadSize)) }
-                                Controls.Label { opacity: 0.72; text: qsTr("Installato: %1").arg(root.humanSize(model.installSize)) }
+                                Controls.Label { opacity: UiMetrics.secondaryOpacity; text: qsTr("Download: %1").arg(root.humanSize(model.downloadSize)) }
+                                Controls.Label { opacity: UiMetrics.secondaryOpacity; text: qsTr("Installato: %1").arg(root.humanSize(model.installSize)) }
                                 Item { Layout.fillWidth: true }
                                 Controls.Button {
                                     text: qsTr("Dettagli")
@@ -313,10 +307,10 @@ Kirigami.ScrollablePage {
                         contentItem: RowLayout {
                             ColumnLayout {
                                 Layout.fillWidth: true
-                                Controls.Label { Layout.fillWidth: true; font.bold: true; text: model.name + (model.arch ? "." + model.arch : "") }
-                                Controls.Label { Layout.fillWidth: true; opacity: 0.72; text: (model.version || "") + (model.repository ? " · " + model.repository : ""); elide: Text.ElideRight }
+                                Controls.Label { Layout.fillWidth: true; font.bold: false; text: model.name + (model.arch ? "." + model.arch : "") }
+                                Controls.Label { Layout.fillWidth: true; opacity: UiMetrics.secondaryOpacity; text: (model.version || "") + (model.repository ? " · " + model.repository : ""); elide: Text.ElideRight }
                             }
-                            Controls.Label { text: root.packageState(model); opacity: 0.7; font.bold: model.persistent || model.owned }
+                            Controls.Label { text: root.packageState(model); opacity: UiMetrics.secondaryOpacity; font.bold: false }
                             Controls.Button {
                                 visible: model.persistent || (!model.owned && model.installed)
                                 enabled: RkBackend.canChangePackages
@@ -363,9 +357,9 @@ Kirigami.ScrollablePage {
                     delegate: Kirigami.AbstractCard {
                         width: ListView.view.width
                         contentItem: RowLayout {
-                            Controls.Label { Layout.fillWidth: true; font.bold: true; text: model.name + (model.arch ? "." + model.arch : "") }
-                            Controls.Label { text: model.version || ""; opacity: 0.72 }
-                            Controls.Label { text: model.repository || ""; opacity: 0.72 }
+                            Controls.Label { Layout.fillWidth: true; font.bold: false; text: model.name + (model.arch ? "." + model.arch : "") }
+                            Controls.Label { text: model.version || ""; opacity: UiMetrics.secondaryOpacity }
+                            Controls.Label { text: model.repository || ""; opacity: UiMetrics.secondaryOpacity }
                             Controls.Button {
                                 text: qsTr("Dettagli")
                                 icon.name: "documentinfo"
@@ -398,9 +392,9 @@ Kirigami.ScrollablePage {
                     delegate: Kirigami.AbstractCard {
                         width: ListView.view.width
                         contentItem: RowLayout {
-                            Controls.Label { Layout.fillWidth: true; font.bold: true; text: model.name + (model.arch ? "." + model.arch : "") }
-                            Controls.Label { text: model.version || ""; opacity: 0.72 }
-                            Controls.Label { text: model.repository || ""; opacity: 0.72 }
+                            Controls.Label { Layout.fillWidth: true; font.bold: false; text: model.name + (model.arch ? "." + model.arch : "") }
+                            Controls.Label { text: model.version || ""; opacity: UiMetrics.secondaryOpacity }
+                            Controls.Label { text: model.repository || ""; opacity: UiMetrics.secondaryOpacity }
                             Controls.Button {
                                 text: qsTr("Dettagli")
                                 icon.name: "documentinfo"
@@ -422,7 +416,7 @@ Kirigami.ScrollablePage {
                 Controls.Label {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
-                    opacity: 0.72
+                    opacity: UiMetrics.secondaryOpacity
                     text: qsTr("Repository DNF configurati nel sistema. Puoi aggiungere un file .repo remoto via HTTPS e abilitare o disabilitare repository esistenti. rk usa solo repository abilitati e verifica le firme RPM prima di ogni transazione.")
                 }
                 RowLayout {
@@ -448,14 +442,14 @@ Kirigami.ScrollablePage {
                         contentItem: RowLayout {
                             ColumnLayout {
                                 Layout.fillWidth: true
-                                Controls.Label { font.bold: true; text: modelData.name }
-                                Controls.Label { text: modelData.id; opacity: 0.72 }
+                                Controls.Label { font.bold: false; text: modelData.name }
+                                Controls.Label { text: modelData.id; opacity: UiMetrics.secondaryOpacity }
                             }
                             Controls.Label {
                                 Layout.preferredWidth: 110
                                 horizontalAlignment: Text.AlignHCenter
                                 text: modelData.enabled ? qsTr("attivo") : qsTr("inattivo")
-                                font.bold: true
+                                font.bold: false
                                 opacity: modelData.enabled ? 1.0 : 0.68
                             }
                             Controls.Button {
@@ -497,7 +491,7 @@ Kirigami.ScrollablePage {
                         required property string modelData
                         Layout.fillWidth: true
                         wrapMode: Text.WrapAtWordBoundaryOrAnywhere
-                        font.family: Kirigami.Theme.defaultFixedWidthFont.family
+                        font.family: Kirigami.Theme.fixedWidthFont.family
                         text: modelData
                     }
                 }
@@ -510,6 +504,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: qsTr("Aggiungi repository DNF")
         standardButtons: Controls.Dialog.Cancel
         contentItem: ColumnLayout {
@@ -561,6 +556,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         width: Math.min(root.width - 48, 800)
         height: Math.min(root.height - 48, 650)
         title: root.detailPackage ? root.detailPackage.name : qsTr("Dettagli pacchetto")
@@ -581,7 +577,7 @@ Kirigami.ScrollablePage {
                 }
                 Controls.Label {
                     Layout.fillWidth: true
-                    opacity: 0.72
+                    opacity: UiMetrics.secondaryOpacity
                     wrapMode: Text.WordWrap
                     text: root.detailPackage
                         ? [root.detailPackage.version, root.detailPackage.arch,
@@ -595,9 +591,9 @@ Kirigami.ScrollablePage {
                     Kirigami.AbstractCard {
                         Layout.fillWidth: true
                         contentItem: ColumnLayout {
-                            Controls.Label { text: qsTr("Download"); opacity: 0.72 }
+                            Controls.Label { text: qsTr("Download"); opacity: UiMetrics.secondaryOpacity }
                             Controls.Label {
-                                font.bold: true
+                                font.bold: false
                                 text: root.detailPackage ? root.humanSize(root.detailPackage.downloadSize) : ""
                             }
                         }
@@ -605,9 +601,9 @@ Kirigami.ScrollablePage {
                     Kirigami.AbstractCard {
                         Layout.fillWidth: true
                         contentItem: ColumnLayout {
-                            Controls.Label { text: qsTr("Spazio installato"); opacity: 0.72 }
+                            Controls.Label { text: qsTr("Spazio installato"); opacity: UiMetrics.secondaryOpacity }
                             Controls.Label {
-                                font.bold: true
+                                font.bold: false
                                 text: root.detailPackage ? root.humanSize(root.detailPackage.installSize) : ""
                             }
                         }
@@ -619,7 +615,7 @@ Kirigami.ScrollablePage {
                 Controls.Label {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
-                    opacity: 0.72
+                    opacity: UiMetrics.secondaryOpacity
                     text: qsTr("Il piano mostrato qui sotto è l'output reale di rk plan. Non viene reinterpretato dalla UI.")
                 }
                 Controls.BusyIndicator {
@@ -643,7 +639,7 @@ Kirigami.ScrollablePage {
                     contentItem: Controls.Label {
                         width: parent.width
                         wrapMode: Text.WrapAtWordBoundaryOrAnywhere
-                        font.family: Kirigami.Theme.defaultFixedWidthFont.family
+                        font.family: Kirigami.Theme.fixedWidthFont.family
                         text: utilityBackend.output
                     }
                 }
@@ -656,6 +652,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: root.pendingTitle
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label {

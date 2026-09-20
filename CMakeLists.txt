@@ -30,7 +30,12 @@ qt_add_executable(krisCC
     src/OperationLog.cpp src/OperationLog.h
 )
 
+set_source_files_properties(qml/components/UiMetrics.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+
 set(KRISCC_QML_FILES
+    qml/components/UiMetrics.qml
+    qml/components/PageIntro.qml
+    qml/components/OutputCard.qml
     qml/Main.qml
     qml/modules/DashboardModule.qml
     qml/modules/SoftwareModule.qml
@@ -58,7 +63,7 @@ target_link_libraries(krisCC PRIVATE
     Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::DBus
     KF6::Kirigami
 )
-target_compile_definitions(krisCC PRIVATE KRISCC_VERSION="${PROJECT_VERSION}-5")
+target_compile_definitions(krisCC PRIVATE KRISCC_VERSION="${PROJECT_VERSION}-6")
 
 add_executable(kriscc-admin
     src/AdminHelper.cpp

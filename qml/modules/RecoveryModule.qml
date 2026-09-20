@@ -51,21 +51,17 @@ Kirigami.ScrollablePage {
         width: parent.width
         spacing: Kirigami.Units.largeSpacing
 
+        PageIntro { title: root.title; subtitle: qsTr("Archivi locali tar.gz in ~/krisCC Backups. Configurazione e home restano dati utente e non modificano il deployment BootC.") }
+
         Kirigami.AbstractCard {
             Layout.fillWidth: true
             contentItem: ColumnLayout {
                 spacing: Kirigami.Units.largeSpacing
                 Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Crea backup") }
-                Controls.Label {
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                    opacity: 0.72
-                    text: qsTr("Archivi locali tar.gz in ~/krisCC Backups. Configurazione e home restano dati utente e non modificano il deployment BootC.")
-                }
 
                 RowLayout {
                     Layout.fillWidth: true
-                    Controls.Label { text: qsTr("Profilo:"); font.bold: true }
+                    Controls.Label { text: qsTr("Profilo:"); font.bold: false }
                     Controls.ComboBox {
                         id: backupProfile
                         Layout.preferredWidth: 260
@@ -83,7 +79,7 @@ Kirigami.ScrollablePage {
                 Controls.Label {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
-                    opacity: 0.72
+                    opacity: UiMetrics.secondaryOpacity
                     text: backupProfile.currentIndex === 0
                           ? qsTr("Include le configurazioni utente supportate. Minimo 1 GiB libero.")
                           : qsTr("Include la home, escludendo cache, cestino e backup precedenti. Minimo 5 GiB liberi.")
@@ -95,7 +91,7 @@ Kirigami.ScrollablePage {
                         Kirigami.Heading { level: 3; font.bold: true; text: qsTr("Contenuto del backup") }
                         Controls.Label {
                             Layout.fillWidth: true
-                            opacity: 0.72
+                            opacity: UiMetrics.secondaryOpacity
                             text: qsTr("Destinazione: ~/krisCC Backups")
                         }
                         Repeater {
@@ -118,7 +114,7 @@ Kirigami.ScrollablePage {
                                 }
                                 Controls.Label {
                                     visible: modelData.exists !== undefined
-                                    opacity: 0.72
+                                    opacity: UiMetrics.secondaryOpacity
                                     text: modelData.exists ? qsTr("presente") : qsTr("assente")
                                 }
                             }
@@ -185,10 +181,10 @@ Kirigami.ScrollablePage {
                         contentItem: RowLayout {
                             ColumnLayout {
                                 Layout.fillWidth: true
-                                Controls.Label { Layout.fillWidth: true; font.bold: true; text: modelData.name }
+                                Controls.Label { Layout.fillWidth: true; font.bold: false; text: modelData.name }
                                 Controls.Label {
                                     Layout.fillWidth: true
-                                    opacity: 0.72
+                                    opacity: UiMetrics.secondaryOpacity
                                     text: (modelData.kind === "home" ? qsTr("Home") : qsTr("Configurazione"))
                                           + " · " + root.humanSize(modelData.size)
                                           + " · " + modelData.modified
@@ -229,7 +225,7 @@ Kirigami.ScrollablePage {
                         Controls.Label {
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
-                            opacity: 0.72
+                            opacity: UiMetrics.secondaryOpacity
                             text: qsTr("Stato strutturato di rk. Le azioni vengono abilitate solo quando il contratto KrisOS le consente.")
                         }
                     }
@@ -257,16 +253,16 @@ Kirigami.ScrollablePage {
                     Kirigami.AbstractCard {
                         Layout.fillWidth: true
                         contentItem: ColumnLayout {
-                            Controls.Label { font.bold: true; text: qsTr("Overlay /usr") }
-                            Controls.Label { font.bold: true; text: root.overlayLabel() }
+                            Controls.Label { font.bold: false; text: qsTr("Overlay /usr") }
+                            Controls.Label { font.bold: false; text: root.overlayLabel() }
                         }
                     }
                     Kirigami.AbstractCard {
                         Layout.fillWidth: true
                         contentItem: ColumnLayout {
-                            Controls.Label { font.bold: true; text: qsTr("Recovery pendente") }
+                            Controls.Label { font.bold: false; text: qsTr("Recovery pendente") }
                             Controls.Label {
-                                font.bold: true
+                                font.bold: false
                                 text: !RkBackend.statusValid ? qsTr("Non disponibile")
                                       : RkBackend.pendingRecovery ? qsTr("Sì · riavvio richiesto") : qsTr("No")
                             }
@@ -275,9 +271,9 @@ Kirigami.ScrollablePage {
                     Kirigami.AbstractCard {
                         Layout.fillWidth: true
                         contentItem: ColumnLayout {
-                            Controls.Label { font.bold: true; text: qsTr("Needs sync") }
+                            Controls.Label { font.bold: false; text: qsTr("Needs sync") }
                             Controls.Label {
-                                font.bold: true
+                                font.bold: false
                                 text: !RkBackend.statusValid ? qsTr("Non disponibile")
                                       : RkBackend.needsSync ? qsTr("Sì") : qsTr("No")
                             }
@@ -326,7 +322,7 @@ Kirigami.ScrollablePage {
                 Controls.Label {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
-                    opacity: 0.72
+                    opacity: UiMetrics.secondaryOpacity
                     text: qsTr("Se rk sync segnala una richiesta non più disponibile, puoi dimenticare solo quella richiesta. L'operazione non disinstalla direttamente RPM già presenti.")
                 }
 
@@ -375,13 +371,9 @@ Kirigami.ScrollablePage {
                     id: rkTechnicalDetails
                     text: qsTr("Dettagli tecnici rk")
                 }
-                Controls.TextArea {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 170
+                OutputCard {
                     visible: rkTechnicalDetails.checked
-                    readOnly: true
-                    wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere
-                    font.family: Kirigami.Theme.defaultFixedWidthFont.family
+                    embedded: true
                     text: RkBackend.statusText
                 }
             }
@@ -393,6 +385,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: qsTr("Creare il backup della home?")
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label {
@@ -407,6 +400,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: qsTr("Ripristinare %1?").arg(root.restoreName)
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label {
@@ -423,6 +417,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: qsTr("Risincronizzare il layer RPM?")
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label {
@@ -438,6 +433,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: qsTr("Dimenticare la richiesta %1?").arg(packageName)
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label {

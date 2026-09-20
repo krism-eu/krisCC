@@ -103,7 +103,7 @@ Kirigami.ApplicationWindow {
                             Controls.Label {
                                 Layout.fillWidth: true
                                 text: qsTr("Centro di controllo KrisOS")
-                                opacity: 0.72
+                                opacity: UiMetrics.secondaryOpacity
                                 elide: Text.ElideRight
                             }
                         }
@@ -220,7 +220,7 @@ Kirigami.ApplicationWindow {
                             }
                             Controls.Label {
                                 text: qsTr("KrisOS Control Center")
-                                opacity: 0.66
+                                opacity: UiMetrics.secondaryOpacity
                             }
                         }
 
@@ -229,14 +229,9 @@ Kirigami.ApplicationWindow {
                             Controls.Label {
                                 Layout.alignment: Qt.AlignRight
                                 text: qsTr("v%1").arg(Qt.application.version)
-                                opacity: 0.72
+                                opacity: UiMetrics.secondaryOpacity
                             }
-                            Controls.Label {
-                                Layout.alignment: Qt.AlignRight
-                                text: qsTr("Sistema sicuro. Sempre tuo.")
-                                color: Kirigami.Theme.highlightColor
-                                font.bold: true
-                            }
+
                         }
                     }
 
@@ -256,17 +251,66 @@ Kirigami.ApplicationWindow {
                     Layout.fillHeight: true
                     currentIndex: root.currentSection
 
-                    DashboardModule {
+                    Loader {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        property bool visited: false
+                        active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 0)
+                        onLoaded: visited = true
+                        sourceComponent: Component { DashboardModule {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         onOpenRequested: function(pageId) { root.openById(pageId) }
+                    } }
                     }
-                    SoftwareModule { Layout.fillWidth: true; Layout.fillHeight: true }
-                    FlatpakModule { Layout.fillWidth: true; Layout.fillHeight: true }
-                    PodmanModule { Layout.fillWidth: true; Layout.fillHeight: true }
-                    SystemModule { Layout.fillWidth: true; Layout.fillHeight: true }
-                    CommandsModule { Layout.fillWidth: true; Layout.fillHeight: true }
-                    RecoveryModule { Layout.fillWidth: true; Layout.fillHeight: true }
+                    Loader {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        property bool visited: false
+                        active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 1)
+                        onLoaded: visited = true
+                        sourceComponent: Component { SoftwareModule { Layout.fillWidth: true; Layout.fillHeight: true } }
+                    }
+                    Loader {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        property bool visited: false
+                        active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 2)
+                        onLoaded: visited = true
+                        sourceComponent: Component { FlatpakModule { Layout.fillWidth: true; Layout.fillHeight: true } }
+                    }
+                    Loader {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        property bool visited: false
+                        active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 3)
+                        onLoaded: visited = true
+                        sourceComponent: Component { PodmanModule { Layout.fillWidth: true; Layout.fillHeight: true } }
+                    }
+                    Loader {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        property bool visited: false
+                        active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 4)
+                        onLoaded: visited = true
+                        sourceComponent: Component { SystemModule { Layout.fillWidth: true; Layout.fillHeight: true } }
+                    }
+                    Loader {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        property bool visited: false
+                        active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 5)
+                        onLoaded: visited = true
+                        sourceComponent: Component { CommandsModule { Layout.fillWidth: true; Layout.fillHeight: true } }
+                    }
+                    Loader {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        property bool visited: false
+                        active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 6)
+                        onLoaded: visited = true
+                        sourceComponent: Component { RecoveryModule { Layout.fillWidth: true; Layout.fillHeight: true } }
+                    }
                 }
             }
         }

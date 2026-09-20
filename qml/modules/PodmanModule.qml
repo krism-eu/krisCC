@@ -160,13 +160,7 @@ Kirigami.ScrollablePage {
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 2
-            Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Podman") }
-            Controls.Label {
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                opacity: 0.75
-                text: qsTr("Container e immagini locali dell'utente corrente, con stato, dimensione e azioni esplicite.")
-            }
+            PageIntro { title: root.title; subtitle: qsTr("Container e immagini locali dell'utente corrente, con stato, dimensione e azioni esplicite.") }
         }
 
         Controls.TabBar {
@@ -177,7 +171,7 @@ Kirigami.ScrollablePage {
             Controls.TabButton {
                 implicitHeight: Kirigami.Units.gridUnit * 2.1
                 text: qsTr("Container")
-                font.bold: checked
+                font.bold: true
                 onClicked: {
                     root.mode = "containers"
                     root.refresh()
@@ -186,7 +180,7 @@ Kirigami.ScrollablePage {
             Controls.TabButton {
                 implicitHeight: Kirigami.Units.gridUnit * 2.1
                 text: qsTr("Immagini")
-                font.bold: checked
+                font.bold: true
                 onClicked: {
                     root.mode = "images"
                     root.refresh()
@@ -204,7 +198,7 @@ Kirigami.ScrollablePage {
             }
             Item { Layout.fillWidth: true }
             Controls.Label {
-                opacity: 0.72
+                opacity: UiMetrics.secondaryOpacity
                 text: root.mode === "images"
                       ? qsTr("%1 immagini").arg(root.images.length)
                       : qsTr("%1 container").arg(root.containers.length)
@@ -246,37 +240,37 @@ Kirigami.ScrollablePage {
                             Layout.fillWidth: true
                             Controls.Label {
                                 Layout.fillWidth: true
-                                font.bold: true
+                                font.bold: false
                                 font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
                                 text: root.containerName(modelData)
                                 elide: Text.ElideRight
                             }
                             Controls.Label {
-                                font.bold: true
-                                opacity: 0.72
+                                font.bold: false
+                                opacity: UiMetrics.secondaryOpacity
                                 text: root.containerState(modelData)
                             }
                         }
                         Controls.Label {
                             Layout.fillWidth: true
                             text: root.containerImage(modelData)
-                            opacity: 0.72
+                            opacity: UiMetrics.secondaryOpacity
                             elide: Text.ElideMiddle
                         }
                         Controls.Label {
                             Layout.fillWidth: true
                             text: qsTr("Dimensione: %1").arg(root.containerSize(modelData))
-                            opacity: 0.72
+                            opacity: UiMetrics.secondaryOpacity
                         }
                         RowLayout {
                             Layout.fillWidth: true
-                            Controls.Button { text: qsTr("Info"); icon.name: "documentinfo"; onClicked: utilityBackend.runPodman("info", root.containerName(modelData)) }
-                            Controls.Button { text: qsTr("Log"); icon.name: "text-x-log"; onClicked: utilityBackend.runPodman("logs", root.containerName(modelData)) }
+                            Controls.Button { text: qsTr("Info"); enabled: !utilityBackend.busy; icon.name: "documentinfo"; onClicked: utilityBackend.runPodman("info", root.containerName(modelData)) }
+                            Controls.Button { text: qsTr("Log"); enabled: !utilityBackend.busy; icon.name: "text-x-log"; onClicked: utilityBackend.runPodman("logs", root.containerName(modelData)) }
                             Item { Layout.fillWidth: true }
-                            Controls.Button { text: qsTr("Avvia"); enabled: !utilityBackend.busy; onClicked: root.runAction("start", root.containerName(modelData)) }
-                            Controls.Button { text: qsTr("Ferma"); enabled: !utilityBackend.busy; onClicked: root.runAction("stop", root.containerName(modelData)) }
-                            Controls.Button { text: qsTr("Riavvia"); enabled: !utilityBackend.busy; onClicked: root.runAction("restart", root.containerName(modelData)) }
-                            Controls.Button {
+                            Controls.Button { icon.name: "media-playback-start"; text: qsTr("Avvia"); enabled: !utilityBackend.busy; onClicked: root.runAction("start", root.containerName(modelData)) }
+                            Controls.Button { icon.name: "media-playback-stop"; text: qsTr("Ferma"); enabled: !utilityBackend.busy; onClicked: root.runAction("stop", root.containerName(modelData)) }
+                            Controls.Button { icon.name: "view-refresh"; text: qsTr("Riavvia"); enabled: !utilityBackend.busy; onClicked: root.runAction("restart", root.containerName(modelData)) }
+                            Controls.Button { icon.name: "go-next";
                                 text: qsTr("Rinomina")
                                 enabled: !utilityBackend.busy
                                 onClicked: {
@@ -313,20 +307,20 @@ Kirigami.ScrollablePage {
                             Layout.fillWidth: true
                             Controls.Label {
                                 Layout.fillWidth: true
-                                font.bold: true
+                                font.bold: false
                                 font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
                                 text: root.imageName(modelData)
                                 elide: Text.ElideMiddle
                             }
                             Controls.Label {
                                 Layout.fillWidth: true
-                                opacity: 0.66
+                                opacity: UiMetrics.secondaryOpacity
                                 text: qsTr("ID %1").arg(root.imageId(modelData).substring(0, 20))
                                 elide: Text.ElideRight
                             }
                             Controls.Label {
                                 Layout.fillWidth: true
-                                opacity: 0.66
+                                opacity: UiMetrics.secondaryOpacity
                                 text: [root.imageCreated(modelData), root.imageSize(modelData)].filter(function(x) { return !!x }).join(" · ")
                             }
                         }
@@ -359,13 +353,9 @@ Kirigami.ScrollablePage {
                   && utilityBackend.operationId !== "podman.images"
                   && utilityBackend.output.length > 0
             contentItem: ColumnLayout {
-                Controls.Label { font.bold: true; text: utilityBackend.title }
-                Controls.TextArea {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 220
-                    readOnly: true
-                    wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere
-                    font.family: Kirigami.Theme.defaultFixedWidthFont.family
+                Controls.Label { font.bold: false; text: utilityBackend.title }
+                OutputCard {
+                    embedded: true
                     text: utilityBackend.output
                 }
             }
@@ -377,6 +367,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: qsTr("Rinomina container")
         standardButtons: Controls.Dialog.Ok | Controls.Dialog.Cancel
         contentItem: ColumnLayout {
@@ -397,6 +388,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: qsTr("Eliminare l'immagine?")
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label {

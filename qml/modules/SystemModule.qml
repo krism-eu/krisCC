@@ -78,21 +78,16 @@ Kirigami.ScrollablePage {
         width: parent.width
         spacing: Kirigami.Units.largeSpacing
 
-        Controls.Label {
-            Layout.fillWidth: true
-            wrapMode: Text.WordWrap
-            opacity: 0.72
-            text: qsTr("Aggiornamenti, salute, avvio e strumenti essenziali. Le normali preferenze desktop restano nelle Impostazioni di sistema Plasma.")
-        }
+        PageIntro { title: root.title; subtitle: qsTr("Aggiornamenti, salute, avvio e strumenti essenziali. Le normali preferenze desktop restano nelle Impostazioni di sistema Plasma.") }
 
         Controls.TabBar {
             id: sections
             Layout.fillWidth: true
             palette.highlight: Kirigami.Theme.highlightColor
-            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: checked; text: qsTr("Aggiornamenti") }
-            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: checked; text: qsTr("Salute") }
-            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: checked; text: qsTr("Avvio e dischi") }
-            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: checked; text: qsTr("Strumenti") }
+            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: true; text: qsTr("Aggiornamenti") }
+            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: true; text: qsTr("Salute") }
+            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: true; text: qsTr("Avvio e dischi") }
+            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: true; text: qsTr("Strumenti") }
         }
 
         StackLayout {
@@ -128,13 +123,13 @@ Kirigami.ScrollablePage {
                             }
                             Controls.Label {
                                 Layout.fillWidth: true
-                                font.bold: true
+                                font.bold: false
                                 elide: Text.ElideMiddle
                                 text: root.bootedDeployment().image || qsTr("Immagine non disponibile")
                             }
                             Controls.Label {
                                 Layout.fillWidth: true
-                                opacity: 0.72
+                                opacity: UiMetrics.secondaryOpacity
                                 text: {
                                     var d = root.bootedDeployment()
                                     return [d.version || "", root.shortDigest(d.digest || "")].filter(function(x) { return !!x }).join(" · ")
@@ -142,7 +137,7 @@ Kirigami.ScrollablePage {
                             }
                             Controls.Label {
                                 Layout.fillWidth: true
-                                opacity: 0.72
+                                opacity: UiMetrics.secondaryOpacity
                                 text: qsTr("%1 pacchetti RPM persistenti richiesti").arg(BootcBackend.persistentPackageCount)
                             }
 
@@ -210,14 +205,14 @@ Kirigami.ScrollablePage {
                                 Layout.fillWidth: true
                                 visible: BootcBackend.operationLines.length > 0
                                 contentItem: ColumnLayout {
-                                    Controls.Label { font.bold: true; text: qsTr("Operazione BootC") }
+                                    Controls.Label { font.bold: false; text: qsTr("Operazione BootC") }
                                     Repeater {
                                         model: BootcBackend.operationLines
                                         delegate: Controls.Label {
                                             required property string modelData
                                             Layout.fillWidth: true
                                             wrapMode: Text.WrapAtWordBoundaryOrAnywhere
-                                            font.family: Kirigami.Theme.defaultFixedWidthFont.family
+                                            font.family: Kirigami.Theme.fixedWidthFont.family
                                             text: modelData
                                         }
                                     }
@@ -228,15 +223,11 @@ Kirigami.ScrollablePage {
                                 id: bootTechnicalDetails
                                 text: qsTr("Dettagli tecnici")
                             }
-                            Controls.TextArea {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 150
-                                visible: bootTechnicalDetails.checked
-                                readOnly: true
-                                wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere
-                                font.family: Kirigami.Theme.defaultFixedWidthFont.family
-                                text: BootcBackend.statusText
-                            }
+                            OutputCard {
+                    visible: bootTechnicalDetails.checked
+                    embedded: true
+                    text: BootcBackend.statusText
+                }
                         }
                     }
 
@@ -253,7 +244,7 @@ Kirigami.ScrollablePage {
                             Controls.Label {
                                 Layout.fillWidth: true
                                 wrapMode: Text.WordWrap
-                                opacity: 0.72
+                                opacity: UiMetrics.secondaryOpacity
                                 text: qsTr("Controllo e aggiornamento delle applicazioni Flatpak del profilo utente.")
                             }
                             Item { Layout.fillHeight: true }
@@ -271,15 +262,11 @@ Kirigami.ScrollablePage {
                                     onClicked: flatpakDialog.open()
                                 }
                             }
-                            Controls.TextArea {
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: 120
-                                visible: utilityBackend.operationId.indexOf("flatpak.") === 0 && utilityBackend.output.length > 0
-                                readOnly: true
-                                wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere
-                                font.family: Kirigami.Theme.defaultFixedWidthFont.family
-                                text: utilityBackend.output
-                            }
+                            OutputCard {
+                    visible: utilityBackend.operationId.indexOf("flatpak.") === 0 && utilityBackend.output.length > 0
+                    embedded: true
+                    text: utilityBackend.output
+                }
                         }
                     }
                 }
@@ -321,18 +308,18 @@ Kirigami.ScrollablePage {
                                         Layout.fillWidth: true
                                         Controls.Label {
                                             Layout.fillWidth: true
-                                            font.bold: true
+                                            font.bold: false
                                             text: modelData.action
                                             elide: Text.ElideRight
                                         }
                                         Controls.Label {
-                                            font.bold: true
+                                            font.bold: false
                                             text: modelData.state
                                         }
                                     }
                                     Controls.Label {
                                         Layout.fillWidth: true
-                                        opacity: 0.72
+                                        opacity: UiMetrics.secondaryOpacity
                                         text: [modelData.time, modelData.category].filter(function(x) { return !!x }).join(" · ")
                                         elide: Text.ElideRight
                                     }
@@ -340,7 +327,7 @@ Kirigami.ScrollablePage {
                                         Layout.fillWidth: true
                                         visible: modelData.detail.length > 0
                                         wrapMode: Text.WordWrap
-                                        opacity: 0.72
+                                        opacity: UiMetrics.secondaryOpacity
                                         text: modelData.detail
                                     }
                                 }
@@ -360,7 +347,7 @@ Kirigami.ScrollablePage {
                         Controls.Label {
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
-                            opacity: 0.72
+                            opacity: UiMetrics.secondaryOpacity
                             text: qsTr("Controlli leggibili e non distruttivi su unità fallite, overlay /usr, spazio, rk e stato BootC.")
                         }
                         Flow {
@@ -381,7 +368,7 @@ Kirigami.ScrollablePage {
                         Controls.Label {
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
-                            opacity: 0.72
+                            opacity: UiMetrics.secondaryOpacity
                             text: qsTr("Stato rapido dei servizi principali e vista completa dei servizi attivi.")
                         }
                         Repeater {
@@ -389,13 +376,13 @@ Kirigami.ScrollablePage {
                             delegate: RowLayout {
                                 required property var modelData
                                 Layout.fillWidth: true
-                                Controls.Label { Layout.fillWidth: true; font.bold: true; text: modelData.title }
+                                Controls.Label { Layout.fillWidth: true; font.bold: false; text: modelData.title }
                                 Controls.Label {
                                     Layout.preferredWidth: 120
                                     horizontalAlignment: Text.AlignHCenter
                                     text: SystemBackend.serviceStates[modelData.id] || qsTr("non disponibile")
                                 }
-                                Controls.Button {
+                                Controls.Button { icon.name: "view-refresh";
                                     Layout.preferredWidth: 110
                                     text: qsTr("Riavvia")
                                     onClicked: {
@@ -430,21 +417,11 @@ Kirigami.ScrollablePage {
                         RowLayout {
                             Layout.fillWidth: true
                             Kirigami.Heading { Layout.fillWidth: true; level: 3; font.bold: true; text: utilityBackend.title }
-                            Controls.Button {
-                                text: qsTr("Copia")
-                                icon.name: "edit-copy"
-                                enabled: utilityBackend.output.length > 0
-                                onClicked: SystemBackend.copyToClipboard(utilityBackend.output)
-                            }
                         }
-                        Controls.TextArea {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 330
-                            readOnly: true
-                            wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere
-                            font.family: Kirigami.Theme.defaultFixedWidthFont.family
-                            text: utilityBackend.output
-                        }
+                        OutputCard {
+                    embedded: true
+                    text: utilityBackend.output
+                }
                     }
                 }
             }
@@ -466,7 +443,7 @@ Kirigami.ScrollablePage {
                         Controls.Label {
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
-                            opacity: 0.72
+                            opacity: UiMetrics.secondaryOpacity
                             text: qsTr("BootNext vale per un solo riavvio e non cambia il BootOrder permanente.")
                         }
                         RowLayout {
@@ -485,7 +462,7 @@ Kirigami.ScrollablePage {
                                 valueRole: "code"
                                 enabled: count > 0
                             }
-                            Controls.Button {
+                            Controls.Button { icon.name: "go-next";
                                 text: qsTr("Usa al prossimo avvio")
                                 enabled: uefiCombo.count > 0 && SystemBackend.canSelectNextBoot
                                 onClicked: {
@@ -505,7 +482,7 @@ Kirigami.ScrollablePage {
                         Controls.Label {
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
-                            opacity: 0.72
+                            opacity: UiMetrics.secondaryOpacity
                             text: qsTr("Leggi le voci GRUB/BLS disponibili e scegli, quando supportato, una voce solo per il prossimo avvio.")
                         }
                         RowLayout {
@@ -524,7 +501,7 @@ Kirigami.ScrollablePage {
                                 valueRole: "id"
                                 enabled: count > 0
                             }
-                            Controls.Button {
+                            Controls.Button { icon.name: "go-next";
                                 text: qsTr("Prossimo avvio")
                                 enabled: grubCombo.count > 0 && SystemBackend.grubNextBootAvailable && SystemBackend.canSelectNextBoot
                                 onClicked: {
@@ -544,16 +521,16 @@ Kirigami.ScrollablePage {
                         Controls.Label {
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
-                            opacity: 0.72
+                            opacity: UiMetrics.secondaryOpacity
                             text: qsTr("Vista read-only di partizioni, mount correnti e configurazione persistente. krisCC non riscrive fstab automaticamente.")
                         }
                         Flow {
                             Layout.fillWidth: true
                             spacing: Kirigami.Units.smallSpacing
-                            Controls.Button { text: qsTr("Partizioni"); enabled: !utilityBackend.busy; onClicked: utilityBackend.runBookmark("partitions") }
-                            Controls.Button { text: qsTr("Ordine mount"); enabled: !utilityBackend.busy; onClicked: utilityBackend.runBookmark("fstab-order") }
-                            Controls.Button { text: qsTr("Mount attivi"); enabled: !utilityBackend.busy; onClicked: utilityBackend.runBookmark("mounts") }
-                            Controls.Button { text: qsTr("Spazio"); enabled: !utilityBackend.busy; onClicked: utilityBackend.runBookmark("disk-space") }
+                            Controls.Button { icon.name: "drive-harddisk"; text: qsTr("Partizioni"); enabled: !utilityBackend.busy; onClicked: utilityBackend.runBookmark("partitions") }
+                            Controls.Button { icon.name: "view-list-sort"; text: qsTr("Ordine mount"); enabled: !utilityBackend.busy; onClicked: utilityBackend.runBookmark("fstab-order") }
+                            Controls.Button { icon.name: "drive-multidisk"; text: qsTr("Mount attivi"); enabled: !utilityBackend.busy; onClicked: utilityBackend.runBookmark("mounts") }
+                            Controls.Button { icon.name: "drive-harddisk"; text: qsTr("Spazio"); enabled: !utilityBackend.busy; onClicked: utilityBackend.runBookmark("disk-space") }
                             Controls.Button {
                                 text: qsTr("Partition Manager")
                                 icon.name: "partitionmanager"
@@ -572,14 +549,10 @@ Kirigami.ScrollablePage {
                           || utilityBackend.operationId === "bookmark.disk-space"
                     contentItem: ColumnLayout {
                         Kirigami.Heading { level: 3; font.bold: true; text: utilityBackend.title }
-                        Controls.TextArea {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 300
-                            readOnly: true
-                            wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere
-                            font.family: Kirigami.Theme.defaultFixedWidthFont.family
-                            text: utilityBackend.output
-                        }
+                        OutputCard {
+                    embedded: true
+                    text: utilityBackend.output
+                }
                     }
                 }
             }
@@ -590,11 +563,13 @@ Kirigami.ScrollablePage {
                 GridLayout {
                     Layout.fillWidth: true
                     columns: width > 760 ? 2 : 1
+                    uniformCellWidths: true
                     columnSpacing: Kirigami.Units.largeSpacing
                     rowSpacing: Kirigami.Units.largeSpacing
 
                     Kirigami.AbstractCard {
                         Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignTop
                         contentItem: ColumnLayout {
                             Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Plasma") }
                             Controls.Button { text: qsTr("Impostazioni di sistema"); icon.name: "settings-configure"; enabled: SystemBackend.toolAvailable("systemsettings"); onClicked: SystemBackend.launchTool("systemsettings") }
@@ -604,6 +579,7 @@ Kirigami.ScrollablePage {
 
                     Kirigami.AbstractCard {
                         Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignTop
                         contentItem: ColumnLayout {
                             Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Diagnostica") }
                             Controls.Button { text: qsTr("KSystemLog"); icon.name: "utilities-log-viewer"; enabled: SystemBackend.toolAvailable("ksystemlog"); onClicked: SystemBackend.launchTool("ksystemlog") }
@@ -613,13 +589,14 @@ Kirigami.ScrollablePage {
 
                     Kirigami.AbstractCard {
                         Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignTop
                         contentItem: ColumnLayout {
                             Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Pulizia") }
                             Controls.Label {
                                 Layout.fillWidth: true
                                 wrapMode: Text.WordWrap
-                                opacity: 0.72
-                                text: qsTr("Le pulizie dei cestini sono sempre autorizzate come amministratore e operano solo sugli scope predefiniti.")
+                                opacity: UiMetrics.secondaryOpacity
+                                text: qsTr("Le pulizie dei cestini usano solo i privilegi del tuo utente e operano soltanto sugli scope predefiniti.")
                             }
                             Controls.Button {
                                 text: qsTr("Svuota cestino home")
@@ -658,15 +635,15 @@ Kirigami.ScrollablePage {
                                       : MaintenanceBackend.resultState === "error" ? Kirigami.MessageType.Error
                                       : Kirigami.MessageType.Information
                                 text: MaintenanceBackend.running
-                                      ? qsTr("Pulizia amministrativa in corso…")
+                                      ? qsTr("Pulizia in corso…")
                                       : MaintenanceBackend.output
                             }
-                            Controls.Button {
+                            Controls.Button { icon.name: "edit-clear";
                                 text: qsTr("Flatpak inutilizzati")
                                 enabled: SystemBackend.programAvailable("flatpak") && !utilityBackend.busy
                                 onClicked: unusedFlatpakDialog.open()
                             }
-                            Controls.Button {
+                            Controls.Button { icon.name: "edit-find";
                                 text: qsTr("RPM non necessari")
                                 enabled: SystemBackend.programAvailable("dnf5") && !utilityBackend.busy
                                 onClicked: utilityBackend.runBookmark("unneeded-rpms")
@@ -676,6 +653,7 @@ Kirigami.ScrollablePage {
 
                     Kirigami.AbstractCard {
                         Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignTop
                         contentItem: ColumnLayout {
                             Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Storage") }
                             Controls.Button {
@@ -684,7 +662,7 @@ Kirigami.ScrollablePage {
                                 enabled: SystemBackend.toolAvailable("qdirstat")
                                 onClicked: SystemBackend.launchTool("qdirstat")
                             }
-                            Controls.Button { text: qsTr("Partition Manager"); enabled: SystemBackend.toolAvailable("partitionmanager"); onClicked: SystemBackend.launchTool("partitionmanager") }
+                            Controls.Button { icon.name: "partitionmanager"; text: qsTr("Partition Manager"); enabled: SystemBackend.toolAvailable("partitionmanager"); onClicked: SystemBackend.launchTool("partitionmanager") }
                         }
                     }
                 }
@@ -695,14 +673,10 @@ Kirigami.ScrollablePage {
                           || utilityBackend.operationId === "flatpak.remove-unused"
                     contentItem: ColumnLayout {
                         Kirigami.Heading { level: 3; font.bold: true; text: utilityBackend.title }
-                        Controls.TextArea {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 260
-                            readOnly: true
-                            wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere
-                            font.family: Kirigami.Theme.defaultFixedWidthFont.family
-                            text: utilityBackend.output
-                        }
+                        OutputCard {
+                    embedded: true
+                    text: utilityBackend.output
+                }
                     }
                 }
             }
@@ -714,6 +688,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: qsTr("Riavviare %1?").arg(root.pendingServiceTitle)
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label {
@@ -732,6 +707,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: downloadOnly ? qsTr("Applicare l'aggiornamento KrisOS?")
                             : qsTr("Riavviare nel nuovo aggiornamento?")
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
@@ -754,6 +730,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: qsTr("Risincronizzare i pacchetti persistenti?")
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label {
@@ -770,6 +747,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: qsTr("Confermare la pulizia?")
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label {
@@ -784,8 +762,13 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: qsTr("Aggiornare tutti i Flatpak utente?")
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
+        contentItem: Controls.Label {
+            text: qsTr("Aggiornare le applicazioni e i runtime Flatpak del tuo utente?")
+            wrapMode: Text.WordWrap
+        }
         onAccepted: utilityBackend.runFlatpak("update-all", "")
     }
 
@@ -794,6 +777,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: qsTr("Rimuovere i Flatpak inutilizzati?")
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label {
@@ -808,6 +792,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: qsTr("Cancellare la cronologia krisCC?")
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         onAccepted: {
@@ -823,6 +808,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: qsTr("Usare questa voce al prossimo avvio?")
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label { wrapMode: Text.WordWrap; text: nextUefiDialog.label }
@@ -836,6 +822,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: qsTr("Usare questa voce GRUB al prossimo avvio?")
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label { wrapMode: Text.WordWrap; text: nextGrubDialog.label }

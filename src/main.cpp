@@ -112,6 +112,14 @@ int main(int argc, char *argv[])
             instanceController.setWindow(window);
     }
 
+    if (smokeTest) {
+        systemBackend.setResourceMonitoringEnabled(true);
+        if (systemBackend.memoryTotalMiB() <= 0 || systemBackend.memoryUsedMiB() < 0
+            || systemBackend.memoryUsedMiB() > systemBackend.memoryTotalMiB()) {
+            qCritical("Smoke test: invalid RAM sample from procfs");
+            return 2;
+        }
+    }
     if (smokeTest)
         QTimer::singleShot(2200, &app, &QCoreApplication::quit);
 

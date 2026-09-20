@@ -110,13 +110,7 @@ Kirigami.ScrollablePage {
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 2
-            Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Applicazioni Flatpak") }
-            Controls.Label {
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                opacity: 0.72
-                text: qsTr("Ricerca, installazione e aggiornamenti delle applicazioni Flatpak nel tuo profilo utente.")
-            }
+            PageIntro { title: root.title; subtitle: qsTr("Ricerca, installazione e aggiornamenti delle applicazioni Flatpak nel tuo profilo utente.") }
         }
 
         Controls.TabBar {
@@ -126,7 +120,7 @@ Kirigami.ScrollablePage {
             currentIndex: 0
             Controls.TabButton {
                 implicitHeight: Kirigami.Units.gridUnit * 2.1
-                font.bold: checked
+                font.bold: true
                 text: qsTr("Cerca")
                 onClicked: {
                     root.mode = "search"
@@ -134,9 +128,9 @@ Kirigami.ScrollablePage {
                     searchField.clear()
                 }
             }
-            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: checked; text: qsTr("Installati"); onClicked: root.run("installed", "") }
-            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: checked; text: qsTr("Aggiornamenti"); onClicked: root.run("updates", "") }
-            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: checked; text: qsTr("Remote"); onClicked: root.run("remotes", "") }
+            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: true; text: qsTr("Installati"); onClicked: root.run("installed", "") }
+            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: true; text: qsTr("Aggiornamenti"); onClicked: root.run("updates", "") }
+            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: true; text: qsTr("Remote"); onClicked: root.run("remotes", "") }
         }
 
         RowLayout {
@@ -256,7 +250,7 @@ Kirigami.ScrollablePage {
                             spacing: 1
                             Controls.Label {
                                 Layout.fillWidth: true
-                                font.bold: true
+                                font.bold: false
                                 font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
                                 text: modelData[0] || ""
                                 elide: Text.ElideRight
@@ -299,7 +293,7 @@ Kirigami.ScrollablePage {
 
                     Controls.Label {
                         Layout.fillWidth: true
-                        opacity: 0.72
+                        opacity: UiMetrics.secondaryOpacity
                         elide: Text.ElideRight
                         text: {
                             if (root.mode === "search")
@@ -344,6 +338,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: qsTr("Aggiungere Flathub?")
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label {
@@ -370,6 +365,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: qsTr("Rimuovere %1?").arg(appName)
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label {
@@ -391,6 +387,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: qsTr("Aggiornare %1?").arg(appName)
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label {
@@ -405,6 +402,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: qsTr("Aggiornare tutte le applicazioni Flatpak?")
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label {

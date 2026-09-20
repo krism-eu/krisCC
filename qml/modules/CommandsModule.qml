@@ -73,13 +73,14 @@ Kirigami.ScrollablePage {
     ColumnLayout {
         width: parent.width
         spacing: Kirigami.Units.largeSpacing
+        PageIntro { title: root.title; subtitle: qsTr("Diagnostica e comandi personali eseguiti con i privilegi del tuo utente.") }
 
         Controls.TabBar {
             id: commandTabs
             Layout.fillWidth: true
             palette.highlight: Kirigami.Theme.highlightColor
-            Controls.TabButton { text: qsTr("Predefiniti"); font.bold: checked }
-            Controls.TabButton { text: qsTr("Miei comandi"); font.bold: checked }
+            Controls.TabButton { text: qsTr("Predefiniti"); font.bold: true }
+            Controls.TabButton { text: qsTr("Miei comandi"); font.bold: true }
         }
 
         StackLayout {
@@ -92,13 +93,7 @@ Kirigami.ScrollablePage {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: Kirigami.Units.smallSpacing
-                    Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Diagnostica pronta") }
-                    Controls.Label {
-                        Layout.fillWidth: true
-                        wrapMode: Text.WordWrap
-                        opacity: 0.72
-                        text: qsTr("Comandi read-only difficili da ricordare ma utili nella diagnosi quotidiana. Le funzioni già coperte bene dalle pagine Flatpak, Container e dal Monitor di sistema non vengono duplicate qui.")
-                    }
+                    PageIntro { title: root.title; subtitle: qsTr("Comandi read-only difficili da ricordare ma utili nella diagnosi quotidiana. Le funzioni già coperte bene dalle pagine Flatpak, Container e dal Monitor di sistema non vengono duplicate qui.") }
                     RowLayout {
                         Layout.fillWidth: true
                         Controls.TextField {
@@ -133,7 +128,7 @@ Kirigami.ScrollablePage {
                                 spacing: Kirigami.Units.smallSpacing
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    Controls.Label { Layout.fillWidth: true; font.bold: true; text: modelData.title }
+                                    Controls.Label { Layout.fillWidth: true; font.bold: false; text: modelData.title }
                                     Controls.Button {
                                         flat: true
                                         icon.name: "edit-copy"
@@ -149,7 +144,7 @@ Kirigami.ScrollablePage {
                                 }
                                 Controls.Label {
                                     Layout.fillWidth: true
-                                    font.family: Kirigami.Theme.defaultFixedWidthFont.family
+                                    font.family: Kirigami.Theme.fixedWidthFont.family
                                     wrapMode: Text.WrapAtWordBoundaryOrAnywhere
                                     opacity: 0.82
                                     text: modelData.command
@@ -157,7 +152,7 @@ Kirigami.ScrollablePage {
                                 Controls.Label {
                                     Layout.fillWidth: true
                                     wrapMode: Text.WordWrap
-                                    opacity: 0.72
+                                    opacity: UiMetrics.secondaryOpacity
                                     text: modelData.note
                                 }
                             }
@@ -180,7 +175,7 @@ Kirigami.ScrollablePage {
                             Kirigami.Heading { Layout.fillWidth: true; level: 3; font.bold: true; text: utilityBackend.title || qsTr("Output") }
                             Controls.Label {
                                 visible: utilityBackend.resultState !== "idle"
-                                font.bold: true
+                                font.bold: false
                                 text: root.stateLabel(utilityBackend.resultState)
                             }
                             Controls.Button {
@@ -195,22 +190,11 @@ Kirigami.ScrollablePage {
                                 enabled: !utilityBackend.busy
                                 onClicked: utilityBackend.clearResult()
                             }
-                            Controls.Button {
-                                text: qsTr("Copia output")
-                                icon.name: "edit-copy"
-                                enabled: utilityBackend.output.length > 0
-                                onClicked: SystemBackend.copyToClipboard(utilityBackend.output)
-                            }
                         }
-                        Controls.TextArea {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 340
-                            readOnly: true
-                            wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere
-                            font.family: Kirigami.Theme.defaultFixedWidthFont.family
-                            text: utilityBackend.output
-                            onTextChanged: cursorPosition = length
-                        }
+                        OutputCard {
+                    embedded: true
+                    text: utilityBackend.output
+                }
                     }
                 }
             }
@@ -226,7 +210,7 @@ Kirigami.ScrollablePage {
                         Controls.Label {
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
-                            opacity: 0.72
+                            opacity: UiMetrics.secondaryOpacity
                             text: qsTr("Comandi o script Bash personali salvati in ~/.config/krisCC. Restano nella home attraverso aggiornamenti RPM e BootC e rientrano nel backup della configurazione. Vengono eseguiti solo con i privilegi dell'utente corrente.")
                         }
                     }
@@ -265,7 +249,7 @@ Kirigami.ScrollablePage {
                                     Layout.fillWidth: true
                                     Controls.Label {
                                         Layout.fillWidth: true
-                                        font.bold: true
+                                        font.bold: false
                                         font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
                                         text: modelData.name
                                     }
@@ -273,7 +257,7 @@ Kirigami.ScrollablePage {
                                         Layout.fillWidth: true
                                         visible: modelData.description.length > 0
                                         wrapMode: Text.WordWrap
-                                        opacity: 0.72
+                                        opacity: UiMetrics.secondaryOpacity
                                         text: modelData.description
                                     }
                                 }
@@ -303,7 +287,7 @@ Kirigami.ScrollablePage {
                             }
                             Controls.Label {
                                 Layout.fillWidth: true
-                                font.family: Kirigami.Theme.defaultFixedWidthFont.family
+                                font.family: Kirigami.Theme.fixedWidthFont.family
                                 wrapMode: Text.WrapAtWordBoundaryOrAnywhere
                                 maximumLineCount: 4
                                 elide: Text.ElideRight
@@ -312,7 +296,7 @@ Kirigami.ScrollablePage {
                             }
                             Controls.Label {
                                 visible: modelData.confirm
-                                opacity: 0.62
+                                opacity: UiMetrics.secondaryOpacity
                                 text: qsTr("Richiede conferma prima dell'esecuzione")
                             }
                         }
@@ -329,7 +313,7 @@ Kirigami.ScrollablePage {
                             Layout.fillWidth: true
                             Kirigami.Heading { Layout.fillWidth: true; level: 3; font.bold: true; text: qsTr("Output comando personale") }
                             Controls.Label {
-                                font.bold: true
+                                font.bold: false
                                 text: root.stateLabel(CustomActionsBackend.resultState)
                             }
                             Controls.Button {
@@ -338,27 +322,16 @@ Kirigami.ScrollablePage {
                                 icon.name: "process-stop"
                                 onClicked: CustomActionsBackend.cancel()
                             }
-                            Controls.Button {
-                                text: qsTr("Copia output")
-                                icon.name: "edit-copy"
-                                enabled: CustomActionsBackend.output.length > 0
-                                onClicked: SystemBackend.copyToClipboard(CustomActionsBackend.output)
-                            }
                         }
                         Controls.BusyIndicator {
                             visible: CustomActionsBackend.running
                             running: visible
                             Layout.alignment: Qt.AlignHCenter
                         }
-                        Controls.TextArea {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 300
-                            readOnly: true
-                            wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere
-                            font.family: Kirigami.Theme.defaultFixedWidthFont.family
-                            text: CustomActionsBackend.output
-                            onTextChanged: cursorPosition = length
-                        }
+                        OutputCard {
+                    embedded: true
+                    text: CustomActionsBackend.output
+                }
                     }
                 }
             }
@@ -371,6 +344,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         width: Math.min(root.width - 48, 760)
         height: Math.min(root.height - 48, 650)
         title: actionId.length > 0 ? qsTr("Modifica comando personale") : qsTr("Nuovo comando personale")
@@ -396,7 +370,7 @@ Kirigami.ScrollablePage {
 
         contentItem: ColumnLayout {
             spacing: Kirigami.Units.smallSpacing
-            Controls.Label { text: qsTr("Nome"); font.bold: true }
+            Controls.Label { text: qsTr("Nome"); font.bold: false }
             Controls.TextField {
                 id: actionName
                 Layout.fillWidth: true
@@ -410,7 +384,7 @@ Kirigami.ScrollablePage {
                 placeholderText: qsTr("A cosa serve e quando usarlo")
                 selectByMouse: true
             }
-            Controls.Label { text: qsTr("Comando / script Bash"); font.bold: true }
+            Controls.Label { text: qsTr("Comando / script Bash"); font.bold: false }
             Controls.ScrollView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -418,7 +392,7 @@ Kirigami.ScrollablePage {
                 Controls.TextArea {
                     id: actionScript
                     wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere
-                    font.family: Kirigami.Theme.defaultFixedWidthFont.family
+                    font.family: Kirigami.Theme.fixedWidthFont.family
                     placeholderText: qsTr("Puoi inserire più righe, pipe e sequenze di comandi.")
                     selectByMouse: true
                 }
@@ -430,7 +404,7 @@ Kirigami.ScrollablePage {
             Controls.Label {
                 Layout.fillWidth: true
                 wrapMode: Text.WordWrap
-                opacity: 0.68
+                opacity: UiMetrics.secondaryOpacity
                 text: qsTr("krisCC non aggiunge sudo o Polkit: lo script gira come il tuo utente.")
             }
             Controls.Button {
@@ -456,6 +430,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: qsTr("Eseguire %1?").arg(root.pendingCustomName)
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label {
@@ -470,6 +445,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: qsTr("Eliminare %1?").arg(root.deleteCustomName)
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         onAccepted: CustomActionsBackend.removeAction(root.deleteCustomId)

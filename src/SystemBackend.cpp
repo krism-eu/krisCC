@@ -398,8 +398,8 @@ QString SystemBackend::memorySummary() const
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
         return tr("Non disponibile");
 
-    while (!file.atEnd()) {
-        const QByteArray line = file.readLine().simplified();
+    for (const QByteArray &rawLine : file.readAll().split('\n')) {
+        const QByteArray line = rawLine.simplified();
         if (!line.startsWith("MemTotal:"))
             continue;
         const QList<QByteArray> parts = line.split(' ');
@@ -1228,8 +1228,8 @@ void SystemBackend::refreshResources()
     qint64 availableKiB = -1;
     QFile meminfo(QStringLiteral("/proc/meminfo"));
     if (meminfo.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        while (!meminfo.atEnd()) {
-            const QByteArray line = meminfo.readLine().simplified();
+        for (const QByteArray &rawLine : meminfo.readAll().split('\n')) {
+            const QByteArray line = rawLine.simplified();
             if (line.startsWith("MemTotal:")) {
                 const QList<QByteArray> parts = line.split(' ');
                 if (parts.size() >= 2)
