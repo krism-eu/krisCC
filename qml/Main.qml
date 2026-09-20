@@ -207,8 +207,8 @@ Kirigami.ApplicationWindow {
 
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: Kirigami.Units.largeSpacing * 1.5
-                        anchors.rightMargin: Kirigami.Units.largeSpacing * 1.5
+                        anchors.leftMargin: UiMetrics.pageMargin
+                        anchors.rightMargin: UiMetrics.pageMargin
 
                         ColumnLayout {
                             Layout.fillWidth: true
@@ -256,7 +256,7 @@ Kirigami.ApplicationWindow {
                         Layout.fillHeight: true
                         property bool visited: false
                         active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 0)
-                        onLoaded: visited = true
+                        onLoaded: Qt.callLater(function() { visited = true })
                         sourceComponent: Component { DashboardModule {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
@@ -268,7 +268,7 @@ Kirigami.ApplicationWindow {
                         Layout.fillHeight: true
                         property bool visited: false
                         active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 1)
-                        onLoaded: visited = true
+                        onLoaded: Qt.callLater(function() { visited = true })
                         sourceComponent: Component { SoftwareModule { Layout.fillWidth: true; Layout.fillHeight: true } }
                     }
                     Loader {
@@ -276,7 +276,7 @@ Kirigami.ApplicationWindow {
                         Layout.fillHeight: true
                         property bool visited: false
                         active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 2)
-                        onLoaded: visited = true
+                        onLoaded: Qt.callLater(function() { visited = true })
                         sourceComponent: Component { FlatpakModule { Layout.fillWidth: true; Layout.fillHeight: true } }
                     }
                     Loader {
@@ -284,7 +284,7 @@ Kirigami.ApplicationWindow {
                         Layout.fillHeight: true
                         property bool visited: false
                         active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 3)
-                        onLoaded: visited = true
+                        onLoaded: Qt.callLater(function() { visited = true })
                         sourceComponent: Component { PodmanModule { Layout.fillWidth: true; Layout.fillHeight: true } }
                     }
                     Loader {
@@ -292,7 +292,7 @@ Kirigami.ApplicationWindow {
                         Layout.fillHeight: true
                         property bool visited: false
                         active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 4)
-                        onLoaded: visited = true
+                        onLoaded: Qt.callLater(function() { visited = true })
                         sourceComponent: Component { SystemModule { Layout.fillWidth: true; Layout.fillHeight: true } }
                     }
                     Loader {
@@ -300,7 +300,7 @@ Kirigami.ApplicationWindow {
                         Layout.fillHeight: true
                         property bool visited: false
                         active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 5)
-                        onLoaded: visited = true
+                        onLoaded: Qt.callLater(function() { visited = true })
                         sourceComponent: Component { CommandsModule { Layout.fillWidth: true; Layout.fillHeight: true } }
                     }
                     Loader {
@@ -308,7 +308,7 @@ Kirigami.ApplicationWindow {
                         Layout.fillHeight: true
                         property bool visited: false
                         active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 6)
-                        onLoaded: visited = true
+                        onLoaded: Qt.callLater(function() { visited = true })
                         sourceComponent: Component { RecoveryModule { Layout.fillWidth: true; Layout.fillHeight: true } }
                     }
                 }

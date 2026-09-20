@@ -6,6 +6,7 @@ import org.kriscc
 
 Kirigami.ScrollablePage {
     id: root
+    padding: UiMetrics.pageMargin
     title: qsTr("Comandi")
 
     UtilityBackend { id: utilityBackend }
@@ -146,7 +147,7 @@ Kirigami.ScrollablePage {
                                     Layout.fillWidth: true
                                     font.family: Kirigami.Theme.fixedWidthFont.family
                                     wrapMode: Text.WrapAtWordBoundaryOrAnywhere
-                                    opacity: 0.82
+                                    opacity: UiMetrics.secondaryOpacity
                                     text: modelData.command
                                 }
                                 Controls.Label {
@@ -291,7 +292,7 @@ Kirigami.ScrollablePage {
                                 wrapMode: Text.WrapAtWordBoundaryOrAnywhere
                                 maximumLineCount: 4
                                 elide: Text.ElideRight
-                                opacity: 0.82
+                                opacity: UiMetrics.secondaryOpacity
                                 text: modelData.script
                             }
                             Controls.Label {

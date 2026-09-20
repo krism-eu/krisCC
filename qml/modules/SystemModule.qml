@@ -6,6 +6,7 @@ import org.kriscc
 
 Kirigami.ScrollablePage {
     id: root
+    padding: UiMetrics.pageMargin
     title: qsTr("Sistema")
 
     UtilityBackend { id: utilityBackend }

@@ -6,6 +6,7 @@ import org.kriscc
 
 Kirigami.ScrollablePage {
     id: root
+    padding: UiMetrics.pageMargin
     title: qsTr("Flatpak")
 
     UtilityBackend { id: utilityBackend }
@@ -109,7 +110,7 @@ Kirigami.ScrollablePage {
 
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 2
+            spacing: Kirigami.Units.smallSpacing
             PageIntro { title: root.title; subtitle: qsTr("Ricerca, installazione e aggiornamenti delle applicazioni Flatpak nel tuo profilo utente.") }
         }
 
@@ -248,7 +249,7 @@ Kirigami.ScrollablePage {
 
                         ColumnLayout {
                             Layout.fillWidth: true
-                            spacing: 1
+                            spacing: Kirigami.Units.smallSpacing
                             Controls.Label {
                                 Layout.fillWidth: true
                                 font.bold: false
@@ -263,7 +264,7 @@ Kirigami.ScrollablePage {
                                 wrapMode: Text.WordWrap
                                 maximumLineCount: 2
                                 elide: Text.ElideRight
-                                opacity: 0.82
+                                opacity: UiMetrics.secondaryOpacity
                             }
                             Controls.Label {
                                 Layout.fillWidth: true

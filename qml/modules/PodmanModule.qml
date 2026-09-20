@@ -6,6 +6,7 @@ import org.kriscc
 
 Kirigami.ScrollablePage {
     id: root
+    padding: UiMetrics.pageMargin
     title: qsTr("Container")
 
     UtilityBackend { id: utilityBackend }
@@ -159,7 +160,7 @@ Kirigami.ScrollablePage {
 
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 2
+            spacing: Kirigami.Units.smallSpacing
             PageIntro { title: root.title; subtitle: qsTr("Container e immagini locali dell'utente corrente, con stato, dimensione e azioni esplicite.") }
         }
 

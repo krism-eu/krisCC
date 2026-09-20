@@ -6,6 +6,7 @@ import org.kriscc
 
 Kirigami.ScrollablePage {
     id: root
+    padding: UiMetrics.pageMargin
     title: qsTr("Software RPM")
 
     UtilityBackend { id: utilityBackend }
@@ -128,7 +129,7 @@ Kirigami.ScrollablePage {
 
         ColumnLayout {
             Layout.fillWidth: true
-            spacing: 2
+            spacing: Kirigami.Units.smallSpacing
             PageIntro { title: root.title; subtitle: qsTr("Base immutabile, pacchetti persistenti gestiti da rk e pacchetti locali vengono distinti chiaramente. La ricerca usa i repository DNF abilitati; l'installazione persistente resta validata dalla policy rk.") }
         }
 

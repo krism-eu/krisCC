@@ -5,6 +5,7 @@ import org.kde.kirigami as Kirigami
 
 Kirigami.ScrollablePage {
     id: root
+    padding: UiMetrics.pageMargin
     title: qsTr("Dashboard")
     signal openRequested(string pageId)
 
@@ -199,7 +200,7 @@ Kirigami.ScrollablePage {
         modal: true
         title: qsTr("Svuotare i cestini?")
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
-        contentItem: Controls.Label { text: qsTr("Elimina definitivamente gli elementi nei cestini del tuo utente, nella home e nelle partizioni montate supportate. L’operazione non può essere annullata."); wrapMode: Text.WordWrap }
+        contentItem: Controls.Label { implicitWidth: Kirigami.Units.gridUnit * 24; text: qsTr("Elimina definitivamente gli elementi nei cestini del tuo utente, nella home e nelle partizioni montate supportate. L’operazione non può essere annullata."); wrapMode: Text.WordWrap }
         onAccepted: MaintenanceBackend.cleanTrash("all")
     }
 }

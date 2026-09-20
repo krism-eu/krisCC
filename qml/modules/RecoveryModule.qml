@@ -6,6 +6,7 @@ import org.kriscc
 
 Kirigami.ScrollablePage {
     id: root
+    padding: UiMetrics.pageMargin
     title: qsTr("Backup e recovery")
 
     UtilityBackend { id: utilityBackend }
@@ -56,7 +57,7 @@ Kirigami.ScrollablePage {
         Kirigami.AbstractCard {
             Layout.fillWidth: true
             contentItem: ColumnLayout {
-                spacing: Kirigami.Units.largeSpacing
+                spacing: Kirigami.Units.smallSpacing
                 Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Crea backup") }
 
                 RowLayout {
@@ -220,7 +221,7 @@ Kirigami.ScrollablePage {
                     Layout.fillWidth: true
                     ColumnLayout {
                         Layout.fillWidth: true
-                        spacing: 2
+                        spacing: Kirigami.Units.smallSpacing
                         Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Recovery layer RPM") }
                         Controls.Label {
                             Layout.fillWidth: true
