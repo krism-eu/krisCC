@@ -19,13 +19,6 @@ krisCC usa come layout primario quello attuale di KrisOS:
 - `/var/lib/krisos/packages.list`
 - `/usr/share/krisos/owned-packages.txt`
 
-Per non rompere installazioni già avviate con il layout precedente, il backend mantiene temporaneamente un fallback in sola lettura verso:
-
-- `/var/lib/raku-kris/packages.list`
-- `/usr/share/raku-kris/owned-packages.txt`
-
-Il nuovo percorso ha sempre precedenza. Il fallback legacy potrà essere rimosso solo dopo avere verificato che tutte le installazioni migrate usino esclusivamente `/var/lib/krisos` e `/usr/share/krisos`.
-
 `/usr/bin/rk` non viene rinominato: è ancora il nome dell'helper nel repository KrisOS corrente e cambiarlo unilateralmente romperebbe le operazioni persistenti e la policy Polkit.
 
 ## Modello software
@@ -35,6 +28,10 @@ La base del sistema resta image-based e si aggiorna esclusivamente tramite BootC
 krisCC usa DNF5 per catalogo, inventario, aggiornamenti disponibili, pacchetti recenti e stato dei repository abilitati. La gestione esplicita dei repository usa soltanto `dnf5 config-manager`: add da URL HTTPS validato e enable/disable di un ID validato. L'installazione/rimozione del layer persistente passa sempre da `rk`. rk usa i repository DNF che l'amministratore ha lasciato abilitati, forza `pkg_gpgcheck` e verifica le firme della transazione prima di applicarla; la base immutabile e le architetture vietate restano protette.
 
 L'anteprima deve usare `rk plan <pacchetto>` e non un comando DNF5 parallelo: il piano mostrato all'utente deve essere prodotto dallo stesso solver, dalle stesse esclusioni e dalla stessa policy che verranno applicati da `rk add`.
+
+## Contratto RK
+
+krisCC legge lo stato del layer persistente esclusivamente tramite `rk status --json` con schema versione 1. Il formato umano resta per il terminale, ma non viene parsato dalla UI.
 
 ## Privilegi
 

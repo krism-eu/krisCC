@@ -75,9 +75,7 @@ Ordine di preferenza:
 
 Non è consentito distribuire parsing dello stesso contratto in più moduli o in QML.
 
-Per `rk`, il solo punto autorizzato a interpretare `rk status` è `RkBackend`. Dashboard, Recovery e altre viste consumano esclusivamente proprietà tipizzate.
-
-Se in futuro `rk` espone un formato JSON/versionato, la migrazione deve interessare `RkBackend`, non le viste.
+Per `rk`, il contratto machine-readable è `rk status --json` con `schema: 1`. Il solo punto autorizzato a interpretarlo è `RkBackend`; Dashboard, Recovery e altre viste consumano esclusivamente proprietà tipizzate. Output testuale e dettagli di implementazione non attraversano il confine del backend.
 
 ## 5. Compatibilità e cambiamenti futuri
 
@@ -152,20 +150,21 @@ Una funzione entra in krisCC solo se sono definiti tutti questi elementi:
 
 Se uno di questi elementi manca, la funzione non è ancora pronta per il Control Center.
 
-## 9. Comandi diagnostici
+## 9. Comandi diagnostici e azioni personali
 
-La pagina Comandi è una cassetta degli attrezzi read-only per l'uso quotidiano.
+La sezione **Predefiniti** della pagina Comandi è una cassetta degli attrezzi read-only per l'uso quotidiano.
 
-Sono ammessi comandi:
+I comandi predefiniti devono essere frequenti, utili per diagnosi locale, con argomenti fissi, senza input libero, senza `sudo` e senza shell costruita dall'utente. Le funzioni rare o specifiche di un sottosistema restano nella pagina del sottosistema invece di moltiplicare i bookmark.
 
-- frequenti;
-- utili per diagnosi locale;
-- con argomenti fissi;
-- senza input libero;
-- senza `sudo`;
-- senza shell costruita dall'utente.
+La sezione **Miei comandi** è separata dal contratto amministrativo: conserva in `~/.config/krisCC/custom-actions.json` comandi o script Bash scelti esplicitamente dall'utente. Queste azioni:
 
-Le funzioni rare o specifiche di un sottosistema restano nella pagina del sottosistema invece di moltiplicare i bookmark.
+- non passano da Polkit;
+- non ricevono elevazione automatica;
+- non vengono eseguite quando krisCC gira come root;
+- operano dalla home con l'ambiente e i privilegi dell'utente;
+- hanno configurazione versionata, scrittura atomica, output limitato e cancellazione esplicita.
+
+Un'azione personale che diventa una funzione amministrativa stabile deve essere promossa a backend ufficiale con capability detection, allowlist e test; non va resa privilegiata dentro il meccanismo custom.
 
 ## 10. Test come contratto di compatibilità
 

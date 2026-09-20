@@ -6,6 +6,10 @@
 #include <QString>
 #include <QVariantList>
 
+class QTimer;
+
+class PolkitHelper;
+
 class SystemBackend : public QObject
 {
     Q_OBJECT
@@ -17,13 +21,27 @@ class SystemBackend : public QObject
     Q_PROPERTY(QString storageSummary READ storageSummary CONSTANT)
     Q_PROPERTY(QString desktopSession READ desktopSession CONSTANT)
     Q_PROPERTY(QString selinuxState READ selinuxState CONSTANT)
+    Q_PROPERTY(bool bootSelectionRunning READ bootSelectionRunning NOTIFY bootSelectionStateChanged)
+    Q_PROPERTY(QString bootSelectionState READ bootSelectionState NOTIFY bootSelectionStateChanged)
+    Q_PROPERTY(bool canSelectNextBoot READ canSelectNextBoot NOTIFY bootSelectionStateChanged)
+    Q_PROPERTY(bool uefiBootAvailable READ uefiBootAvailable CONSTANT)
+    Q_PROPERTY(bool grubEntriesAvailable READ grubEntriesAvailable CONSTANT)
+    Q_PROPERTY(bool grubNextBootAvailable READ grubNextBootAvailable CONSTANT)
+    Q_PROPERTY(QVariantList uefiEntries READ uefiEntries NOTIFY bootEntriesChanged)
+    Q_PROPERTY(QVariantList grubEntries READ grubEntries NOTIFY bootEntriesChanged)
+    Q_PROPERTY(bool bootEntriesBusy READ bootEntriesBusy NOTIFY bootEntriesChanged)
+    Q_PROPERTY(QString bootEntriesError READ bootEntriesError NOTIFY bootEntriesChanged)
+    Q_PROPERTY(int cpuUsagePercent READ cpuUsagePercent NOTIFY resourcesChanged)
+    Q_PROPERTY(qint64 memoryUsedMiB READ memoryUsedMiB NOTIFY resourcesChanged)
+    Q_PROPERTY(qint64 memoryTotalMiB READ memoryTotalMiB NOTIFY resourcesChanged)
+    Q_PROPERTY(double cpuTemperatureC READ cpuTemperatureC NOTIFY resourcesChanged)
     Q_PROPERTY(bool backupBusy READ backupBusy NOTIFY backupBusyChanged)
     Q_PROPERTY(QString backupStatus READ backupStatus NOTIFY backupStatusChanged)
     Q_PROPERTY(QString backupPath READ backupPath NOTIFY backupStatusChanged)
     Q_PROPERTY(QString backupState READ backupState NOTIFY backupStatusChanged)
 
 public:
-    explicit SystemBackend(QObject *parent = nullptr);
+    explicit SystemBackend(PolkitHelper *polkit, QObject *parent = nullptr);
     ~SystemBackend() override;
 
     QString osName() const;
@@ -34,6 +52,20 @@ public:
     QString storageSummary() const;
     QString desktopSession() const;
     QString selinuxState() const;
+    bool bootSelectionRunning() const { return m_bootSelectionRunning; }
+    const QString &bootSelectionState() const { return m_bootSelectionState; }
+    bool canSelectNextBoot() const;
+    bool uefiBootAvailable() const;
+    bool grubEntriesAvailable() const;
+    bool grubNextBootAvailable() const;
+    const QVariantList &uefiEntries() const { return m_uefiEntries; }
+    const QVariantList &grubEntries() const { return m_grubEntries; }
+    bool bootEntriesBusy() const { return m_bootEntriesBusy; }
+    const QString &bootEntriesError() const { return m_bootEntriesError; }
+    int cpuUsagePercent() const { return m_cpuUsagePercent; }
+    qint64 memoryUsedMiB() const { return m_memoryUsedMiB; }
+    qint64 memoryTotalMiB() const { return m_memoryTotalMiB; }
+    double cpuTemperatureC() const { return m_cpuTemperatureC; }
 
     bool backupBusy() const { return m_backupBusy; }
     const QString &backupStatus() const { return m_backupStatus; }
@@ -49,6 +81,10 @@ public:
     Q_INVOKABLE QString serviceState(const QString &service) const;
     Q_INVOKABLE bool restartService(const QString &service);
     Q_INVOKABLE void requestReboot();
+    Q_INVOKABLE void refreshUefiEntries();
+    Q_INVOKABLE void refreshGrubEntries();
+    Q_INVOKABLE bool selectNextUefi(const QString &token);
+    Q_INVOKABLE bool selectNextGrub(const QString &entry);
     Q_INVOKABLE void notify(const QString &summary, const QString &body = QString()) const;
 
     Q_INVOKABLE bool createSnapshot(const QString &kind);
@@ -67,6 +103,10 @@ signals:
     void backupBusyChanged();
     void backupStatusChanged();
     void rebootFinished(bool success, const QString &message);
+    void bootSelectionStateChanged();
+    void bootSelectionFinished(const QString &kind, bool success, const QString &output);
+    void bootEntriesChanged();
+    void resourcesChanged();
 
 private:
     QString readOsName() const;
@@ -76,7 +116,26 @@ private:
     void setBackupBusy(bool busy);
     void setBackupResult(const QString &status, const QString &path = QString(),
                          const QString &state = QStringLiteral("idle"));
+    void refreshResources();
+    double readCpuTemperature() const;
 
+    PolkitHelper *m_polkit = nullptr;
+    bool m_bootSelectionOwned = false;
+    bool m_bootSelectionRunning = false;
+    QString m_bootSelectionKind;
+    QString m_bootSelectionState = QStringLiteral("idle");
+    QVariantList m_uefiEntries;
+    QVariantList m_grubEntries;
+    QPointer<QProcess> m_bootEntriesProcess;
+    bool m_bootEntriesBusy = false;
+    QString m_bootEntriesError;
+    QTimer *m_resourceTimer = nullptr;
+    quint64 m_previousCpuTotal = 0;
+    quint64 m_previousCpuIdle = 0;
+    int m_cpuUsagePercent = -1;
+    qint64 m_memoryUsedMiB = -1;
+    qint64 m_memoryTotalMiB = -1;
+    double m_cpuTemperatureC = -1.0;
     QPointer<QProcess> m_backupProcess;
     bool m_backupBusy = false;
     QString m_backupStatus;

@@ -188,10 +188,6 @@ bool UtilityBackend::runBookmark(const QString &id)
         return start(QStringLiteral("loginctl"), {QStringLiteral("list-sessions"), QStringLiteral("--no-legend")}, tr("Sessioni attive"), QStringLiteral("bookmark.sessions"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("mounts"))
         return start(QStringLiteral("findmnt"), {QStringLiteral("-o"), QStringLiteral("TARGET,SOURCE,FSTYPE,OPTIONS")}, tr("Mount attivi"), QStringLiteral("bookmark.mounts"), kShortQueryTimeoutMs);
-    if (id == QStringLiteral("top-cpu"))
-        return start(QStringLiteral("ps"), {QStringLiteral("-eo"), QStringLiteral("pid,comm,%cpu,%mem"), QStringLiteral("--sort=-%cpu")}, tr("Processi per CPU"), QStringLiteral("bookmark.top-cpu"), kShortQueryTimeoutMs);
-    if (id == QStringLiteral("top-memory"))
-        return start(QStringLiteral("ps"), {QStringLiteral("-eo"), QStringLiteral("pid,comm,%mem,%cpu"), QStringLiteral("--sort=-%mem")}, tr("Processi per memoria"), QStringLiteral("bookmark.top-memory"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("selinux"))
         return start(QStringLiteral("getenforce"), {}, tr("SELinux"), QStringLiteral("bookmark.selinux"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("services-active"))
@@ -220,17 +216,9 @@ bool UtilityBackend::runBookmark(const QString &id)
         return start(QStringLiteral("journalctl"), {QStringLiteral("-b"), QStringLiteral("-p"), QStringLiteral("warning"), QStringLiteral("--no-pager"), QStringLiteral("-n"), QStringLiteral("200")}, tr("Warning ed errori dell'avvio"), QStringLiteral("bookmark.journal-errors"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("kernel-errors"))
         return start(QStringLiteral("journalctl"), {QStringLiteral("-k"), QStringLiteral("-b"), QStringLiteral("-p"), QStringLiteral("warning"), QStringLiteral("--no-pager"), QStringLiteral("-n"), QStringLiteral("200")}, tr("Warning kernel"), QStringLiteral("bookmark.kernel-errors"), kShortQueryTimeoutMs);
-    if (id == QStringLiteral("flatpak-list"))
-        return start(QStringLiteral("/usr/bin/flatpak"), {QStringLiteral("list"), QStringLiteral("--user"), QStringLiteral("--app")}, tr("Flatpak utente"), QStringLiteral("bookmark.flatpak-list"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("unneeded-rpms"))
         return start(QStringLiteral("/usr/bin/dnf5"), {QStringLiteral("repoquery"), QStringLiteral("--installed"), QStringLiteral("--unneeded")},
                      tr("RPM non necessari"), QStringLiteral("bookmark.unneeded-rpms"), kRepositoryQueryTimeoutMs);
-    if (id == QStringLiteral("podman-images"))
-        return start(QStringLiteral("/usr/bin/podman"), {QStringLiteral("images")}, tr("Immagini Podman"), QStringLiteral("bookmark.podman-images"), kContainerQueryTimeoutMs);
-    if (id == QStringLiteral("uefi"))
-        return start(QStringLiteral("/usr/bin/efibootmgr"), {}, tr("Voci di avvio UEFI"), QStringLiteral("bookmark.uefi"), kShortQueryTimeoutMs);
-    if (id == QStringLiteral("grub-entries"))
-        return start(QStringLiteral("/usr/bin/grubby"), {QStringLiteral("--info=ALL")}, tr("Voci GRUB/BLS"), QStringLiteral("bookmark.grub-entries"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("fstab-order"))
         return start(QStringLiteral("findmnt"), {QStringLiteral("--fstab"), QStringLiteral("--evaluate"), QStringLiteral("-o"), QStringLiteral("TARGET,SOURCE,FSTYPE,OPTIONS")}, tr("Ordine mount configurato"), QStringLiteral("bookmark.fstab-order"), kShortQueryTimeoutMs);
 

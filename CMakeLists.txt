@@ -18,6 +18,7 @@ qt_standard_project_setup(REQUIRES 6.5)
 qt_add_executable(krisCC
     src/main.cpp
     src/BootcBackend.cpp src/BootcBackend.h
+    src/CustomActionsBackend.cpp src/CustomActionsBackend.h
     src/SystemBackend.cpp src/SystemBackend.h
     src/SoftwareBackend.cpp src/SoftwareBackend.h
     src/PackageSearch.cpp src/PackageSearch.h

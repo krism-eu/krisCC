@@ -1,6 +1,7 @@
 #include "BootcBackend.h"
 
-#include <QDebug>
+#include "PolkitHelper.h"
+
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -14,19 +15,6 @@ QString jsonString(const QJsonObject &object, const QString &key)
 {
     const QJsonValue value = object.value(key);
     return value.isString() ? value.toString() : QString();
-}
-
-QString firstExistingPath(const QStringList &paths)
-{
-    for (qsizetype i = 0; i < paths.size(); ++i) {
-        const QString &path = paths.at(i);
-        if (!QFileInfo::exists(path))
-            continue;
-        if (i > 0)
-            qWarning().noquote() << "krisCC: using legacy compatibility path:" << path;
-        return path;
-    }
-    return paths.isEmpty() ? QString() : paths.constFirst();
 }
 
 QVariantMap deploymentMap(const QString &role, const QJsonObject &deployment)
@@ -94,11 +82,77 @@ void startBootcStatus(QProcess *process, const QString &format)
 }
 }
 
-BootcBackend::BootcBackend(QObject *parent)
+BootcBackend::BootcBackend(PolkitHelper *polkit, QObject *parent)
     : QObject(parent)
+    , m_polkit(polkit)
 {
+    if (m_polkit) {
+        connect(m_polkit, &PolkitHelper::runningChanged, this, &BootcBackend::operationStateChanged);
+        connect(m_polkit, &PolkitHelper::line, this, [this](const QString &line) {
+            if (!m_operationOwned)
+                return;
+            m_operationLines.append(line);
+            while (m_operationLines.size() > 14)
+                m_operationLines.removeFirst();
+            emit operationStateChanged();
+        });
+        connect(m_polkit, &PolkitHelper::finished, this,
+                [this](bool success, const QString &output) {
+            if (!m_operationOwned)
+                return;
+            m_operationOwned = false;
+            m_operationRunning = false;
+            m_operationState = success ? QStringLiteral("success") : QStringLiteral("error");
+            if (m_operationLines.isEmpty() && !output.trimmed().isEmpty())
+                m_operationLines.append(output.trimmed());
+            emit operationStateChanged();
+            emit operationFinished(success, output);
+            refreshStatus();
+            refreshPackages();
+        });
+    }
+
     loadPackages();
     QTimer::singleShot(0, this, &BootcBackend::refreshStatus);
+}
+
+bool BootcBackend::canOperate() const
+{
+    return bootcAvailable() && !m_busy && m_polkit && !m_polkit->running() && !m_operationRunning;
+}
+
+bool BootcBackend::checkUpgrade()
+{
+    return startPrivileged({QStringLiteral("upgrade"), QStringLiteral("--check")});
+}
+
+bool BootcBackend::downloadUpgrade()
+{
+    return startPrivileged({QStringLiteral("upgrade"), QStringLiteral("--download-only")});
+}
+
+bool BootcBackend::prepareUpgrade()
+{
+    return startPrivileged({QStringLiteral("upgrade")});
+}
+
+bool BootcBackend::applyDownloaded()
+{
+    return startPrivileged({QStringLiteral("upgrade"), QStringLiteral("--from-downloaded"),
+                            QStringLiteral("--apply")});
+}
+
+bool BootcBackend::startPrivileged(const QStringList &args)
+{
+    if (!canOperate())
+        return false;
+    m_operationOwned = true;
+    m_operationRunning = true;
+    m_operationState = QStringLiteral("running");
+    m_operationLines.clear();
+    emit operationStateChanged();
+    m_polkit->execute(QStringLiteral("/usr/bin/bootc"), args);
+    return true;
 }
 
 bool BootcBackend::bootcAvailable() const
@@ -274,15 +328,12 @@ void BootcBackend::setBusy(bool busy)
         return;
     m_busy = busy;
     emit busyChanged();
+    emit operationStateChanged();
 }
 
 void BootcBackend::loadPackages()
 {
-    const QString statePath = firstExistingPath({
-        QStringLiteral("/var/lib/krisos/packages.list"),
-        QStringLiteral("/var/lib/raku-kris/packages.list")
-    });
-    QFile file(statePath);
+    QFile file(QStringLiteral("/var/lib/krisos/packages.list"));
     QStringList packages;
     if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         while (!file.atEnd()) {

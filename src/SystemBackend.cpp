@@ -1,6 +1,7 @@
 #include "SystemBackend.h"
 
 #include "OperationLog.h"
+#include "PolkitHelper.h"
 
 #include <QClipboard>
 #include <QDateTime>
@@ -85,9 +86,274 @@ const QStringList &backupHomeExcludes()
 }
 }
 
-SystemBackend::SystemBackend(QObject *parent)
+SystemBackend::SystemBackend(PolkitHelper *polkit, QObject *parent)
     : QObject(parent)
+    , m_polkit(polkit)
 {
+    if (m_polkit) {
+        connect(m_polkit, &PolkitHelper::runningChanged, this, &SystemBackend::bootSelectionStateChanged);
+        connect(m_polkit, &PolkitHelper::finished, this,
+                [this](bool success, const QString &output) {
+            if (!m_bootSelectionOwned)
+                return;
+            const QString kind = m_bootSelectionKind;
+            m_bootSelectionOwned = false;
+            m_bootSelectionRunning = false;
+            m_bootSelectionKind.clear();
+            m_bootSelectionState = success ? QStringLiteral("success") : QStringLiteral("error");
+            emit bootSelectionStateChanged();
+            emit bootSelectionFinished(kind, success, output);
+            if (kind == QStringLiteral("uefi"))
+                refreshUefiEntries();
+            else if (kind == QStringLiteral("grub"))
+                refreshGrubEntries();
+        });
+    }
+
+    m_resourceTimer = new QTimer(this);
+    m_resourceTimer->setInterval(2000);
+    connect(m_resourceTimer, &QTimer::timeout, this, &SystemBackend::refreshResources);
+    refreshResources();
+    m_resourceTimer->start();
+}
+
+bool SystemBackend::canSelectNextBoot() const
+{
+    return m_polkit && !m_polkit->running() && !m_bootSelectionRunning;
+}
+
+bool SystemBackend::uefiBootAvailable() const
+{
+    return !resolveExecutable(QStringLiteral("efibootmgr")).isEmpty();
+}
+
+bool SystemBackend::grubEntriesAvailable() const
+{
+    return !resolveExecutable(QStringLiteral("grubby")).isEmpty();
+}
+
+bool SystemBackend::grubNextBootAvailable() const
+{
+    return !resolveExecutable(QStringLiteral("grub2-reboot")).isEmpty();
+}
+
+void SystemBackend::refreshUefiEntries()
+{
+    if (m_bootEntriesBusy)
+        return;
+
+    const QString program = resolveExecutable(QStringLiteral("efibootmgr"));
+    if (program.isEmpty()) {
+        m_uefiEntries.clear();
+        m_bootEntriesError = tr("efibootmgr non disponibile.");
+        emit bootEntriesChanged();
+        return;
+    }
+
+    m_bootEntriesBusy = true;
+    m_bootEntriesError.clear();
+    emit bootEntriesChanged();
+
+    auto *process = new QProcess(this);
+    const QPointer<QProcess> guard(process);
+    m_bootEntriesProcess = process;
+    process->setProcessChannelMode(QProcess::MergedChannels);
+
+    connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
+            [this, guard](int exitCode, QProcess::ExitStatus status) {
+        if (!guard || guard != m_bootEntriesProcess)
+            return;
+        const bool timedOut = guard->property("krisccTimedOut").toBool();
+        const QString output = QString::fromUtf8(guard->readAllStandardOutput());
+        m_bootEntriesProcess = nullptr;
+        guard->deleteLater();
+        m_bootEntriesBusy = false;
+
+        if (timedOut || status != QProcess::NormalExit || exitCode != 0) {
+            m_uefiEntries.clear();
+            m_bootEntriesError = timedOut ? tr("Tempo massimo superato leggendo le voci UEFI.")
+                                          : tr("Impossibile leggere le voci UEFI.");
+            emit bootEntriesChanged();
+            return;
+        }
+
+        QVariantList entries;
+        static const QRegularExpression pattern(
+            QStringLiteral("^Boot([0-9A-Fa-f]{4})\\*?\\s+(.+)$"));
+        for (const QString &line : output.split(QLatin1Char('\n'))) {
+            const QRegularExpressionMatch match = pattern.match(line.trimmed());
+            if (!match.hasMatch())
+                continue;
+            QVariantMap entry;
+            const QString code = match.captured(1).toUpper();
+            entry.insert(QStringLiteral("code"), code);
+            entry.insert(QStringLiteral("label"), code + QStringLiteral(" · ") + match.captured(2).trimmed());
+            entries.append(entry);
+        }
+        m_uefiEntries = entries;
+        m_bootEntriesError.clear();
+        emit bootEntriesChanged();
+    });
+
+    connect(process, &QProcess::errorOccurred, this,
+            [this, guard](QProcess::ProcessError error) {
+        if (!guard || guard != m_bootEntriesProcess || error != QProcess::FailedToStart)
+            return;
+        m_bootEntriesProcess = nullptr;
+        guard->deleteLater();
+        m_bootEntriesBusy = false;
+        m_uefiEntries.clear();
+        m_bootEntriesError = tr("Impossibile avviare efibootmgr.");
+        emit bootEntriesChanged();
+    });
+
+    process->start(program, {});
+    QTimer::singleShot(15000, process, [this, guard] {
+        if (!guard || guard != m_bootEntriesProcess || guard->state() == QProcess::NotRunning)
+            return;
+        guard->setProperty("krisccTimedOut", true);
+        guard->terminate();
+        QTimer::singleShot(2000, guard, [guard] {
+            if (guard && guard->state() != QProcess::NotRunning)
+                guard->kill();
+        });
+    });
+}
+
+void SystemBackend::refreshGrubEntries()
+{
+    if (m_bootEntriesBusy)
+        return;
+
+    const QString program = resolveExecutable(QStringLiteral("grubby"));
+    if (program.isEmpty()) {
+        m_grubEntries.clear();
+        m_bootEntriesError = tr("grubby non disponibile.");
+        emit bootEntriesChanged();
+        return;
+    }
+
+    m_bootEntriesBusy = true;
+    m_bootEntriesError.clear();
+    emit bootEntriesChanged();
+
+    auto *process = new QProcess(this);
+    const QPointer<QProcess> guard(process);
+    m_bootEntriesProcess = process;
+    process->setProcessChannelMode(QProcess::MergedChannels);
+
+    connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
+            [this, guard](int exitCode, QProcess::ExitStatus status) {
+        if (!guard || guard != m_bootEntriesProcess)
+            return;
+        const bool timedOut = guard->property("krisccTimedOut").toBool();
+        const QString output = QString::fromUtf8(guard->readAllStandardOutput());
+        m_bootEntriesProcess = nullptr;
+        guard->deleteLater();
+        m_bootEntriesBusy = false;
+
+        if (timedOut || status != QProcess::NormalExit || exitCode != 0) {
+            m_grubEntries.clear();
+            m_bootEntriesError = timedOut ? tr("Tempo massimo superato leggendo le voci GRUB/BLS.")
+                                          : tr("Impossibile leggere le voci GRUB/BLS.");
+            emit bootEntriesChanged();
+            return;
+        }
+
+        QVariantList entries;
+        QString id;
+        QString title;
+        const auto commitEntry = [&entries, &id, &title]() {
+            if (id.isEmpty())
+                return;
+            QVariantMap entry;
+            entry.insert(QStringLiteral("id"), id);
+            entry.insert(QStringLiteral("label"), title.isEmpty() ? id : title);
+            entries.append(entry);
+            id.clear();
+            title.clear();
+        };
+
+        for (const QString &raw : output.split(QLatin1Char('\n'))) {
+            const QString line = raw.trimmed();
+            if (line.startsWith(QStringLiteral("index="))) {
+                commitEntry();
+            } else if (line.startsWith(QStringLiteral("title="))) {
+                title = line.mid(6).remove(QLatin1Char('"'));
+            } else if (line.startsWith(QStringLiteral("id="))) {
+                id = line.mid(3).remove(QLatin1Char('"'));
+            }
+        }
+        commitEntry();
+
+        m_grubEntries = entries;
+        m_bootEntriesError.clear();
+        emit bootEntriesChanged();
+    });
+
+    connect(process, &QProcess::errorOccurred, this,
+            [this, guard](QProcess::ProcessError error) {
+        if (!guard || guard != m_bootEntriesProcess || error != QProcess::FailedToStart)
+            return;
+        m_bootEntriesProcess = nullptr;
+        guard->deleteLater();
+        m_bootEntriesBusy = false;
+        m_grubEntries.clear();
+        m_bootEntriesError = tr("Impossibile avviare grubby.");
+        emit bootEntriesChanged();
+    });
+
+    process->start(program, {QStringLiteral("--info=ALL")});
+    QTimer::singleShot(15000, process, [this, guard] {
+        if (!guard || guard != m_bootEntriesProcess || guard->state() == QProcess::NotRunning)
+            return;
+        guard->setProperty("krisccTimedOut", true);
+        guard->terminate();
+        QTimer::singleShot(2000, guard, [guard] {
+            if (guard && guard->state() != QProcess::NotRunning)
+                guard->kill();
+        });
+    });
+}
+
+bool SystemBackend::selectNextUefi(const QString &value)
+{
+    if (!canSelectNextBoot())
+        return false;
+    const QString token = value.trimmed();
+    static const QRegularExpression pattern(QStringLiteral("^[0-9A-Fa-f]{4}$"));
+    if (!pattern.match(token).hasMatch())
+        return false;
+
+    m_bootSelectionOwned = true;
+    m_bootSelectionRunning = true;
+    m_bootSelectionKind = QStringLiteral("uefi");
+    m_bootSelectionState = QStringLiteral("running");
+    emit bootSelectionStateChanged();
+    m_polkit->execute(QStringLiteral("/usr/bin/efibootmgr"),
+                      {QStringLiteral("-n"), token});
+    return true;
+}
+
+bool SystemBackend::selectNextGrub(const QString &value)
+{
+    if (!canSelectNextBoot())
+        return false;
+    const QString entry = value.trimmed();
+    if (entry.isEmpty() || entry.size() > 256 || entry.startsWith(QLatin1Char('-')))
+        return false;
+    for (const QChar ch : entry) {
+        if (ch.isNull() || ch.unicode() < 0x20 || ch.unicode() == 0x7f)
+            return false;
+    }
+
+    m_bootSelectionOwned = true;
+    m_bootSelectionRunning = true;
+    m_bootSelectionKind = QStringLiteral("grub");
+    m_bootSelectionState = QStringLiteral("running");
+    emit bootSelectionStateChanged();
+    m_polkit->execute(QStringLiteral("/usr/bin/grub2-reboot"), {entry});
+    return true;
 }
 
 SystemBackend::~SystemBackend()
@@ -850,6 +1116,138 @@ void SystemBackend::setBackupResult(const QString &status, const QString &path, 
     m_backupPath = path;
     m_backupState = state;
     emit backupStatusChanged();
+}
+
+void SystemBackend::refreshResources()
+{
+    int nextCpuUsage = m_cpuUsagePercent;
+    QFile stat(QStringLiteral("/proc/stat"));
+    if (stat.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        const QList<QByteArray> parts = stat.readLine().simplified().split(' ');
+        if (parts.size() >= 9 && parts.at(0) == "cpu") {
+            bool ok = true;
+            quint64 values[8] = {};
+            for (int i = 0; i < 8; ++i) {
+                bool fieldOk = false;
+                values[i] = parts.at(i + 1).toULongLong(&fieldOk);
+                ok = ok && fieldOk;
+            }
+            if (ok) {
+                const quint64 total = values[0] + values[1] + values[2] + values[3]
+                                    + values[4] + values[5] + values[6] + values[7];
+                const quint64 idle = values[3] + values[4];
+                if (m_previousCpuTotal > 0 && total > m_previousCpuTotal) {
+                    const quint64 totalDelta = total - m_previousCpuTotal;
+                    const quint64 idleDelta = idle >= m_previousCpuIdle ? idle - m_previousCpuIdle : 0;
+                    const double busy = totalDelta > 0
+                        ? 100.0 * double(totalDelta - qMin(idleDelta, totalDelta)) / double(totalDelta)
+                        : 0.0;
+                    nextCpuUsage = qBound(0, qRound(busy), 100);
+                }
+                m_previousCpuTotal = total;
+                m_previousCpuIdle = idle;
+            }
+        }
+    }
+
+    qint64 totalKiB = -1;
+    qint64 availableKiB = -1;
+    QFile meminfo(QStringLiteral("/proc/meminfo"));
+    if (meminfo.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        while (!meminfo.atEnd()) {
+            const QByteArray line = meminfo.readLine().simplified();
+            if (line.startsWith("MemTotal:")) {
+                const QList<QByteArray> parts = line.split(' ');
+                if (parts.size() >= 2)
+                    totalKiB = parts.at(1).toLongLong();
+            } else if (line.startsWith("MemAvailable:")) {
+                const QList<QByteArray> parts = line.split(' ');
+                if (parts.size() >= 2)
+                    availableKiB = parts.at(1).toLongLong();
+            }
+        }
+    }
+
+    const qint64 nextTotalMiB = totalKiB >= 0 ? totalKiB / 1024 : -1;
+    const qint64 nextUsedMiB = totalKiB >= 0 && availableKiB >= 0
+        ? qMax<qint64>(0, totalKiB - availableKiB) / 1024
+        : -1;
+    const double nextTemperature = readCpuTemperature();
+
+    const bool changed = nextCpuUsage != m_cpuUsagePercent
+        || nextUsedMiB != m_memoryUsedMiB
+        || nextTotalMiB != m_memoryTotalMiB
+        || !qFuzzyCompare(nextTemperature + 1.0, m_cpuTemperatureC + 1.0);
+
+    m_cpuUsagePercent = nextCpuUsage;
+    m_memoryUsedMiB = nextUsedMiB;
+    m_memoryTotalMiB = nextTotalMiB;
+    m_cpuTemperatureC = nextTemperature;
+    if (changed)
+        emit resourcesChanged();
+}
+
+double SystemBackend::readCpuTemperature() const
+{
+    const QDir hwmonRoot(QStringLiteral("/sys/class/hwmon"));
+    const QStringList hwmons = hwmonRoot.entryList(
+        QStringList{QStringLiteral("hwmon*")}, QDir::Dirs | QDir::NoDotAndDotDot);
+
+    int bestScore = -1;
+    double bestTemperature = -1.0;
+    for (const QString &directoryName : hwmons) {
+        const QDir directory(hwmonRoot.filePath(directoryName));
+        QFile nameFile(directory.filePath(QStringLiteral("name")));
+        QString sensorName;
+        if (nameFile.open(QIODevice::ReadOnly | QIODevice::Text))
+            sensorName = QString::fromUtf8(nameFile.readAll()).trimmed().toLower();
+
+        int baseScore = -1;
+        if (sensorName == QStringLiteral("k10temp")
+            || sensorName == QStringLiteral("coretemp")
+            || sensorName == QStringLiteral("zenpower"))
+            baseScore = 100;
+        else if (sensorName.contains(QStringLiteral("cpu"))
+                 || sensorName.contains(QStringLiteral("soc")))
+            baseScore = 70;
+        else if (sensorName == QStringLiteral("acpitz"))
+            baseScore = 20;
+
+        const QStringList inputs = directory.entryList(
+            QStringList{QStringLiteral("temp*_input")}, QDir::Files);
+        for (const QString &inputName : inputs) {
+            QFile input(directory.filePath(inputName));
+            if (!input.open(QIODevice::ReadOnly | QIODevice::Text))
+                continue;
+            bool ok = false;
+            const qint64 milli = QString::fromUtf8(input.readAll()).trimmed().toLongLong(&ok);
+            if (!ok || milli < -20000 || milli > 150000)
+                continue;
+
+            QString label;
+            const QString labelName = inputName;
+            const QString prefix = labelName.left(labelName.indexOf(QLatin1Char('_')));
+            QFile labelFile(directory.filePath(prefix + QStringLiteral("_label")));
+            if (labelFile.open(QIODevice::ReadOnly | QIODevice::Text))
+                label = QString::fromUtf8(labelFile.readAll()).trimmed().toLower();
+
+            int score = baseScore;
+            if (label.contains(QStringLiteral("tctl"))
+                || label.contains(QStringLiteral("tdie"))
+                || label.contains(QStringLiteral("package"))
+                || label.contains(QStringLiteral("cpu")))
+                score += 30;
+            if (score < 0)
+                continue;
+
+            const double temperature = double(milli) / 1000.0;
+            if (score > bestScore) {
+                bestScore = score;
+                bestTemperature = temperature;
+            }
+        }
+    }
+    return bestTemperature;
 }
 
 QString SystemBackend::readOsName() const

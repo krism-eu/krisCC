@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "0.7.0"
-RELEASE = "1"
+RELEASE = "2"
 RPM_EVR = f"{VERSION}-{RELEASE}.fc44"
 RPM_FILE = f"krisCC-{RPM_EVR}.x86_64.rpm"
 TAG = f"v{VERSION}-{RELEASE}"
@@ -40,6 +40,11 @@ package_cpp = read("src/PackageSearch.cpp")
 main_qml = read("qml/Main.qml")
 dashboard_qml = read("qml/modules/DashboardModule.qml")
 software_qml = read("qml/modules/SoftwareModule.qml")
+bootc_cpp = read("src/BootcBackend.cpp")
+software_cpp = read("src/SoftwareBackend.cpp")
+custom_cpp = read("src/CustomActionsBackend.cpp")
+custom_h = read("src/CustomActionsBackend.h")
+system_h = read("src/SystemBackend.h")
 flatpak_qml = read("qml/modules/FlatpakModule.qml")
 podman_qml = read("qml/modules/PodmanModule.qml")
 system_qml = read("qml/modules/SystemModule.qml")
@@ -89,7 +94,7 @@ command_card_ids = set(re.findall(r'\{\s*id:\s*"([^"]+)"', commands_qml))
 missing = sorted((qml_bookmarks | command_card_ids) - backend_bookmarks)
 require(not missing, f"QML bookmark(s) without backend implementation: {missing}")
 
-# Privileged entry points are deliberately tiny and explicit.
+# Privileged entry points are deliberately tiny, explicit and owned by typed backends.
 expected_programs = {
     "/usr/bin/rk",
     "/usr/bin/bootc",
@@ -98,14 +103,19 @@ expected_programs = {
     "/usr/bin/grub2-reboot",
     "/usr/libexec/kriscc/maintenance",
 }
-privileged_programs = set()
 for qml_path in ("qml/modules/SystemModule.qml", "qml/modules/RecoveryModule.qml",
                  "qml/modules/SoftwareModule.qml"):
     qml = read(qml_path)
-    privileged_programs.update(re.findall(r'PolkitHelper\.execute\("([^"]+)"', qml))
-    privileged_programs.update(re.findall(r'root\.runPrivileged\("([^"]+)"', qml))
-    privileged_programs.update(re.findall(r'root\.requestPrivileged\(\s*"([^"]+)"', qml))
-for backend in (rk_cpp, maintenance_backend_cpp):
+    require("PolkitHelper" not in qml,
+            f"{qml_path}: QML must not access PolkitHelper")
+    require(not re.search(r'/(?:usr/)?bin/(?:bootc|dnf5|efibootmgr|grub2-reboot)', qml),
+            f"{qml_path}: privileged implementation path leaked into QML")
+
+require('setContextProperty(QStringLiteral("PolkitHelper")' not in main_cpp,
+        "PolkitHelper must not be exposed to QML")
+
+privileged_programs = set()
+for backend in (rk_cpp, maintenance_backend_cpp, bootc_cpp, software_cpp, system_cpp):
     privileged_programs.update(re.findall(
         r'm_polkit->execute\(QStringLiteral\("([^"]+)"\)', backend))
 require(privileged_programs == expected_programs,
@@ -223,12 +233,22 @@ require('QStringLiteral(".local/share/flatpak")' in system_cpp,
 require('QStringLiteral(".local/share/containers")' in system_cpp,
         "home backup must exclude Podman container store")
 
-# RK recovery state is parsed once in C++ and QML consumes typed properties.
-for token in ("Overlay:", "Pending recovery:", "Needs sync:"):
-    require(f'QStringLiteral("{token}")' in rk_cpp,
-            f"RkBackend parser is missing contract marker: {token}")
+# RK recovery state is consumed through the KrisOS versioned JSON contract.
+for token in (
+    'QStringLiteral("status"), QStringLiteral("--json")',
+    'object.value(QStringLiteral("schema")).toInt(-1) != 1',
+    'QStringLiteral("pending_recovery")',
+    'QStringLiteral("needs_sync")',
+    'QStringLiteral("requests")',
+):
+    require(token in rk_cpp, f"RkBackend JSON contract missing: {token}")
+require("Overlay:" not in rk_cpp and "Pending recovery:" not in rk_cpp,
+        "RkBackend still parses human-readable rk status")
 require('m_polkit->execute(QStringLiteral("/usr/bin/rk"), args)' in rk_cpp,
-        "RkBackend does not own privileged rk recovery actions")
+        "RkBackend does not own privileged rk actions")
+require("Q_INVOKABLE bool addPackage" in read("src/RkBackend.h")
+        and "Q_INVOKABLE bool removePackage" in read("src/RkBackend.h"),
+        "RkBackend does not own package mutations")
 require('utilityBackend.runBookmark("rk-status")' not in recovery_qml,
         "Recovery still parses rk through the generic command backend")
 require("RkBackend.needsSync" in recovery_qml and "RkBackend.overlayState" in dashboard_qml,
@@ -282,6 +302,7 @@ for name, qml in {
     "podman": podman_qml,
     "system": system_qml,
     "recovery": recovery_qml,
+    "commands": commands_qml,
 }.items():
     require(qml.count("parent: Controls.Overlay.overlay") >= qml.count("Controls.Dialog {"),
             f"{name}: dialog remains parented to scroll content")
@@ -300,14 +321,16 @@ require("/usr/libexec/kriscc/bootc-status humanreadable" in utility_cpp,
         "health check must use the safe bootc status wrapper")
 require("root.hasStagedDeployment()" in system_qml
         and "BootcBackend.refreshStatus()" in system_qml
-        and "bootProgressLines" in system_qml,
+        and "BootcBackend.operationLines" in system_qml,
         "System BootC workflow lost staged/progress/refresh state")
-require('QStringLiteral("downloadOnly")' in read("src/BootcBackend.cpp")
-        and '["upgrade", "--from-downloaded", "--apply"]' in system_qml
-        and '["upgrade", "--apply"]' not in system_qml
+require('QStringLiteral("downloadOnly")' in bootc_cpp
+        and "BootcBackend.applyDownloaded()" in system_qml
+        and "BootcBackend.checkUpgrade()" in system_qml
+        and "BootcBackend.downloadUpgrade()" in system_qml
+        and "BootcBackend.prepareUpgrade()" in system_qml
         and "SystemBackend.requestReboot()" in system_qml,
-        "System BootC staged actions do not match the JSON deployment state")
-require('QStringLiteral("--format-version=1")' in read("src/BootcBackend.cpp"),
+        "System BootC staged actions do not match the typed backend state")
+require('QStringLiteral("--format-version=1")' in bootc_cpp,
         "root BootC JSON status path does not pin schema version 1")
 require('QStringLiteral("--from-downloaded")' in polkit_cpp,
         "BootC allowlist is missing the fixed from-downloaded forms")
@@ -326,6 +349,65 @@ require("Q_PROPERTY(QString selinuxState" in read("src/SystemBackend.h")
         "Dashboard SELinux state is not backed by SystemBackend")
 require("launchUnprivileged" not in polkit_cpp,
         "dead Polkit unprivileged launcher remains")
+
+# Specialized boot state is parsed in SystemBackend, never in QML.
+require("Q_PROPERTY(QVariantList uefiEntries" in system_h
+        and "Q_PROPERTY(QVariantList grubEntries" in system_h,
+        "typed next-boot entry state is missing")
+require("SystemBackend.refreshUefiEntries()" in system_qml
+        and "SystemBackend.refreshGrubEntries()" in system_qml
+        and "SystemBackend.selectNextUefi" in system_qml
+        and "SystemBackend.selectNextGrub" in system_qml,
+        "System page does not use typed next-boot APIs")
+require("function uefiEntries()" not in system_qml
+        and "function grubEntries()" not in system_qml,
+        "system-text parsing remains in QML")
+
+# Dashboard keeps lightweight always-visible local resource state.
+for token in (
+    "Q_PROPERTY(int cpuUsagePercent",
+    "Q_PROPERTY(qint64 memoryUsedMiB",
+    "Q_PROPERTY(qint64 memoryTotalMiB",
+    "Q_PROPERTY(double cpuTemperatureC",
+):
+    require(token in system_h, f"resource property missing: {token}")
+require("MemAvailable:" in system_cpp,
+        "RAM usage must use MemAvailable rather than swap or free-only accounting")
+require('/sys/class/hwmon' in system_cpp and "k10temp" in system_cpp and "coretemp" in system_cpp,
+        "CPU temperature must use local hwmon capability detection")
+for token in ("SystemBackend.cpuUsagePercent", "SystemBackend.memoryUsedMiB",
+              "SystemBackend.cpuTemperatureC", "swap esclusa"):
+    require(token in dashboard_qml, f"dashboard resource box missing: {token}")
+
+# Personal commands are persistent user data and are intentionally outside the privileged contract.
+require("src/CustomActionsBackend.cpp src/CustomActionsBackend.h" in cmake,
+        "CustomActionsBackend is not linked")
+require("QStandardPaths::AppConfigLocation" in custom_cpp
+        and "custom-actions.json" in custom_cpp
+        and "QSaveFile" in custom_cpp,
+        "personal command storage is not versioned/atomic user configuration")
+require("geteuid() == 0" in custom_cpp,
+        "personal commands must refuse execution when krisCC itself is root")
+require('QStringLiteral("--noprofile")' in custom_cpp
+        and 'QStringLiteral("--norc")' in custom_cpp,
+        "personal Bash scripts do not use the bounded execution wrapper")
+require("PolkitHelper" not in custom_cpp and "pkexec" not in custom_cpp,
+        "personal commands crossed the privileged boundary")
+require("Miei comandi" in commands_qml
+        and "CustomActionsBackend.saveAction" in commands_qml
+        and "CustomActionsBackend.runAction" in commands_qml,
+        "personal commands UI is missing")
+for removed in ("top-cpu", "top-memory", "flatpak-list", "podman-images"):
+    require(f'id: "{removed}"' not in commands_qml,
+            f"duplicated predefined command remains: {removed}")
+
+# Current main supports only KrisOS runtime state paths; migration fallbacks are gone.
+require("/usr/share/krisos/owned-packages.txt" in package_cpp
+        and "/var/lib/krisos/packages.list" in package_cpp
+        and "/var/lib/krisos/packages.list" in bootc_cpp,
+        "current KrisOS state paths missing")
+require("raku-kris" not in package_cpp and "raku-kris" not in bootc_cpp,
+        "obsolete Raku compatibility paths remain")
 
 # Keep the intended minimal scope and immutable KrisOS update contract.
 combined_ui = system_qml + recovery_qml + dashboard_qml

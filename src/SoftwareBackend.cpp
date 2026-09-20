@@ -1,16 +1,115 @@
 #include "SoftwareBackend.h"
 
+#include "PolkitHelper.h"
+
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTimer>
+#include <QRegularExpression>
+#include <QUrl>
 
 #include <algorithm>
 
-SoftwareBackend::SoftwareBackend(QObject *parent)
+SoftwareBackend::SoftwareBackend(PolkitHelper *polkit, QObject *parent)
     : QObject(parent)
+    , m_polkit(polkit)
 {
+    if (m_polkit) {
+        connect(m_polkit, &PolkitHelper::runningChanged, this, &SoftwareBackend::operationStateChanged);
+        connect(m_polkit, &PolkitHelper::line, this, [this](const QString &line) {
+            if (!m_operationOwned)
+                return;
+            m_operationLines.append(line);
+            while (m_operationLines.size() > 12)
+                m_operationLines.removeFirst();
+            emit operationStateChanged();
+        });
+        connect(m_polkit, &PolkitHelper::finished, this,
+                [this](bool success, const QString &output) {
+            if (!m_operationOwned)
+                return;
+            m_operationOwned = false;
+            m_operationRunning = false;
+            m_operationState = success ? QStringLiteral("success") : QStringLiteral("error");
+            if (m_operationLines.isEmpty() && !output.trimmed().isEmpty())
+                m_operationLines.append(output.trimmed());
+            emit operationStateChanged();
+            emit operationFinished(success, output);
+            refreshRepositories();
+        });
+    }
+}
+
+bool SoftwareBackend::canModifyRepositories() const
+{
+    return !m_busy && m_polkit && !m_polkit->running() && !m_operationRunning;
+}
+
+bool SoftwareBackend::validRepositoryId(const QString &repoId) const
+{
+    static const QRegularExpression pattern(
+        QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"));
+    return pattern.match(repoId.trimmed()).hasMatch();
+}
+
+bool SoftwareBackend::validRepositoryUrl(const QString &value) const
+{
+    const QString urlText = value.trimmed();
+    if (urlText.isEmpty() || urlText.size() > 2048
+        || urlText.contains(QRegularExpression(QStringLiteral("[\\s\\x00-\\x1f]"))))
+        return false;
+    const QUrl url(urlText);
+    return url.isValid()
+        && url.scheme() == QStringLiteral("https")
+        && !url.host().isEmpty()
+        && url.userInfo().isEmpty();
+}
+
+bool SoftwareBackend::startPrivileged(const QStringList &args)
+{
+    if (!canModifyRepositories())
+        return false;
+    m_operationOwned = true;
+    m_operationRunning = true;
+    m_operationState = QStringLiteral("running");
+    m_operationLines.clear();
+    setError({});
+    emit operationStateChanged();
+    m_polkit->execute(QStringLiteral("/usr/bin/dnf5"), args);
+    return true;
+}
+
+bool SoftwareBackend::enableRepository(const QString &repoId)
+{
+    const QString id = repoId.trimmed();
+    if (!validRepositoryId(id)) {
+        setError(tr("Identificatore repository non valido."));
+        return false;
+    }
+    return startPrivileged({QStringLiteral("config-manager"), QStringLiteral("enable"), id});
+}
+
+bool SoftwareBackend::disableRepository(const QString &repoId)
+{
+    const QString id = repoId.trimmed();
+    if (!validRepositoryId(id)) {
+        setError(tr("Identificatore repository non valido."));
+        return false;
+    }
+    return startPrivileged({QStringLiteral("config-manager"), QStringLiteral("disable"), id});
+}
+
+bool SoftwareBackend::addRepository(const QString &value)
+{
+    const QString url = value.trimmed();
+    if (!validRepositoryUrl(url)) {
+        setError(tr("Repository non aggiunto: usa un URL HTTPS valido."));
+        return false;
+    }
+    return startPrivileged({QStringLiteral("config-manager"), QStringLiteral("addrepo"),
+                            QStringLiteral("--from-repofile=") + url});
 }
 
 void SoftwareBackend::refreshRepositories()
@@ -113,6 +212,7 @@ void SoftwareBackend::setBusy(bool busy)
         return;
     m_busy = busy;
     emit busyChanged();
+    emit operationStateChanged();
 }
 
 void SoftwareBackend::setError(const QString &error)

@@ -8,12 +8,12 @@ Le regole di stabilità, compatibilità e integrazione sono definite in [ARCHITE
 
 ## Cosa gestisce
 
-- **Panoramica**: stato essenziale di sistema, aggiornamenti, storage e Quick System Info.
+- **Panoramica**: stato essenziale di sistema, aggiornamenti, storage, CPU, RAM usata senza swap, temperatura CPU e Quick System Info.
 - **Software RPM**: ricerca, installati, aggiornabili, pacchetti recenti, provenienza Base/Persistente/Locale e piano della transazione tramite la stessa policy `rk` usata per installare.
 - **Flatpak**: ricerca strutturata, installati, aggiornamenti, update singolo o completo del profilo utente, remote e integrazione Flathub senza dipendere da Discover.
 - **Container / Podman**: elenco container e immagini locali, stato, nome/tag, dimensione, informazioni, log, start/stop/restart, rinomina e rimozione esplicita delle immagini senza force.
 - **Sistema**: centro aggiornamenti BootC/Flatpak/rk, salute e sicurezza read-only, storage, voci UEFI e GRUB/BLS, selezione one-shot del prossimo avvio e strumenti KDE essenziali.
-- **Comandi**: bookmark read-only per attività quotidiane: systemd, journal, rete, spazio, inode, mount, partizioni e processi, con comando visibile/copiabile e filtro locale.
+- **Comandi**: diagnostica read-only pronta per systemd, journal, rete, spazio, inode, mount e avvio, più **Miei comandi** per salvare comandi o script Bash multilinea personali in `~/.config/krisCC/custom-actions.json`. Le azioni personali girano soltanto con i privilegi dell'utente corrente.
 - **Backup e recovery**: creazione, anteprima precisa di inclusioni/esclusioni, elenco, verifica e ripristino degli snapshot `tar.gz`, più stato RK strutturato, sync e forget di recovery. Il backup home esclude runtime/app Flatpak e storage Podman ricostruibili, mantenendo i dati Flatpak in `~/.var/app`.
 - **Cronologia**: registro locale delle operazioni mutanti eseguite da krisCC. Non vengono salvati output completi dei comandi.
 
@@ -30,8 +30,6 @@ krisCC usa in via primaria il layout corrente di KrisOS:
 - `/var/lib/krisos/packages.list`
 - `/usr/share/krisos/owned-packages.txt`
 - `/usr/bin/rk`
-
-Per la fase di migrazione mantiene un fallback in sola lettura verso i vecchi percorsi `/var/lib/raku-kris` e `/usr/share/raku-kris`. Il layout KrisOS ha sempre precedenza.
 
 Il pacchetto RPM e l'eseguibile hanno una sola identità tecnica: **`krisCC`**. Non sono previsti alias, binari o compatibilità RPM con i vecchi nomi sperimentali.
 

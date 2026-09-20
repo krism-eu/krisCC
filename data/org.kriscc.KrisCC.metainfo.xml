@@ -14,7 +14,7 @@
   <categories><category>Settings</category><category>System</category></categories>
   <releases>
     <release version="0.7.0" date="2026-09-20">
-      <description><p>Structured KrisOS state backends, tightly scoped privileged maintenance, a lighter Plasma/Kirigami dashboard, daily diagnostics, and a documented long-term compatibility architecture.</p></description>
+      <description><p>Structured KrisOS state backends, tightly scoped privileged maintenance, live CPU/RAM/temperature status, persistent personal command scripts, daily diagnostics, and a documented long-term compatibility architecture.</p></description>
     </release>
     <release version="0.6.0" date="2026-09-19">
       <description><p>Finalized BootC staged-update handling, bounded long-running mutations, deterministic RPM search results, and hardened repository URL validation.</p></description>

@@ -55,7 +55,7 @@ if grep -q 'url.scheme() == QStringLiteral("http")' src/PolkitHelper.cpp; then
   echo "ERROR: repository URLs must be HTTPS-only" >&2
   exit 1
 fi
-grep -q 'Repository non aggiunto: usa un URL HTTPS valido' qml/modules/SoftwareModule.qml
+grep -q 'Repository non aggiunto: usa un URL HTTPS valido' src/SoftwareBackend.cpp
 if grep -q 'auth_admin_keep' data/org.kriscc.controlcenter.policy; then
   echo "ERROR: repository authorization must not be retained" >&2
   exit 1
@@ -114,20 +114,23 @@ if grep -q 'currentIndex: root.mode' qml/modules/FlatpakModule.qml qml/modules/P
   exit 1
 fi
 
-# The BootC check is an explicit registry check and must remain non-applying.
-grep -Fq 'root.runBootc(["upgrade", "--check"])' qml/modules/SystemModule.qml
+# BootC mutations are semantic backend actions; QML never constructs privileged argv.
+grep -q 'BootcBackend.checkUpgrade()' qml/modules/SystemModule.qml
+grep -q 'BootcBackend.downloadUpgrade()' qml/modules/SystemModule.qml
+grep -q 'BootcBackend.prepareUpgrade()' qml/modules/SystemModule.qml
+grep -q 'BootcBackend.applyDownloaded()' qml/modules/SystemModule.qml
 grep -q 'text: qsTr("Controlla immagine")' qml/modules/SystemModule.qml
 grep -q 'root.hasStagedDeployment()' qml/modules/SystemModule.qml
-grep -q 'bootProgressLines' qml/modules/SystemModule.qml
+grep -q 'BootcBackend.operationLines' qml/modules/SystemModule.qml
 grep -q 'BootcBackend.refreshStatus()' qml/modules/SystemModule.qml
 grep -q '/usr/libexec/kriscc/bootc-status humanreadable' src/UtilityBackend.cpp
 grep -q 'QStringLiteral("downloadOnly")' src/BootcBackend.cpp
-grep -Fq 'root.runBootc(["upgrade", "--from-downloaded", "--apply"])' qml/modules/SystemModule.qml
 grep -q 'SystemBackend.requestReboot()' qml/modules/SystemModule.qml
+grep -q 'm_polkit->execute(QStringLiteral("/usr/bin/bootc")' src/BootcBackend.cpp
 grep -q 'org.freedesktop.login1.Manager' src/SystemBackend.cpp
 grep -q 'constexpr int kInteractiveTimeoutMs = 30 \* 60 \* 1000;' src/UtilityBackend.cpp
 grep -q 'constexpr int kPodmanActionTimeoutMs = 5 \* 60 \* 1000;' src/UtilityBackend.cpp
-if grep -Fq 'root.runBootc(["upgrade", "--apply"])' qml/modules/SystemModule.qml; then
+if grep -Fq 'QStringLiteral("upgrade"), QStringLiteral("--apply")' src/BootcBackend.cpp; then
   echo "ERROR: BootC apply bypasses the staged download-only state" >&2
   exit 1
 fi
@@ -145,17 +148,14 @@ grep -q 'imageStatus.value(QStringLiteral("image")).toObject()' src/BootcBackend
 grep -q 'deployment.value(QStringLiteral("ostree")).toObject()' src/BootcBackend.cpp
 grep -q 'jsonString(ostree, QStringLiteral("checksum"))' src/BootcBackend.cpp
 
-# KrisOS is primary. The Raku paths remain only as read-only compatibility
-# fallbacks for machines that have not yet booted the renamed image, and using
-# one must be visible in the application log.
+# KrisOS paths are the only supported runtime contract on the current line.
 grep -q '/usr/share/krisos/owned-packages.txt' src/PackageSearch.cpp
 grep -q '/var/lib/krisos/packages.list' src/PackageSearch.cpp
 grep -q '/var/lib/krisos/packages.list' src/BootcBackend.cpp
-grep -q '/usr/share/raku-kris/owned-packages.txt' src/PackageSearch.cpp
-grep -q '/var/lib/raku-kris/packages.list' src/PackageSearch.cpp
-grep -q '/var/lib/raku-kris/packages.list' src/BootcBackend.cpp
-grep -q 'using legacy compatibility path' src/PackageSearch.cpp
-grep -q 'using legacy compatibility path' src/BootcBackend.cpp
+if grep -RniE 'raku-kris|using legacy compatibility path' src/PackageSearch.cpp src/BootcBackend.cpp; then
+  echo "ERROR: obsolete Raku compatibility path remains" >&2
+  exit 1
+fi
 
 # krisCC has one technical identity. Old experimental package/application names
 # must not be shipped or advertised as compatibility aliases.
@@ -175,7 +175,7 @@ test ! -e data/org.kcontrolc.KControlC.metainfo.xml
 
 grep -q '^Name:[[:space:]]*krisCC$' packaging/krisCC.spec
 grep -Fxq 'Version:        0.7.0' packaging/krisCC.spec
-grep -Fxq 'Release:        1%{?dist}' packaging/krisCC.spec
+grep -Fxq 'Release:        2%{?dist}' packaging/krisCC.spec
 if grep -Eq '^Provides:[[:space:]]*(kcc|k-controlc)([[:space:]=]|$)|^Obsoletes:[[:space:]]*(kcc|k-controlc)([[:space:]<=>]|$)' packaging/krisCC.spec; then
   echo "ERROR: krisCC must not provide or obsolete experimental legacy identities" >&2
   exit 1
@@ -280,11 +280,15 @@ if grep -q 'launchUnprivileged\|isUnprivilegedInvocationAllowed' src/PolkitHelpe
   exit 1
 fi
 
-# Next-boot selection is one-shot only: BootNext or grub2-reboot, never a permanent BootOrder rewrite.
+# Next-boot selection is one-shot and owned by SystemBackend, never by QML.
 grep -q 'QStringLiteral("/usr/bin/efibootmgr")' src/PolkitHelper.cpp
 grep -q 'QStringLiteral("-n")' src/PolkitHelper.cpp
 grep -q 'QStringLiteral("/usr/bin/grub2-reboot")' src/PolkitHelper.cpp
 grep -q "entry.startsWith(QLatin1Char('-'))" src/PolkitHelper.cpp
+grep -q 'SystemBackend.selectNextUefi' qml/modules/SystemModule.qml
+grep -q 'SystemBackend.selectNextGrub' qml/modules/SystemModule.qml
+grep -q 'Q_PROPERTY(QVariantList uefiEntries' src/SystemBackend.h
+grep -q 'Q_PROPERTY(QVariantList grubEntries' src/SystemBackend.h
 grep -q 'org.kriscc.controlcenter.boot.next-uefi' data/org.kriscc.controlcenter.policy
 grep -q 'org.kriscc.controlcenter.boot.next-grub' data/org.kriscc.controlcenter.policy
 grep -q 'BootNext vale per un solo riavvio' qml/modules/SystemModule.qml
@@ -298,6 +302,52 @@ if grep -niE 'fwupdmgr|firmware|welcome|first.?run' qml/modules/SystemModule.qml
   echo "ERROR: firmware/welcome scope leaked into krisCC 0.7 UI" >&2
   exit 1
 fi
+
+# QML must never construct or launch privileged commands directly.
+if grep -R -n 'PolkitHelper\|/usr/bin/bootc\|/usr/bin/dnf5\|/usr/bin/efibootmgr\|/usr/bin/grub2-reboot' qml; then
+  echo "ERROR: privileged implementation details leaked into QML" >&2
+  exit 1
+fi
+grep -q 'm_polkit->execute(QStringLiteral("/usr/bin/rk")' src/RkBackend.cpp
+grep -q 'm_polkit->execute(QStringLiteral("/usr/bin/dnf5")' src/SoftwareBackend.cpp
+grep -q 'm_polkit->execute(QStringLiteral("/usr/bin/bootc")' src/BootcBackend.cpp
+grep -q 'm_polkit->execute(QStringLiteral("/usr/bin/efibootmgr")' src/SystemBackend.cpp
+grep -q 'm_polkit->execute(QStringLiteral("/usr/bin/grub2-reboot")' src/SystemBackend.cpp
+grep -q 'QStringLiteral("status"), QStringLiteral("--json")' src/RkBackend.cpp
+grep -q 'object.value(QStringLiteral("schema")).toInt(-1) != 1' src/RkBackend.cpp
+
+# Dashboard resources are lightweight local reads; RAM explicitly uses MemAvailable and not swap.
+grep -q 'Q_PROPERTY(int cpuUsagePercent' src/SystemBackend.h
+grep -q 'Q_PROPERTY(qint64 memoryUsedMiB' src/SystemBackend.h
+grep -q 'Q_PROPERTY(double cpuTemperatureC' src/SystemBackend.h
+grep -q 'MemAvailable:' src/SystemBackend.cpp
+grep -q '/sys/class/hwmon' src/SystemBackend.cpp
+grep -q 'SystemBackend.cpuUsagePercent' qml/modules/DashboardModule.qml
+grep -q 'SystemBackend.memoryUsedMiB' qml/modules/DashboardModule.qml
+grep -q 'SystemBackend.cpuTemperatureC' qml/modules/DashboardModule.qml
+grep -q 'swap esclusa' qml/modules/DashboardModule.qml
+
+# Personal commands are versioned user configuration and never cross the privilege boundary.
+grep -q 'src/CustomActionsBackend.cpp src/CustomActionsBackend.h' CMakeLists.txt
+grep -q 'QStandardPaths::AppConfigLocation' src/CustomActionsBackend.cpp
+grep -q 'custom-actions.json' src/CustomActionsBackend.cpp
+grep -q 'QSaveFile' src/CustomActionsBackend.cpp
+grep -q 'geteuid() == 0' src/CustomActionsBackend.cpp
+grep -q 'QStringLiteral("--noprofile")' src/CustomActionsBackend.cpp
+grep -q 'QStringLiteral("--norc")' src/CustomActionsBackend.cpp
+if grep -q 'PolkitHelper\|pkexec' src/CustomActionsBackend.cpp src/CustomActionsBackend.h; then
+  echo "ERROR: personal commands must never use the privileged path" >&2
+  exit 1
+fi
+grep -q 'Miei comandi' qml/modules/CommandsModule.qml
+grep -q 'CustomActionsBackend.saveAction' qml/modules/CommandsModule.qml
+grep -q 'CustomActionsBackend.runAction' qml/modules/CommandsModule.qml
+for removed in top-cpu top-memory flatpak-list podman-images; do
+  if grep -q "id: \"$removed\"" qml/modules/CommandsModule.qml; then
+    echo "ERROR: duplicated bookmark remains: $removed" >&2
+    exit 1
+  fi
+done
 
 # --background must be a single activatable session instance, not an unreachable duplicate.
 grep -q 'org.kriscc.ControlCenter' src/main.cpp

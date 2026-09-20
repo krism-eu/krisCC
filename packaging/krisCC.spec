@@ -1,6 +1,6 @@
 Name:           krisCC
 Version:        0.7.0
-Release:        1%{?dist}
+Release:        2%{?dist}
 Summary:        krisCC personal control center for KrisOS and Fedora bootc
 License:        MIT
 URL:            https://github.com/krism-eu/krisCC
@@ -52,6 +52,12 @@ Settings.
 %{_datadir}/icons/hicolor/scalable/apps/krisCC.svg
 
 %changelog
+* Sun Sep 20 2026 krism-eu - 0.7.0-2
+- Add persistent per-user custom commands and multiline scripts
+- Show CPU usage, RAM used without swap and CPU temperature on the dashboard
+- Move privileged BootC, RK, repository and next-boot actions behind typed backends
+- Consume the versioned KrisOS rk status JSON contract and remove Raku compatibility paths
+
 * Sun Sep 20 2026 krism-eu - 0.7.0-1
 - Introduce structured RK and maintenance backends with tighter privilege boundaries
 - Refresh the Plasma/Kirigami dashboard and daily diagnostics around typed system state

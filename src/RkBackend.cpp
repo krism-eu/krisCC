@@ -3,25 +3,17 @@
 #include "PolkitHelper.h"
 
 #include <QFileInfo>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonParseError>
 #include <QRegularExpression>
 #include <QTimer>
 
 namespace {
 constexpr int kStatusTimeoutMs = 30 * 1000;
+}
 
-bool parseBoolean(const QString &value, bool *result)
-{
-    if (value == QStringLiteral("True")) {
-        *result = true;
-        return true;
-    }
-    if (value == QStringLiteral("False")) {
-        *result = false;
-        return true;
-    }
-    return false;
-}
-}
 
 RkBackend::RkBackend(PolkitHelper *polkit, QObject *parent)
     : QObject(parent)
@@ -29,6 +21,14 @@ RkBackend::RkBackend(PolkitHelper *polkit, QObject *parent)
 {
     if (m_polkit) {
         connect(m_polkit, &PolkitHelper::runningChanged, this, &RkBackend::stateChanged);
+        connect(m_polkit, &PolkitHelper::line, this, [this](const QString &line) {
+            if (!m_operationOwned)
+                return;
+            m_operationLines.append(line);
+            while (m_operationLines.size() > 12)
+                m_operationLines.removeFirst();
+            emit operationStateChanged();
+        });
         connect(m_polkit, &PolkitHelper::finished, this,
                 [this](bool success, const QString &output) {
             if (!m_operationOwned)
@@ -53,6 +53,17 @@ bool RkBackend::canSync() const
         && m_overlayState == QStringLiteral("ready")
         && m_needsSync
         && !m_pendingRecovery
+        && !m_busy
+        && m_polkit
+        && !m_polkit->running();
+}
+
+bool RkBackend::canChangePackages() const
+{
+    return m_statusValid
+        && m_overlayState == QStringLiteral("ready")
+        && !m_pendingRecovery
+        && !m_needsSync
         && !m_busy
         && m_polkit
         && !m_polkit->running();
@@ -88,7 +99,8 @@ void RkBackend::refreshStatus()
             return;
 
         const bool timedOut = process->property("krisccTimedOut").toBool();
-        const QString output = QString::fromUtf8(process->readAllStandardOutput()).trimmed();
+        const QByteArray outputData = process->readAllStandardOutput();
+        const QString output = QString::fromUtf8(outputData).trimmed();
         m_process = nullptr;
         process->deleteLater();
         m_busy = false;
@@ -104,7 +116,7 @@ void RkBackend::refreshStatus()
             return;
         }
 
-        parseStatus(output);
+        parseStatus(outputData);
     });
 
     connect(rawProcess, &QProcess::errorOccurred, this,
@@ -118,7 +130,8 @@ void RkBackend::refreshStatus()
         finishStatusError(tr("Impossibile avviare rk status: %1").arg(reason));
     });
 
-    rawProcess->start(QStringLiteral("/usr/bin/rk"), {QStringLiteral("status")});
+    rawProcess->start(QStringLiteral("/usr/bin/rk"),
+                      {QStringLiteral("status"), QStringLiteral("--json")});
     QTimer::singleShot(kStatusTimeoutMs, rawProcess, [process] {
         if (!process || process->state() == QProcess::NotRunning)
             return;
@@ -139,6 +152,24 @@ bool RkBackend::sync()
     return true;
 }
 
+bool RkBackend::addPackage(const QString &packageName)
+{
+    const QString package = packageName.trimmed();
+    if (!canChangePackages() || !validPackageName(package))
+        return false;
+    startPrivileged({QStringLiteral("add"), package});
+    return true;
+}
+
+bool RkBackend::removePackage(const QString &packageName)
+{
+    const QString package = packageName.trimmed();
+    if (!canChangePackages() || !validPackageName(package))
+        return false;
+    startPrivileged({QStringLiteral("rm"), package});
+    return true;
+}
+
 bool RkBackend::forget(const QString &packageName)
 {
     const QString package = packageName.trimmed();
@@ -148,69 +179,47 @@ bool RkBackend::forget(const QString &packageName)
     return true;
 }
 
-void RkBackend::parseStatus(const QString &text)
+void RkBackend::parseStatus(const QByteArray &data)
 {
-    bool overlaySeen = false;
-    bool pendingSeen = false;
-    bool needsSeen = false;
-    bool pending = false;
-    bool needs = false;
-    bool requestsStarted = false;
-    QString overlay;
-    QStringList requests;
-
-    const QStringList lines = text.split(QLatin1Char('\n'));
-    for (const QString &rawLine : lines) {
-        const QString line = rawLine.trimmed();
-        if (line.startsWith(QStringLiteral("Overlay:"))) {
-            if (overlaySeen) {
-                finishStatusError(tr("rk status contiene più stati Overlay."));
-                return;
-            }
-            overlaySeen = true;
-            overlay = line.mid(QStringLiteral("Overlay:").size()).trimmed();
-            if (overlay != QStringLiteral("ready") && overlay != QStringLiteral("degraded")) {
-                finishStatusError(tr("Stato Overlay non riconosciuto: %1").arg(overlay));
-                return;
-            }
-            continue;
-        }
-
-        if (line.startsWith(QStringLiteral("Pending recovery:"))) {
-            if (pendingSeen
-                || !parseBoolean(line.mid(QStringLiteral("Pending recovery:").size()).trimmed(), &pending)) {
-                finishStatusError(tr("Valore Pending recovery non valido."));
-                return;
-            }
-            pendingSeen = true;
-            continue;
-        }
-
-        if (line.startsWith(QStringLiteral("Needs sync:"))) {
-            if (needsSeen
-                || !parseBoolean(line.mid(QStringLiteral("Needs sync:").size()).trimmed(), &needs)) {
-                finishStatusError(tr("Valore Needs sync non valido."));
-                return;
-            }
-            needsSeen = true;
-            requestsStarted = true;
-            continue;
-        }
-
-        if (requestsStarted && !line.isEmpty())
-            requests.append(line);
-    }
-
-    if (!overlaySeen || !pendingSeen || !needsSeen) {
-        finishStatusError(tr("rk status non contiene tutti i marker richiesti."));
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(data, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
+        finishStatusError(tr("rk status --json non valido: %1").arg(parseError.errorString()));
         return;
     }
 
-    m_statusText = text;
+    const QJsonObject object = document.object();
+    if (object.value(QStringLiteral("schema")).toInt(-1) != 1) {
+        finishStatusError(tr("Versione del contratto rk status non supportata."));
+        return;
+    }
+
+    const QString overlay = object.value(QStringLiteral("overlay")).toString();
+    if (overlay != QStringLiteral("ready") && overlay != QStringLiteral("degraded")) {
+        finishStatusError(tr("Stato overlay rk non riconosciuto."));
+        return;
+    }
+    if (!object.value(QStringLiteral("pending_recovery")).isBool()
+        || !object.value(QStringLiteral("needs_sync")).isBool()
+        || !object.value(QStringLiteral("requests")).isArray()) {
+        finishStatusError(tr("rk status --json è incompleto."));
+        return;
+    }
+
+    QStringList requests;
+    for (const QJsonValue &value : object.value(QStringLiteral("requests")).toArray()) {
+        if (!value.isString() || !validPackageName(value.toString())) {
+            finishStatusError(tr("rk status contiene una richiesta pacchetto non valida."));
+            return;
+        }
+        requests.append(value.toString());
+    }
+
+    m_statusText = QString::fromUtf8(document.toJson(QJsonDocument::Indented)).trimmed();
     m_errorText.clear();
     m_overlayState = overlay;
-    m_pendingRecovery = pending;
-    m_needsSync = needs;
+    m_pendingRecovery = object.value(QStringLiteral("pending_recovery")).toBool();
+    m_needsSync = object.value(QStringLiteral("needs_sync")).toBool();
     m_requests = requests;
     m_statusValid = true;
     emit stateChanged();
@@ -244,6 +253,7 @@ void RkBackend::startPrivileged(const QStringList &args)
     m_operationRunning = true;
     m_operationState = QStringLiteral("running");
     m_operationOutput.clear();
+    m_operationLines.clear();
     emit operationStateChanged();
     m_polkit->execute(QStringLiteral("/usr/bin/rk"), args);
 }

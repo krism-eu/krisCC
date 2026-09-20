@@ -11,6 +11,7 @@
 #include <QtQml/qqml.h>
 
 #include "BootcBackend.h"
+#include "CustomActionsBackend.h"
 #include "InstanceController.h"
 #include "PackageSearch.h"
 #include "PolkitHelper.h"
@@ -70,11 +71,12 @@ int main(int argc, char *argv[])
     qmlRegisterType<UtilityBackend>("org.kriscc", 1, 0, "UtilityBackend");
 
     PolkitHelper polkitHelper;
-    BootcBackend bootcBackend;
+    BootcBackend bootcBackend(&polkitHelper);
     RkBackend rkBackend(&polkitHelper);
     MaintenanceBackend maintenanceBackend(&polkitHelper);
-    SoftwareBackend softwareBackend;
-    SystemBackend systemBackend;
+    SoftwareBackend softwareBackend(&polkitHelper);
+    SystemBackend systemBackend(&polkitHelper);
+    CustomActionsBackend customActionsBackend;
 
     QObject::connect(&rkBackend, &RkBackend::operationFinished, &bootcBackend,
                      [&bootcBackend](bool, const QString &) {
@@ -90,12 +92,12 @@ int main(int argc, char *argv[])
     });
 
     QQmlApplicationEngine engine;
-    engine.rootContext()->setContextProperty(QStringLiteral("PolkitHelper"), &polkitHelper);
     engine.rootContext()->setContextProperty(QStringLiteral("BootcBackend"), &bootcBackend);
     engine.rootContext()->setContextProperty(QStringLiteral("RkBackend"), &rkBackend);
     engine.rootContext()->setContextProperty(QStringLiteral("MaintenanceBackend"), &maintenanceBackend);
     engine.rootContext()->setContextProperty(QStringLiteral("SoftwareBackend"), &softwareBackend);
     engine.rootContext()->setContextProperty(QStringLiteral("SystemBackend"), &systemBackend);
+    engine.rootContext()->setContextProperty(QStringLiteral("CustomActionsBackend"), &customActionsBackend);
     engine.rootContext()->setContextProperty(QStringLiteral("KrisccStartHidden"), startHidden);
     const bool smokeTest = qEnvironmentVariableIsSet("KRISCC_SMOKE_TEST");
     engine.rootContext()->setContextProperty(QStringLiteral("KrisccSmokeTest"), smokeTest);

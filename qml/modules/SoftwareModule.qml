@@ -9,15 +9,14 @@ Kirigami.ScrollablePage {
     title: qsTr("Software RPM")
 
     UtilityBackend { id: utilityBackend }
-    property bool ownOperation: false
-    property var progressLines: []
+    property string operationDomain: ""
     property string searchError: ""
     property string listError: ""
     property string installFilter: "all"
     property var detailPackage: null
     property string repoValidationError: ""
-    property string pendingProgram: ""
-    property var pendingArgs: []
+    property string pendingAction: ""
+    property string pendingValue: ""
     property string pendingTitle: ""
     property string pendingMessage: ""
 
@@ -58,18 +57,40 @@ Kirigami.ScrollablePage {
         packageDialog.open()
     }
 
-    function requestPrivileged(program, args, title, message) {
-        root.pendingProgram = program
-        root.pendingArgs = args
+    function requestAction(action, value, title, message) {
+        root.pendingAction = action
+        root.pendingValue = value
         root.pendingTitle = title
         root.pendingMessage = message
         privilegedConfirmDialog.open()
     }
 
-    function runPrivileged(program, args) {
-        root.ownOperation = true
-        root.progressLines = []
-        PolkitHelper.execute(program, args)
+    function runAction(action, value) {
+        if (action === "rk-add") {
+            root.operationDomain = "rk"
+            return RkBackend.addPackage(value)
+        }
+        if (action === "rk-remove") {
+            root.operationDomain = "rk"
+            return RkBackend.removePackage(value)
+        }
+        if (action === "rk-sync") {
+            root.operationDomain = "rk"
+            return RkBackend.sync()
+        }
+        if (action === "repo-disable") {
+            root.operationDomain = "repo"
+            return SoftwareBackend.disableRepository(value)
+        }
+        return false
+    }
+
+    function refreshAfterOperation() {
+        BootcBackend.refreshPackages()
+        SoftwareBackend.refreshRepositories()
+        if (searchField.text.trim().length >= 2)
+            searchModel.search(searchField.text)
+        root.refreshCurrent()
     }
 
     function refreshCurrent() {
@@ -88,21 +109,16 @@ Kirigami.ScrollablePage {
     PackageSearch { id: recentModel; onSearchError: function(message) { root.listError = message } }
 
     Connections {
-        target: PolkitHelper
-        function onLine(text) {
-            if (root.ownOperation)
-                root.progressLines = root.progressLines.concat([text]).slice(-12)
+        target: RkBackend
+        function onOperationFinished(ok, output) {
+            root.refreshAfterOperation()
         }
-        function onFinished(ok, output) {
-            if (!root.ownOperation)
-                return
-            root.ownOperation = false
-            root.progressLines = root.progressLines.concat([ok ? qsTr("--- completato ---") : qsTr("--- fallito ---")]).slice(-12)
-            BootcBackend.refreshPackages()
-            SoftwareBackend.refreshRepositories()
-            if (searchField.text.trim().length >= 2)
-                searchModel.search(searchField.text)
-            root.refreshCurrent()
+    }
+
+    Connections {
+        target: SoftwareBackend
+        function onOperationFinished(ok, output) {
+            root.refreshAfterOperation()
         }
     }
 
@@ -217,14 +233,14 @@ Kirigami.ScrollablePage {
                                 }
                                 Controls.Button {
                                     visible: model.persistent || (!model.owned && !model.persistent)
-                                    enabled: !PolkitHelper.running
+                                    enabled: RkBackend.canChangePackages
                                     text: model.persistent ? qsTr("Rimuovi")
                                           : model.installed ? qsTr("Rendi persistente")
                                                             : qsTr("Installa")
                                     icon.name: model.persistent ? "edit-delete" : "list-add"
-                                    onClicked: root.requestPrivileged(
-                                        "/usr/bin/rk",
-                                        model.persistent ? ["rm", model.name] : ["add", model.name],
+                                    onClicked: root.requestAction(
+                                        model.persistent ? "rk-remove" : "rk-add",
+                                        model.name,
                                         model.persistent ? qsTr("Rimuovere %1?").arg(model.name)
                                                          : model.installed
                                                            ? qsTr("Rendere persistente %1?").arg(model.name)
@@ -303,12 +319,12 @@ Kirigami.ScrollablePage {
                             Controls.Label { text: root.packageState(model); opacity: 0.7; font.bold: model.persistent || model.owned }
                             Controls.Button {
                                 visible: model.persistent || (!model.owned && model.installed)
-                                enabled: !PolkitHelper.running
+                                enabled: RkBackend.canChangePackages
                                 text: model.persistent ? qsTr("Rimuovi") : qsTr("Rendi persistente")
                                 icon.name: model.persistent ? "edit-delete" : "list-add"
-                                onClicked: root.requestPrivileged(
-                                    "/usr/bin/rk",
-                                    model.persistent ? ["rm", model.name] : ["add", model.name],
+                                onClicked: root.requestAction(
+                                    model.persistent ? "rk-remove" : "rk-add",
+                                    model.name,
                                     model.persistent ? qsTr("Rimuovere %1?").arg(model.name)
                                                      : qsTr("Rendere persistente %1?").arg(model.name),
                                     model.persistent
@@ -327,9 +343,9 @@ Kirigami.ScrollablePage {
                     Controls.Button {
                         text: qsTr("Risincronizza persistenti")
                         icon.name: "view-refresh"
-                        enabled: !PolkitHelper.running && BootcBackend.persistentPackageCount > 0
-                        onClicked: root.requestPrivileged(
-                            "/usr/bin/rk", ["sync"],
+                        enabled: RkBackend.canSync && BootcBackend.persistentPackageCount > 0
+                        onClicked: root.requestAction(
+                            "rk-sync", "",
                             qsTr("Risincronizzare i pacchetti persistenti?"),
                             qsTr("rk riallineerà il layer RPM alle richieste persistenti salvate.")
                         )
@@ -414,13 +430,13 @@ Kirigami.ScrollablePage {
                     Controls.Button {
                         text: qsTr("Aggiungi repository")
                         icon.name: "list-add"
-                        enabled: !SoftwareBackend.busy && !PolkitHelper.running
+                        enabled: !SoftwareBackend.busy && SoftwareBackend.canModifyRepositories
                         onClicked: addRepoDialog.open()
                     }
                     Item { Layout.fillWidth: true }
                     Controls.Button { text: qsTr("Aggiorna"); icon.name: "view-refresh"; onClicked: SoftwareBackend.refreshRepositories() }
                 }
-                Controls.BusyIndicator { visible: SoftwareBackend.busy || PolkitHelper.running; running: visible; Layout.alignment: Qt.AlignHCenter }
+                Controls.BusyIndicator { visible: SoftwareBackend.busy || SoftwareBackend.operationRunning; running: visible; Layout.alignment: Qt.AlignHCenter }
                 Kirigami.InlineMessage { Layout.fillWidth: true; visible: SoftwareBackend.errorText.length > 0; type: Kirigami.MessageType.Error; text: SoftwareBackend.errorText }
                 Kirigami.InlineMessage { Layout.fillWidth: true; visible: root.repoValidationError.length > 0; type: Kirigami.MessageType.Error; text: root.repoValidationError }
 
@@ -444,20 +460,19 @@ Kirigami.ScrollablePage {
                             }
                             Controls.Button {
                                 Layout.preferredWidth: 120
-                                enabled: !PolkitHelper.running
+                                enabled: SoftwareBackend.canModifyRepositories
                                 text: modelData.enabled ? qsTr("Disattiva") : qsTr("Attiva")
                                 icon.name: modelData.enabled ? "media-playback-stop" : "media-playback-start"
                                 onClicked: {
                                     if (modelData.enabled) {
-                                        root.requestPrivileged(
-                                            "/usr/bin/dnf5",
-                                            ["config-manager", "disable", modelData.id],
+                                        root.requestAction(
+                                            "repo-disable", modelData.id,
                                             qsTr("Disattivare %1?").arg(modelData.id),
                                             qsTr("I pacchetti di questo repository non saranno più disponibili per ricerca e transazioni rk finché non verrà riattivato.")
                                         )
                                     } else {
-                                        root.runPrivileged("/usr/bin/dnf5",
-                                            ["config-manager", "enable", modelData.id])
+                                        root.operationDomain = "repo"
+                                        SoftwareBackend.enableRepository(modelData.id)
                                     }
                                 }
                             }
@@ -469,11 +484,15 @@ Kirigami.ScrollablePage {
 
         Kirigami.AbstractCard {
             Layout.fillWidth: true
-            visible: root.progressLines.length > 0
+            visible: root.operationDomain === "rk"
+                     ? RkBackend.operationLines.length > 0
+                     : SoftwareBackend.operationLines.length > 0
             contentItem: ColumnLayout {
                 Kirigami.Heading { level: 3; font.bold: true; text: qsTr("Operazione") }
                 Repeater {
-                    model: root.progressLines
+                    model: root.operationDomain === "rk"
+                           ? RkBackend.operationLines
+                           : SoftwareBackend.operationLines
                     delegate: Controls.Label {
                         required property string modelData
                         Layout.fillWidth: true
@@ -517,16 +536,15 @@ Kirigami.ScrollablePage {
                 Layout.alignment: Qt.AlignRight
                 text: qsTr("Aggiungi")
                 icon.name: "list-add"
-                enabled: !PolkitHelper.running
+                enabled: SoftwareBackend.canModifyRepositories
                 onClicked: {
                     var url = repoUrlField.text.trim()
                     root.repoValidationError = ""
-                    if (!/^https:\/\/[^\s]+$/i.test(url)) {
-                        root.repoValidationError = qsTr("Repository non aggiunto: usa un URL HTTPS valido.")
+                    root.operationDomain = "repo"
+                    if (!SoftwareBackend.addRepository(url)) {
+                        root.repoValidationError = SoftwareBackend.errorText
                         return
                     }
-                    root.runPrivileged("/usr/bin/dnf5",
-                        ["config-manager", "addrepo", "--from-repofile=" + url])
                     repoUrlField.clear()
                     addRepoDialog.close()
                 }
@@ -645,8 +663,8 @@ Kirigami.ScrollablePage {
             text: root.pendingMessage
         }
         onAccepted: {
-            if (root.pendingProgram.length > 0)
-                root.runPrivileged(root.pendingProgram, root.pendingArgs)
+            if (root.pendingAction.length > 0)
+                root.runAction(root.pendingAction, root.pendingValue)
         }
     }
 }

@@ -158,6 +158,68 @@ Kirigami.ScrollablePage {
                     }
                 }
             }
+
+            Kirigami.AbstractCard {
+                Layout.fillWidth: true
+                contentItem: RowLayout {
+                    Kirigami.Icon { Layout.preferredWidth: 32; Layout.preferredHeight: 32; source: "speedometer" }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 1
+                        Controls.Label { font.bold: true; text: qsTr("CPU") }
+                        Controls.Label {
+                            font.bold: true
+                            text: SystemBackend.cpuUsagePercent >= 0
+                                  ? qsTr("%1%").arg(SystemBackend.cpuUsagePercent)
+                                  : qsTr("n/d")
+                        }
+                        Controls.Label { opacity: 0.65; text: qsTr("Utilizzo corrente") }
+                    }
+                }
+            }
+
+            Kirigami.AbstractCard {
+                Layout.fillWidth: true
+                contentItem: RowLayout {
+                    Kirigami.Icon { Layout.preferredWidth: 32; Layout.preferredHeight: 32; source: "media-flash-memory-stick" }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 1
+                        Controls.Label { font.bold: true; text: qsTr("RAM usata") }
+                        Controls.Label {
+                            font.bold: true
+                            text: SystemBackend.memoryUsedMiB >= 0
+                                  ? qsTr("%1 MiB").arg(SystemBackend.memoryUsedMiB)
+                                  : qsTr("n/d")
+                        }
+                        Controls.Label {
+                            opacity: 0.65
+                            text: SystemBackend.memoryTotalMiB >= 0
+                                  ? qsTr("su %1 MiB · swap esclusa").arg(SystemBackend.memoryTotalMiB)
+                                  : qsTr("swap esclusa")
+                        }
+                    }
+                }
+            }
+
+            Kirigami.AbstractCard {
+                Layout.fillWidth: true
+                contentItem: RowLayout {
+                    Kirigami.Icon { Layout.preferredWidth: 32; Layout.preferredHeight: 32; source: "temperature" }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 1
+                        Controls.Label { font.bold: true; text: qsTr("Temperatura CPU") }
+                        Controls.Label {
+                            font.bold: true
+                            text: SystemBackend.cpuTemperatureC >= 0
+                                  ? qsTr("%1 °C").arg(SystemBackend.cpuTemperatureC.toFixed(0))
+                                  : qsTr("n/d")
+                        }
+                        Controls.Label { opacity: 0.65; text: qsTr("Sensore hardware CPU") }
+                    }
+                }
+            }
         }
 
         GridLayout {

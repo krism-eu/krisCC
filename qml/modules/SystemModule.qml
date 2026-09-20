@@ -10,10 +10,6 @@ Kirigami.ScrollablePage {
 
     UtilityBackend { id: utilityBackend }
 
-    property bool ownBootAction: false
-    property string bootActionKind: ""
-    property bool ownBootcOperation: false
-    property var bootProgressLines: []
     property string pendingService: ""
     property string pendingServiceTitle: ""
     property var historyEntries: []
@@ -23,12 +19,6 @@ Kirigami.ScrollablePage {
         { id: "cups.service", title: qsTr("Stampa (CUPS)") },
         { id: "bluetooth.service", title: qsTr("Bluetooth") }
     ]
-
-    function runBootc(args) {
-        root.ownBootcOperation = true
-        root.bootProgressLines = []
-        PolkitHelper.execute("/usr/bin/bootc", args)
-    }
 
     function bootedDeployment() {
         var entries = BootcBackend.deployments
@@ -57,75 +47,18 @@ Kirigami.ScrollablePage {
         return value.length > 28 ? value.substring(0, 28) + "…" : value
     }
 
-    function uefiEntries() {
-        if (utilityBackend.operationId !== "bookmark.uefi" || utilityBackend.resultState !== "success")
-            return []
-        var result = []
-        var lines = utilityBackend.output.split("\n")
-        for (var i = 0; i < lines.length; ++i) {
-            var match = lines[i].match(/^Boot([0-9A-Fa-f]{4})\*?\s+(.+)$/)
-            if (match)
-                result.push({ code: match[1].toUpperCase(), label: match[1].toUpperCase() + " · " + match[2] })
-        }
-        return result
-    }
-
-    function grubEntries() {
-        if (utilityBackend.operationId !== "bookmark.grub-entries" || utilityBackend.resultState !== "success")
-            return []
-        var result = []
-        var current = {}
-        var lines = utilityBackend.output.split("\n")
-        function commit() {
-            if (current.id) {
-                var label = current.title ? current.title : current.id
-                result.push({ id: current.id, label: label })
-            }
-            current = {}
-        }
-        for (var i = 0; i < lines.length; ++i) {
-            var line = lines[i].trim()
-            if (line.indexOf("index=") === 0) {
-                commit()
-            } else if (line.indexOf("title=") === 0) {
-                current.title = line.substring(6).replace(/^"|"$/g, "")
-            } else if (line.indexOf("id=") === 0) {
-                current.id = line.substring(3).replace(/^"|"$/g, "")
-            }
-        }
-        commit()
-        return result
-    }
-
     Component.onCompleted: {
         root.historyEntries = SystemBackend.operationHistoryEntries()
         BootcBackend.refreshStatus()
+        if (SystemBackend.uefiBootAvailable)
+            SystemBackend.refreshUefiEntries()
+        if (SystemBackend.grubEntriesAvailable)
+            SystemBackend.refreshGrubEntries()
     }
 
     Connections {
-        target: PolkitHelper
-        function onLine(text) {
-            if (root.ownBootcOperation)
-                root.bootProgressLines = root.bootProgressLines.concat([text]).slice(-14)
-        }
-        function onFinished(success, output) {
-            if (root.ownBootcOperation) {
-                root.ownBootcOperation = false
-                root.bootProgressLines = root.bootProgressLines.concat([
-                    success ? qsTr("--- completato ---") : qsTr("--- fallito ---")
-                ]).slice(-14)
-                BootcBackend.refreshStatus()
-                BootcBackend.refreshPackages()
-                root.historyEntries = SystemBackend.operationHistoryEntries()
-                return
-            }
-            if (!root.ownBootAction)
-                return
-            root.ownBootAction = false
-            if (root.bootActionKind === "uefi")
-                utilityBackend.runBookmark("uefi")
-            else if (root.bootActionKind === "grub")
-                utilityBackend.runBookmark("grub-entries")
+        target: BootcBackend
+        function onOperationFinished(success, output) {
             root.historyEntries = SystemBackend.operationHistoryEntries()
         }
     }
@@ -134,7 +67,10 @@ Kirigami.ScrollablePage {
         target: SystemBackend
         function onRebootFinished(success, message) {
             if (!success && message.length > 0)
-                root.bootProgressLines = root.bootProgressLines.concat([message]).slice(-14)
+                SystemBackend.notify(qsTr("Riavvio non riuscito"), message)
+        }
+        function onBootSelectionFinished(kind, success, output) {
+            root.historyEntries = SystemBackend.operationHistoryEntries()
         }
     }
 
@@ -181,7 +117,7 @@ Kirigami.ScrollablePage {
                             RowLayout {
                                 Layout.fillWidth: true
                                 Kirigami.Heading { Layout.fillWidth: true; level: 2; font.bold: true; text: qsTr("BootC") }
-                                Controls.BusyIndicator { visible: BootcBackend.busy || PolkitHelper.running; running: visible }
+                                Controls.BusyIndicator { visible: BootcBackend.busy || BootcBackend.operationRunning; running: visible }
                             }
                             Controls.Label {
                                 Layout.fillWidth: true
@@ -232,32 +168,32 @@ Kirigami.ScrollablePage {
                                 Controls.Button {
                                     text: qsTr("Aggiorna stato")
                                     icon.name: "view-refresh"
-                                    enabled: !BootcBackend.busy && !PolkitHelper.running
+                                    enabled: !BootcBackend.busy && !BootcBackend.operationRunning
                                     onClicked: BootcBackend.refreshStatus()
                                 }
                                 Controls.Button {
                                     text: qsTr("Controlla immagine")
                                     icon.name: "system-search"
-                                    enabled: BootcBackend.bootcAvailable && !PolkitHelper.running
-                                    onClicked: root.runBootc(["upgrade", "--check"])
+                                    enabled: BootcBackend.canOperate
+                                    onClicked: BootcBackend.checkUpgrade()
                                 }
                                 Controls.Button {
                                     text: qsTr("Scarica")
                                     icon.name: "download"
-                                    enabled: BootcBackend.bootcAvailable && !PolkitHelper.running
-                                    onClicked: root.runBootc(["upgrade", "--download-only"])
+                                    enabled: BootcBackend.canOperate
+                                    onClicked: BootcBackend.downloadUpgrade()
                                 }
                                 Controls.Button {
                                     text: qsTr("Prepara aggiornamento")
                                     icon.name: "system-software-update"
-                                    enabled: BootcBackend.bootcAvailable && !PolkitHelper.running
-                                    onClicked: root.runBootc(["upgrade"])
+                                    enabled: BootcBackend.canOperate
+                                    onClicked: BootcBackend.prepareUpgrade()
                                 }
                                 Controls.Button {
                                     text: root.stagedDeployment().downloadOnly === true
                                           ? qsTr("Applica e riavvia") : qsTr("Riavvia ora")
                                     icon.name: "system-reboot"
-                                    enabled: BootcBackend.bootcAvailable && root.hasStagedDeployment() && !PolkitHelper.running
+                                    enabled: BootcBackend.bootcAvailable && root.hasStagedDeployment() && !BootcBackend.operationRunning
                                     onClicked: {
                                         applyDialog.downloadOnly = root.stagedDeployment().downloadOnly === true
                                         applyDialog.open()
@@ -272,11 +208,11 @@ Kirigami.ScrollablePage {
                             }
                             Kirigami.AbstractCard {
                                 Layout.fillWidth: true
-                                visible: root.bootProgressLines.length > 0
+                                visible: BootcBackend.operationLines.length > 0
                                 contentItem: ColumnLayout {
                                     Controls.Label { font.bold: true; text: qsTr("Operazione BootC") }
                                     Repeater {
-                                        model: root.bootProgressLines
+                                        model: BootcBackend.operationLines
                                         delegate: Controls.Label {
                                             required property string modelData
                                             Layout.fillWidth: true
@@ -516,6 +452,13 @@ Kirigami.ScrollablePage {
             ColumnLayout {
                 spacing: Kirigami.Units.largeSpacing
 
+                Kirigami.InlineMessage {
+                    Layout.fillWidth: true
+                    visible: SystemBackend.bootEntriesError.length > 0
+                    type: Kirigami.MessageType.Warning
+                    text: SystemBackend.bootEntriesError
+                }
+
                 Kirigami.AbstractCard {
                     Layout.fillWidth: true
                     contentItem: ColumnLayout {
@@ -531,20 +474,20 @@ Kirigami.ScrollablePage {
                             Controls.Button {
                                 text: qsTr("Leggi voci UEFI")
                                 icon.name: "view-refresh"
-                                enabled: !utilityBackend.busy && SystemBackend.programAvailable("efibootmgr")
-                                onClicked: utilityBackend.runBookmark("uefi")
+                                enabled: !SystemBackend.bootEntriesBusy && SystemBackend.uefiBootAvailable
+                                onClicked: SystemBackend.refreshUefiEntries()
                             }
                             Controls.ComboBox {
                                 id: uefiCombo
                                 Layout.fillWidth: true
-                                model: root.uefiEntries()
+                                model: SystemBackend.uefiEntries
                                 textRole: "label"
                                 valueRole: "code"
                                 enabled: count > 0
                             }
                             Controls.Button {
                                 text: qsTr("Usa al prossimo avvio")
-                                enabled: uefiCombo.count > 0 && !PolkitHelper.running
+                                enabled: uefiCombo.count > 0 && SystemBackend.canSelectNextBoot
                                 onClicked: {
                                     nextUefiDialog.token = uefiCombo.currentValue
                                     nextUefiDialog.label = uefiCombo.currentText
@@ -563,27 +506,27 @@ Kirigami.ScrollablePage {
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
                             opacity: 0.72
-                            text: qsTr("Le voci vengono lette da grubby. Se grub2-reboot è disponibile puoi scegliere una voce solo per il prossimo avvio.")
+                            text: qsTr("Leggi le voci GRUB/BLS disponibili e scegli, quando supportato, una voce solo per il prossimo avvio.")
                         }
                         RowLayout {
                             Layout.fillWidth: true
                             Controls.Button {
                                 text: qsTr("Leggi voci")
                                 icon.name: "view-refresh"
-                                enabled: !utilityBackend.busy && SystemBackend.programAvailable("grubby")
-                                onClicked: utilityBackend.runBookmark("grub-entries")
+                                enabled: !SystemBackend.bootEntriesBusy && SystemBackend.grubEntriesAvailable
+                                onClicked: SystemBackend.refreshGrubEntries()
                             }
                             Controls.ComboBox {
                                 id: grubCombo
                                 Layout.fillWidth: true
-                                model: root.grubEntries()
+                                model: SystemBackend.grubEntries
                                 textRole: "label"
                                 valueRole: "id"
                                 enabled: count > 0
                             }
                             Controls.Button {
                                 text: qsTr("Prossimo avvio")
-                                enabled: grubCombo.count > 0 && SystemBackend.programAvailable("grub2-reboot") && !PolkitHelper.running
+                                enabled: grubCombo.count > 0 && SystemBackend.grubNextBootAvailable && SystemBackend.canSelectNextBoot
                                 onClicked: {
                                     nextGrubDialog.entryId = grubCombo.currentValue
                                     nextGrubDialog.label = grubCombo.currentText
@@ -623,9 +566,7 @@ Kirigami.ScrollablePage {
 
                 Kirigami.AbstractCard {
                     Layout.fillWidth: true
-                    visible: utilityBackend.operationId === "bookmark.uefi"
-                          || utilityBackend.operationId === "bookmark.grub-entries"
-                          || utilityBackend.operationId === "bookmark.partitions"
+                    visible: utilityBackend.operationId === "bookmark.partitions"
                           || utilityBackend.operationId === "bookmark.fstab-order"
                           || utilityBackend.operationId === "bookmark.mounts"
                           || utilityBackend.operationId === "bookmark.disk-space"
@@ -801,12 +742,10 @@ Kirigami.ScrollablePage {
                   : qsTr("L'aggiornamento è già predisposto per il prossimo avvio; il sistema verrà riavviato ora. Il riavvio è autorizzato secondo la policy della sessione.")
         }
         onAccepted: {
-            if (downloadOnly) {
-                root.runBootc(["upgrade", "--from-downloaded", "--apply"])
-            } else {
-                root.bootProgressLines = []
+            if (downloadOnly)
+                BootcBackend.applyDownloaded()
+            else
                 SystemBackend.requestReboot()
-            }
         }
     }
 
@@ -887,11 +826,7 @@ Kirigami.ScrollablePage {
         title: qsTr("Usare questa voce al prossimo avvio?")
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label { wrapMode: Text.WordWrap; text: nextUefiDialog.label }
-        onAccepted: {
-            root.ownBootAction = true
-            root.bootActionKind = "uefi"
-            PolkitHelper.execute("/usr/bin/efibootmgr", ["-n", nextUefiDialog.token])
-        }
+        onAccepted: SystemBackend.selectNextUefi(nextUefiDialog.token)
     }
 
     Controls.Dialog {
@@ -904,10 +839,6 @@ Kirigami.ScrollablePage {
         title: qsTr("Usare questa voce GRUB al prossimo avvio?")
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label { wrapMode: Text.WordWrap; text: nextGrubDialog.label }
-        onAccepted: {
-            root.ownBootAction = true
-            root.bootActionKind = "grub"
-            PolkitHelper.execute("/usr/bin/grub2-reboot", [nextGrubDialog.entryId])
-        }
+        onAccepted: SystemBackend.selectNextGrub(nextGrubDialog.entryId)
     }
 }

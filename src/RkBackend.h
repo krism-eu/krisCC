@@ -22,7 +22,9 @@ class RkBackend : public QObject
     Q_PROPERTY(bool operationRunning READ operationRunning NOTIFY operationStateChanged)
     Q_PROPERTY(QString operationState READ operationState NOTIFY operationStateChanged)
     Q_PROPERTY(QString operationOutput READ operationOutput NOTIFY operationStateChanged)
+    Q_PROPERTY(QStringList operationLines READ operationLines NOTIFY operationStateChanged)
     Q_PROPERTY(bool canSync READ canSync NOTIFY stateChanged)
+    Q_PROPERTY(bool canChangePackages READ canChangePackages NOTIFY stateChanged)
     Q_PROPERTY(bool canForget READ canForget NOTIFY stateChanged)
 
 public:
@@ -39,11 +41,15 @@ public:
     bool operationRunning() const { return m_operationRunning; }
     const QString &operationState() const { return m_operationState; }
     const QString &operationOutput() const { return m_operationOutput; }
+    const QStringList &operationLines() const { return m_operationLines; }
     bool canSync() const;
+    bool canChangePackages() const;
     bool canForget() const;
 
     Q_INVOKABLE void refreshStatus();
     Q_INVOKABLE bool sync();
+    Q_INVOKABLE bool addPackage(const QString &packageName);
+    Q_INVOKABLE bool removePackage(const QString &packageName);
     Q_INVOKABLE bool forget(const QString &packageName);
 
 signals:
@@ -52,7 +58,7 @@ signals:
     void operationFinished(bool success, const QString &output);
 
 private:
-    void parseStatus(const QString &text);
+    void parseStatus(const QByteArray &data);
     void finishStatusError(const QString &message);
     bool validPackageName(const QString &packageName) const;
     void startPrivileged(const QStringList &args);
@@ -71,4 +77,5 @@ private:
     QString m_errorText;
     QString m_operationState = QStringLiteral("idle");
     QString m_operationOutput;
+    QStringList m_operationLines;
 };

@@ -1,6 +1,5 @@
 #include "PackageSearch.h"
 
-#include <QDebug>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
@@ -9,29 +8,11 @@
 #include <QTimer>
 #include <QTextStream>
 
-namespace {
-QString firstExistingPath(const QStringList &paths)
-{
-    for (qsizetype i = 0; i < paths.size(); ++i) {
-        const QString &path = paths.at(i);
-        if (!QFileInfo::exists(path))
-            continue;
-        if (i > 0)
-            qWarning().noquote() << "krisCC: using legacy compatibility path:" << path;
-        return path;
-    }
-    return paths.isEmpty() ? QString() : paths.constFirst();
-}
-}
 
 PackageSearch::PackageSearch(QObject *parent)
     : QAbstractListModel(parent)
 {
-    const QString ownedPath = firstExistingPath({
-        QStringLiteral("/usr/share/krisos/owned-packages.txt"),
-        QStringLiteral("/usr/share/raku-kris/owned-packages.txt")
-    });
-    QFile file(ownedPath);
+    QFile file(QStringLiteral("/usr/share/krisos/owned-packages.txt"));
     if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
         QTextStream in(&file);
         while (!in.atEnd()) {
@@ -474,11 +455,7 @@ void PackageSearch::stopActiveProcess()
 void PackageSearch::refreshPersistentSet()
 {
     m_persistent.clear();
-    const QString statePath = firstExistingPath({
-        QStringLiteral("/var/lib/krisos/packages.list"),
-        QStringLiteral("/var/lib/raku-kris/packages.list")
-    });
-    QFile file(statePath);
+    QFile file(QStringLiteral("/var/lib/krisos/packages.list"));
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
         return;
     while (!file.atEnd()) {
