@@ -39,13 +39,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts/logs
+          smoke_failed=0
           for style in Basic org.kde.breeze; do
-            QT_QUICK_CONTROLS_STYLE="$style" ./build/krisCC 2>&1 | tee artifacts/logs/kriscc-qml-smoke-$style.log
+            QT_QUICK_CONTROLS_STYLE="$style" ./build/krisCC 2>&1 | tee artifacts/logs/kriscc-qml-smoke-$style.log || smoke_failed=1
             if grep -Ei 'Binding loop detected|Unable to assign|ReferenceError:|TypeError:|Created graphical object was not placed in the graphics scene|QQmlApplicationEngine failed|Type .* unavailable' artifacts/logs/kriscc-qml-smoke-$style.log; then
               echo "ERROR: QML runtime smoke failed for $style" >&2
-              exit 1
+              smoke_failed=1
             fi
           done
+          test "$smoke_failed" -eq 0
 
       - name: Validate integration test syntax
         run: bash -n ./tests/e2e-readonly.sh
