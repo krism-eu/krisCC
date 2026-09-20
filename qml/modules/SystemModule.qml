@@ -13,7 +13,6 @@ Kirigami.ScrollablePage {
     property string pendingService: ""
     property string pendingServiceTitle: ""
     property var historyEntries: []
-    property int servicesRefreshToken: 0
     property var services: [
         { id: "NetworkManager.service", title: qsTr("NetworkManager") },
         { id: "cups.service", title: qsTr("Stampa (CUPS)") },
@@ -54,6 +53,7 @@ Kirigami.ScrollablePage {
             SystemBackend.refreshUefiEntries()
         if (SystemBackend.grubEntriesAvailable)
             SystemBackend.refreshGrubEntries()
+        SystemBackend.refreshServiceStates()
     }
 
     Connections {
@@ -393,7 +393,7 @@ Kirigami.ScrollablePage {
                                 Controls.Label {
                                     Layout.preferredWidth: 120
                                     horizontalAlignment: Text.AlignHCenter
-                                    text: { root.servicesRefreshToken; return SystemBackend.serviceState(modelData.id) }
+                                    text: SystemBackend.serviceStates[modelData.id] || qsTr("non disponibile")
                                 }
                                 Controls.Button {
                                     Layout.preferredWidth: 110
@@ -407,7 +407,7 @@ Kirigami.ScrollablePage {
                             }
                         }
                         RowLayout {
-                            Controls.Button { text: qsTr("Aggiorna stati"); icon.name: "view-refresh"; onClicked: root.servicesRefreshToken++ }
+                            Controls.Button { text: qsTr("Aggiorna stati"); icon.name: "view-refresh"; onClicked: SystemBackend.refreshServiceStates() }
                             Controls.Button { text: qsTr("Mostra tutti gli attivi"); icon.name: "view-list-details"; enabled: !utilityBackend.busy; onClicked: utilityBackend.runBookmark("services-active") }
                         }
                     }

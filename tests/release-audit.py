@@ -8,7 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 VERSION = "0.7.0"
-RELEASE = "3"
+RELEASE = "4"
 RPM_EVR = f"{VERSION}-{RELEASE}.fc44"
 RPM_FILE = f"krisCC-{RPM_EVR}.x86_64.rpm"
 TAG = f"v{VERSION}-{RELEASE}"
@@ -339,6 +339,14 @@ require('QStringLiteral("--latest-limit=1")' in package_cpp,
         "RPM search must request the latest candidate for each name.arch")
 require("m_installedFilter" in package_cpp and "visibleForFilter" not in software_qml,
         "installed RPM filtering must happen in the model")
+require("Formato JSON DNF5 non riconosciuto" in package_cpp
+        and "Formato di output DNF5 repoquery non riconosciuto" in package_cpp
+        and 'object.value(QStringLiteral("evr")).isString()' in package_cpp
+        and 'object.value(QStringLiteral("repository")).isString()' in package_cpp,
+        "PackageSearch must fail loudly when the unversioned DNF5 output shape changes")
+require("Formato JSON repository DNF5 non riconosciuto" in software_cpp
+        and 'object.value(QStringLiteral("is_enabled")).isBool()' in software_cpp,
+        "repository parsing must fail loudly when the DNF5 output shape changes")
 require("/usr/libexec/kriscc/bootc-status humanreadable" in utility_cpp,
         "health check must use the safe bootc status wrapper")
 require("root.hasStagedDeployment()" in system_qml
@@ -370,6 +378,17 @@ require("launchQuickAction" not in system_cpp and "sessionAction" not in system_
 require("Q_PROPERTY(QString selinuxState" in read("src/SystemBackend.h")
         and "SystemBackend.selinuxState" in dashboard_qml,
         "Dashboard SELinux state is not backed by SystemBackend")
+require("Q_PROPERTY(QVariantMap serviceStates" in system_h
+        and "Q_INVOKABLE void refreshServiceStates()" in system_h,
+        "service state cache is not exposed as typed asynchronous state")
+require('manager.asyncCall(QStringLiteral("GetUnit")' in system_cpp
+        and 'properties.asyncCall(QStringLiteral("Get")' in system_cpp,
+        "service state refresh is not asynchronous")
+require('manager.call(QStringLiteral("GetUnit")' not in system_cpp,
+        "synchronous systemd GetUnit remains on the GUI thread")
+require("SystemBackend.serviceStates[modelData.id]" in system_qml
+        and "SystemBackend.serviceState(" not in system_qml,
+        "QML still invokes synchronous service-state lookup")
 require("launchUnprivileged" not in polkit_cpp,
         "dead Polkit unprivileged launcher remains")
 
@@ -459,6 +478,9 @@ require(not re.search(r"fwupdmgr|firmware|welcome|first.?run", combined_ui, re.I
         "firmware/welcome scope leaked into 0.7.0")
 require("bootc" in spec and "dnf5" in spec and "dnf5-plugins" in spec and "tar" in spec,
         "mandatory runtime requirements missing from RPM spec")
+require("find_package(Qt6 6.7 REQUIRED" in cmake
+        and "qt_standard_project_setup(REQUIRES 6.7)" in cmake,
+        "CMake does not declare the Qt 6.7 API floor used by D-Bus authorization")
 require("sudo rk sync" not in recovery_qml, "UI incorrectly claims sudo is used")
 require("bootc" in readme.lower() and "rk" in integration_doc,
         "integration documentation lost KrisOS contracts")

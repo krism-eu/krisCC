@@ -1,6 +1,6 @@
 Name:           krisCC
 Version:        0.7.0
-Release:        3%{?dist}
+Release:        4%{?dist}
 Summary:        krisCC personal control center for KrisOS and Fedora bootc
 License:        MIT
 URL:            https://github.com/krism-eu/krisCC
@@ -53,6 +53,11 @@ Settings.
 %{_datadir}/icons/hicolor/scalable/apps/krisCC.svg
 
 %changelog
+* Sun Sep 20 2026 krism-eu - 0.7.0-4
+- Fail loudly when DNF5 machine-readable output no longer matches the expected contract
+- Refresh core systemd service state asynchronously instead of blocking the QML thread
+- Declare Qt 6.7 as the actual minimum required by the D-Bus authorization API
+
 * Sun Sep 20 2026 krism-eu - 0.7.0-3
 - Harden privileged mutations behind one validated admin helper
 - Run trash cleanup without root privileges and bound privileged processes

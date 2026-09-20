@@ -575,25 +575,72 @@ bool SystemBackend::programAvailable(const QString &program) const
     return !resolveExecutable(program).isEmpty();
 }
 
-QString SystemBackend::serviceState(const QString &service) const
+void SystemBackend::refreshServiceStates()
 {
-    if (!allowedServices().contains(service))
-        return tr("non consentito");
+    const quint64 generation = ++m_serviceRefreshGeneration;
+    for (const QString &service : allowedServices())
+        m_serviceStates.insert(service, tr("lettura…"));
+    emit serviceStatesChanged();
 
-    QDBusInterface manager(QStringLiteral("org.freedesktop.systemd1"),
-                           QStringLiteral("/org/freedesktop/systemd1"),
-                           QStringLiteral("org.freedesktop.systemd1.Manager"),
-                           QDBusConnection::systemBus());
-    const QDBusReply<QDBusObjectPath> unitReply = manager.call(QStringLiteral("GetUnit"), service);
-    if (!unitReply.isValid())
-        return tr("non disponibile");
+    for (const QString &service : allowedServices()) {
+        QDBusInterface manager(QStringLiteral("org.freedesktop.systemd1"),
+                               QStringLiteral("/org/freedesktop/systemd1"),
+                               QStringLiteral("org.freedesktop.systemd1.Manager"),
+                               QDBusConnection::systemBus());
+        if (!manager.isValid()) {
+            if (generation == m_serviceRefreshGeneration) {
+                m_serviceStates.insert(service, tr("non disponibile"));
+                emit serviceStatesChanged();
+            }
+            continue;
+        }
 
-    QDBusInterface properties(QStringLiteral("org.freedesktop.systemd1"), unitReply.value().path(),
-                              QStringLiteral("org.freedesktop.DBus.Properties"),
-                              QDBusConnection::systemBus());
-    const QDBusReply<QDBusVariant> stateReply = properties.call(
-        QStringLiteral("Get"), QStringLiteral("org.freedesktop.systemd1.Unit"), QStringLiteral("ActiveState"));
-    return stateReply.isValid() ? stateReply.value().variant().toString() : tr("sconosciuto");
+        auto *unitWatcher = new QDBusPendingCallWatcher(
+            manager.asyncCall(QStringLiteral("GetUnit"), service), this);
+        connect(unitWatcher, &QDBusPendingCallWatcher::finished, this,
+                [this, service, generation](QDBusPendingCallWatcher *call) {
+            const QDBusPendingReply<QDBusObjectPath> unitReply(*call);
+            call->deleteLater();
+            if (generation != m_serviceRefreshGeneration)
+                return;
+
+            if (unitReply.isError()) {
+                m_serviceStates.insert(service, tr("non disponibile"));
+                emit serviceStatesChanged();
+                return;
+            }
+
+            QDBusInterface properties(QStringLiteral("org.freedesktop.systemd1"),
+                                      unitReply.value().path(),
+                                      QStringLiteral("org.freedesktop.DBus.Properties"),
+                                      QDBusConnection::systemBus());
+            if (!properties.isValid()) {
+                m_serviceStates.insert(service, tr("sconosciuto"));
+                emit serviceStatesChanged();
+                return;
+            }
+
+            auto *stateWatcher = new QDBusPendingCallWatcher(
+                properties.asyncCall(QStringLiteral("Get"),
+                                     QStringLiteral("org.freedesktop.systemd1.Unit"),
+                                     QStringLiteral("ActiveState")),
+                this);
+            connect(stateWatcher, &QDBusPendingCallWatcher::finished, this,
+                    [this, service, generation](QDBusPendingCallWatcher *stateCall) {
+                const QDBusPendingReply<QDBusVariant> stateReply(*stateCall);
+                stateCall->deleteLater();
+                if (generation != m_serviceRefreshGeneration)
+                    return;
+
+                m_serviceStates.insert(
+                    service,
+                    stateReply.isError()
+                        ? tr("sconosciuto")
+                        : stateReply.value().variant().toString());
+                emit serviceStatesChanged();
+            });
+        });
+    }
 }
 
 bool SystemBackend::restartService(const QString &service)
@@ -617,6 +664,7 @@ bool SystemBackend::restartService(const QString &service)
         notify(reply.isError() ? tr("Riavvio servizio non riuscito") : tr("Servizio riavviato"),
                reply.isError() ? reply.error().message() : service);
         call->deleteLater();
+        QTimer::singleShot(400, this, &SystemBackend::refreshServiceStates);
     });
     return true;
 }

@@ -5,6 +5,7 @@
 #include <QProcess>
 #include <QString>
 #include <QVariantList>
+#include <QVariantMap>
 
 class QTimer;
 
@@ -35,6 +36,7 @@ class SystemBackend : public QObject
     Q_PROPERTY(qint64 memoryUsedMiB READ memoryUsedMiB NOTIFY resourcesChanged)
     Q_PROPERTY(qint64 memoryTotalMiB READ memoryTotalMiB NOTIFY resourcesChanged)
     Q_PROPERTY(double cpuTemperatureC READ cpuTemperatureC NOTIFY resourcesChanged)
+    Q_PROPERTY(QVariantMap serviceStates READ serviceStates NOTIFY serviceStatesChanged)
     Q_PROPERTY(bool backupBusy READ backupBusy NOTIFY backupBusyChanged)
     Q_PROPERTY(QString backupStatus READ backupStatus NOTIFY backupStatusChanged)
     Q_PROPERTY(QString backupPath READ backupPath NOTIFY backupStatusChanged)
@@ -66,6 +68,7 @@ public:
     qint64 memoryUsedMiB() const { return m_memoryUsedMiB; }
     qint64 memoryTotalMiB() const { return m_memoryTotalMiB; }
     double cpuTemperatureC() const { return m_cpuTemperatureC; }
+    const QVariantMap &serviceStates() const { return m_serviceStates; }
 
     bool backupBusy() const { return m_backupBusy; }
     const QString &backupStatus() const { return m_backupStatus; }
@@ -78,7 +81,7 @@ public:
     Q_INVOKABLE bool toolAvailable(const QString &toolId) const;
     Q_INVOKABLE bool launchTool(const QString &toolId) const;
     Q_INVOKABLE bool programAvailable(const QString &program) const;
-    Q_INVOKABLE QString serviceState(const QString &service) const;
+    Q_INVOKABLE void refreshServiceStates();
     Q_INVOKABLE bool restartService(const QString &service);
     Q_INVOKABLE void requestReboot();
     Q_INVOKABLE void setResourceMonitoringEnabled(bool enabled);
@@ -108,6 +111,7 @@ signals:
     void bootSelectionFinished(const QString &kind, bool success, const QString &output);
     void bootEntriesChanged();
     void resourcesChanged();
+    void serviceStatesChanged();
 
 private:
     QString readOsName() const;
@@ -138,6 +142,8 @@ private:
     qint64 m_memoryUsedMiB = -1;
     qint64 m_memoryTotalMiB = -1;
     double m_cpuTemperatureC = -1.0;
+    QVariantMap m_serviceStates;
+    quint64 m_serviceRefreshGeneration = 0;
     QPointer<QProcess> m_backupProcess;
     bool m_backupBusy = false;
     QString m_backupStatus;

@@ -98,6 +98,56 @@ if grep -q 'Installing dependencies:\|Transaction Summary:\|Total size of inboun
   exit 1
 fi
 
+# DNF5 does not expose a versioned schema for these commands, so krisCC must
+# fail loudly at runtime and CI must probe the actual Fedora 44 output shape.
+grep -q 'Formato JSON DNF5 non riconosciuto' src/PackageSearch.cpp
+grep -q 'Formato di output DNF5 repoquery non riconosciuto' src/PackageSearch.cpp
+grep -q 'Formato JSON repository DNF5 non riconosciuto' src/SoftwareBackend.cpp
+grep -q 'object.value(QStringLiteral("evr")).isString()' src/PackageSearch.cpp
+grep -q 'object.value(QStringLiteral("repository")).isString()' src/PackageSearch.cpp
+grep -q 'object.value(QStringLiteral("is_enabled")).isBool()' src/SoftwareBackend.cpp
+
+dnf5 list --installed --json > /tmp/kriscc-dnf-list.json
+python3 - /tmp/kriscc-dnf-list.json <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as stream:
+    document = json.load(stream)
+if not isinstance(document, dict):
+    raise SystemExit("dnf5 list JSON root is not an object")
+arrays = [value for value in document.values() if isinstance(value, list)]
+if not arrays:
+    raise SystemExit("dnf5 list JSON contains no package array")
+records = [value for array in arrays for value in array]
+if not records:
+    raise SystemExit("dnf5 list --installed returned no sample package")
+for obj in records[:20]:
+    if not isinstance(obj, dict):
+        raise SystemExit("dnf5 list package is not an object")
+    for key in ("name", "arch", "evr", "repository"):
+        if not isinstance(obj.get(key), str) or not obj[key]:
+            raise SystemExit(f"dnf5 list package missing string field: {key}")
+PY
+
+dnf5 repo list --all --json > /tmp/kriscc-dnf-repos.json
+python3 - /tmp/kriscc-dnf-repos.json <<'PY'
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as stream:
+    document = json.load(stream)
+if not isinstance(document, list):
+    raise SystemExit("dnf5 repo list JSON root is not an array")
+if not document:
+    raise SystemExit("dnf5 repo list returned no sample repository")
+for obj in document[:20]:
+    if not isinstance(obj, dict):
+        raise SystemExit("dnf5 repository is not an object")
+    if not isinstance(obj.get("id"), str) or not obj["id"]:
+        raise SystemExit("dnf5 repository missing id")
+    if not isinstance(obj.get("name"), str):
+        raise SystemExit("dnf5 repository missing name")
+    if not isinstance(obj.get("is_enabled"), bool):
+        raise SystemExit("dnf5 repository missing boolean is_enabled")
+PY
+
 # Flatpak management is deliberately per-user. Inventory, remotes and mutations
 # must all use the same installation scope so the UI never shows system refs it
 # cannot modify.
@@ -184,7 +234,7 @@ test ! -e data/org.kcontrolc.KControlC.metainfo.xml
 
 grep -q '^Name:[[:space:]]*krisCC$' packaging/krisCC.spec
 grep -Fxq 'Version:        0.7.0' packaging/krisCC.spec
-grep -Fxq 'Release:        3%{?dist}' packaging/krisCC.spec
+grep -Fxq 'Release:        4%{?dist}' packaging/krisCC.spec
 if grep -Eq '^Provides:[[:space:]]*(kcc|k-controlc)([[:space:]=]|$)|^Obsoletes:[[:space:]]*(kcc|k-controlc)([[:space:]<=>]|$)' packaging/krisCC.spec; then
   echo "ERROR: krisCC must not provide or obsolete experimental legacy identities" >&2
   exit 1
@@ -405,6 +455,22 @@ grep -q 'ReadOwner | QFileDevice::WriteOwner' src/OperationLog.cpp
 
 # D-Bus mutations must be allowed to trigger interactive Polkit authorization.
 test "$(grep -c 'setInteractiveAuthorizationAllowed(true)' src/SystemBackend.cpp)" -ge 2
+
+# Service state must never perform synchronous D-Bus calls from a QML binding.
+grep -q 'Q_PROPERTY(QVariantMap serviceStates' src/SystemBackend.h
+grep -q 'Q_INVOKABLE void refreshServiceStates()' src/SystemBackend.h
+grep -q 'manager.asyncCall(QStringLiteral("GetUnit")' src/SystemBackend.cpp
+grep -q 'properties.asyncCall(QStringLiteral("Get")' src/SystemBackend.cpp
+grep -q 'SystemBackend.serviceStates\[modelData.id\]' qml/modules/SystemModule.qml
+grep -q 'SystemBackend.refreshServiceStates()' qml/modules/SystemModule.qml
+if grep -q 'SystemBackend.serviceState(' qml/modules/SystemModule.qml; then
+  echo "ERROR: QML still calls synchronous serviceState()" >&2
+  exit 1
+fi
+
+# CMake must declare the Qt floor required by setInteractiveAuthorizationAllowed().
+grep -q 'find_package(Qt6 6.7 REQUIRED' CMakeLists.txt
+grep -q 'qt_standard_project_setup(REQUIRES 6.7)' CMakeLists.txt
 
 # --background must be a single activatable session instance, not an unreachable duplicate.
 grep -q 'org.kriscc.ControlCenter' src/main.cpp

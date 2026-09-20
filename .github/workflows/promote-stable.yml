@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing validated prerelease tag (for example v0.7.0-3)
+        description: Existing validated prerelease tag (for example v0.7.0-4)
         required: true
         type: string
       host_acceptance_confirmed:

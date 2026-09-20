@@ -217,37 +217,61 @@ void PackageSearch::startRepoQuery(const QString &term)
             return;
         }
 
-        beginResetModel();
-        m_results.clear();
+        QList<Entry> entries;
         QSet<QString> seen;
+        bool contractInvalid = false;
         const auto lines = QString::fromUtf8(stdoutData).split('\n', Qt::SkipEmptyParts);
         for (const QString &line : lines) {
             const QStringList parts = line.split(QLatin1Char('\t'));
-            const QString name = parts.value(0).trimmed();
-            const QString arch = parts.value(4).trimmed();
+            if (parts.size() != 7) {
+                contractInvalid = true;
+                break;
+            }
+
+            const QString name = parts.at(0).trimmed();
+            const QString arch = parts.at(4).trimmed();
+            bool downloadOk = false;
+            bool installOk = false;
+            const quint64 downloadSize = parts.at(5).toULongLong(&downloadOk);
+            const quint64 installSize = parts.at(6).toULongLong(&installOk);
+            if (name.isEmpty() || arch.isEmpty() || !downloadOk || !installOk) {
+                contractInvalid = true;
+                break;
+            }
+
             const QString key = name + QLatin1Char('\x1f') + arch;
-            if (name.isEmpty() || parts.size() < 7 || seen.contains(key))
+            if (seen.contains(key))
                 continue;
 
             seen.insert(key);
             Entry entry;
             entry.name = name;
-            entry.summary = parts.value(1).simplified().left(512);
-            entry.version = parts.value(2).trimmed();
-            entry.repository = parts.value(3).trimmed();
+            entry.summary = parts.at(1).simplified().left(512);
+            entry.version = parts.at(2).trimmed();
+            entry.repository = parts.at(3).trimmed();
             entry.arch = arch;
-            entry.downloadSize = parts.value(5).toULongLong();
-            entry.installSize = parts.value(6).toULongLong();
+            entry.downloadSize = downloadSize;
+            entry.installSize = installSize;
             entry.installed = m_installed.contains(name);
             entry.owned = m_owned.contains(name);
             entry.persistent = m_persistent.contains(name);
-            m_results.append(entry);
-            if (m_results.size() >= 200)
+            entries.append(entry);
+            if (entries.size() >= 200)
                 break;
         }
+
+        if (contractInvalid) {
+            clearResults();
+            setSearching(false);
+            emit searchError(tr("Formato di output DNF5 repoquery non riconosciuto."));
+            emit searchFinished();
+            return;
+        }
+
+        beginResetModel();
+        m_results = entries;
         endResetModel();
         emit countChanged();
-
         setSearching(false);
         emit searchFinished();
     });
@@ -330,16 +354,34 @@ void PackageSearch::startListQuery(const QString &filter, bool installedEntries)
 
         QList<Entry> entries;
         QSet<QString> seen;
+        bool sawArray = false;
+        bool contractInvalid = false;
         const QJsonObject root = document.object();
         for (auto it = root.constBegin(); it != root.constEnd(); ++it) {
             if (!it.value().isArray())
                 continue;
+            sawArray = true;
             for (const QJsonValue &value : it.value().toArray()) {
+                if (!value.isObject()) {
+                    contractInvalid = true;
+                    break;
+                }
                 const QJsonObject object = value.toObject();
-                const QString name = object.value(QStringLiteral("name")).toString();
-                const QString arch = object.value(QStringLiteral("arch")).toString();
-                if (name.isEmpty())
-                    continue;
+                if (!object.value(QStringLiteral("name")).isString()
+                    || !object.value(QStringLiteral("arch")).isString()
+                    || !object.value(QStringLiteral("evr")).isString()
+                    || !object.value(QStringLiteral("repository")).isString()) {
+                    contractInvalid = true;
+                    break;
+                }
+
+                const QString name = object.value(QStringLiteral("name")).toString().trimmed();
+                const QString arch = object.value(QStringLiteral("arch")).toString().trimmed();
+                if (name.isEmpty() || arch.isEmpty()) {
+                    contractInvalid = true;
+                    break;
+                }
+
                 const QString key = name + QLatin1Char('\x1f') + arch;
                 if (seen.contains(key))
                     continue;
@@ -368,8 +410,15 @@ void PackageSearch::startListQuery(const QString &filter, bool installedEntries)
                 if (entries.size() >= 500)
                     break;
             }
-            if (entries.size() >= 500)
+            if (contractInvalid || entries.size() >= 500)
                 break;
+        }
+
+        if (!sawArray || contractInvalid) {
+            setSearching(false);
+            emit searchError(tr("Formato JSON DNF5 non riconosciuto."));
+            emit searchFinished();
+            return;
         }
 
         beginResetModel();

@@ -156,16 +156,37 @@ void SoftwareBackend::refreshRepositories()
         }
 
         QVariantList repos;
+        bool contractInvalid = false;
         for (const QJsonValue &value : document.array()) {
+            if (!value.isObject()) {
+                contractInvalid = true;
+                break;
+            }
+
             const QJsonObject object = value.toObject();
-            const QString id = object.value(QStringLiteral("id")).toString();
-            if (id.isEmpty())
-                continue;
+            if (!object.value(QStringLiteral("id")).isString()
+                || !object.value(QStringLiteral("name")).isString()
+                || !object.value(QStringLiteral("is_enabled")).isBool()) {
+                contractInvalid = true;
+                break;
+            }
+
+            const QString id = object.value(QStringLiteral("id")).toString().trimmed();
+            if (id.isEmpty()) {
+                contractInvalid = true;
+                break;
+            }
+
             QVariantMap repo;
             repo.insert(QStringLiteral("id"), id);
-            repo.insert(QStringLiteral("name"), object.value(QStringLiteral("name")).toString(id));
+            repo.insert(QStringLiteral("name"), object.value(QStringLiteral("name")).toString());
             repo.insert(QStringLiteral("enabled"), object.value(QStringLiteral("is_enabled")).toBool());
             repos.append(repo);
+        }
+
+        if (contractInvalid) {
+            setError(tr("Formato JSON repository DNF5 non riconosciuto."));
+            return;
         }
 
         std::sort(repos.begin(), repos.end(), [](const QVariant &left, const QVariant &right) {
