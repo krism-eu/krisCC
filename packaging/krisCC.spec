@@ -1,5 +1,5 @@
 Name:           krisCC
-Version:        0.7.2
+Version:        0.7.3
 Release:        1%{?dist}
 Summary:        krisCC personal control center for KrisOS and Fedora bootc
 License:        MIT
@@ -54,6 +54,11 @@ Settings.
 %{_datadir}/icons/hicolor/scalable/apps/krisCC.svg
 
 %changelog
+* Tue Sep 22 2026 krism-eu - 0.7.3-1
+- Export exact latest-green repository commit from GitHub ZIP
+- Simplify Flatpak remote contract to name/url
+- Keep network status card in the 0.7 dashboard
+
 * Tue Sep 22 2026 krism-eu - 0.7.2-1
 - Adopt public X.Y.Z-only versioning; RPM Release remains packaging metadata
 - Preserve the last green 0.7 trial behavior unchanged
@@ -218,22 +223,3 @@ Settings.
 
 * Wed Sep 16 2026 krism-eu - 0.4.0-4
 - Replace raw Flatpak command output with structured application cards
-- Add direct Flatpak install/remove actions and clearer remote views
-- Make RPM sizes, dependency preview and transaction totals explicit
-
-* Wed Sep 16 2026 krism-eu - 0.4.0-3
-- Add top navigation tabs, dedicated Flatpak and command-bookmark pages
-- Add RPM transaction previews, package origin filters and repository-file addition
-- Clarify external tool availability, active services and the unified backup workflow
-
-* Wed Sep 16 2026 krism-eu - 0.4.0-2
-- Fix DNF5 search metadata parsing
-- Refine software and repository presentation
-
-* Wed Sep 16 2026 krism-eu - 0.4.0-1
-- Move the UI to Kirigami and remove Plasma configuration duplication
-- Add package inventory, upgrades, recent packages and repository management
-- Add personal maintenance tools and local config/home backup snapshots
-
-* Tue Sep 15 2026 krism-eu - 0.3.0-1
-- Initial standalone K-ControlC package
