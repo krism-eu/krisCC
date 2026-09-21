@@ -1,69 +1,15 @@
 #include "BootcBackend.h"
 
 #include "PolkitHelper.h"
+#include "ContractParsers.h"
 
 #include <QFile>
 #include <QFileInfo>
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QTimer>
 
 #include <unistd.h>
 
 namespace {
-QString jsonString(const QJsonObject &object, const QString &key)
-{
-    const QJsonValue value = object.value(key);
-    return value.isString() ? value.toString() : QString();
-}
-
-QVariantMap deploymentMap(const QString &role, const QJsonObject &deployment)
-{
-    QVariantMap map;
-    map.insert(QStringLiteral("role"), role);
-
-    const QJsonObject imageStatus = deployment.value(QStringLiteral("image")).toObject();
-    const QJsonObject imageReference = imageStatus.value(QStringLiteral("image")).toObject();
-    const QJsonObject ostree = deployment.value(QStringLiteral("ostree")).toObject();
-
-    QString image = jsonString(imageReference, QStringLiteral("image"));
-    if (image.isEmpty())
-        image = jsonString(imageReference, QStringLiteral("reference"));
-    if (image.isEmpty())
-        image = jsonString(imageStatus, QStringLiteral("image"));
-    if (image.isEmpty() && deployment.value(QStringLiteral("image")).isString())
-        image = deployment.value(QStringLiteral("image")).toString();
-
-    QString version = jsonString(imageStatus, QStringLiteral("version"));
-    if (version.isEmpty())
-        version = jsonString(deployment, QStringLiteral("version"));
-
-    QString digest = jsonString(imageStatus, QStringLiteral("imageDigest"));
-    if (digest.isEmpty())
-        digest = jsonString(imageReference, QStringLiteral("imageDigest"));
-    if (digest.isEmpty())
-        digest = jsonString(imageReference, QStringLiteral("digest"));
-    if (digest.isEmpty())
-        digest = jsonString(deployment, QStringLiteral("imageDigest"));
-
-    QString checksum = jsonString(ostree, QStringLiteral("checksum"));
-    if (checksum.isEmpty())
-        checksum = jsonString(deployment, QStringLiteral("checksum"));
-
-    QString timestamp = jsonString(imageStatus, QStringLiteral("timestamp"));
-    if (timestamp.isEmpty())
-        timestamp = jsonString(deployment, QStringLiteral("timestamp"));
-
-    map.insert(QStringLiteral("image"), image);
-    map.insert(QStringLiteral("version"), version);
-    map.insert(QStringLiteral("digest"), digest);
-    map.insert(QStringLiteral("checksum"), checksum);
-    map.insert(QStringLiteral("pinned"), deployment.value(QStringLiteral("pinned")).toBool(false));
-    map.insert(QStringLiteral("downloadOnly"), deployment.value(QStringLiteral("downloadOnly")).toBool(false));
-    map.insert(QStringLiteral("timestamp"), timestamp);
-    return map;
-}
-
 void startBootcStatus(QProcess *process, const QString &format)
 {
     QStringList bootcArgs = {
@@ -287,31 +233,23 @@ void BootcBackend::startHumanStatus(const QString &previousError)
 
 void BootcBackend::parseJsonStatus(const QByteArray &data)
 {
-    QJsonParseError error;
-    const QJsonDocument document = QJsonDocument::fromJson(data, &error);
-    if (error.error != QJsonParseError::NoError || !document.isObject()) {
+    const auto parsed = ContractParsers::parseBootcStatus(data);
+    if (!parsed.ok()) {
         m_statusText = QString::fromUtf8(data).trimmed();
-        m_errorText = tr("Output JSON di bootc non valido: %1").arg(error.errorString());
+        using Error = ContractParsers::Error;
+        if (parsed.error == Error::UnsupportedContract)
+            m_errorText = tr("Versione del contratto bootc status non supportata.");
+        else if (parsed.error == Error::InvalidShape)
+            m_errorText = tr("Output bootc status incompleto.");
+        else
+            m_errorText = tr("Output JSON di bootc non valido.");
+        m_deployments.clear();
         return;
     }
 
-    const QJsonObject root = document.object();
-    const QJsonObject status = root.value(QStringLiteral("status")).toObject();
-    m_deployments.clear();
-
-    const struct { const char *key; const char *label; } roles[] = {
-        {"staged", "Staged"},
-        {"booted", "Booted"},
-        {"rollback", "Rollback"}
-    };
-    for (const auto &role : roles) {
-        const QJsonObject deployment = status.value(QLatin1String(role.key)).toObject();
-        if (!deployment.isEmpty())
-            m_deployments.append(deploymentMap(QLatin1String(role.label), deployment));
-    }
-
-    m_statusText = QString::fromUtf8(document.toJson(QJsonDocument::Indented)).trimmed();
+    m_statusText = parsed.formatted;
     m_errorText.clear();
+    m_deployments = parsed.deployments;
 }
 
 void BootcBackend::refreshPackages()

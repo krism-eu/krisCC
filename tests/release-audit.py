@@ -48,10 +48,13 @@ require("src/Validators.cpp src/Validators.h" in cmake, "shared validators not l
 require("src/AdminPolicy.cpp src/AdminPolicy.h" in cmake, "shared admin policy not linked")
 require("kriscc-test-validators" in cmake
         and "kriscc-test-admin-policy" in cmake
-        and "kriscc-test-process-runner" in cmake,
+        and "kriscc-test-process-runner" in cmake
+        and "kriscc-test-parsers" in cmake,
         "semantic unit tests are not wired into CTest")
 require("src/ProcessRunner.cpp src/ProcessRunner.h" in cmake,
         "shared user-level ProcessRunner not linked")
+require("src/ContractParsers.cpp src/ContractParsers.h" in cmake,
+        "shared contract parsers not linked")
 require("AdminPolicy::resolve" in admin_cpp and "AdminPolicy::resolve" in polkit_cpp,
         "client/root privileged allowlist does not share AdminPolicy")
 require('QStringLiteral("/usr/bin/rk")' in admin_policy

@@ -3,6 +3,7 @@
 #include "OperationLog.h"
 #include "PolkitHelper.h"
 #include "Validators.h"
+#include "ContractParsers.h"
 
 #include <QClipboard>
 #include <QCoreApplication>
@@ -181,24 +182,8 @@ void SystemBackend::refreshUefiEntries()
             return;
         }
 
-        QVariantList entries;
-        static const QRegularExpression pattern(
-            QStringLiteral("^Boot([0-9A-Fa-f]{4})\\*?\\s+(.+)$"));
-        for (const QString &line : output.split(QLatin1Char('\n'))) {
-            const QRegularExpressionMatch match = pattern.match(line.trimmed());
-            if (!match.hasMatch())
-                continue;
-            QVariantMap entry;
-            const QString code = match.captured(1).toUpper();
-            entry.insert(QStringLiteral("code"), code);
-            QString description = match.captured(2).trimmed();
-            const qsizetype tab = description.indexOf(QLatin1Char('\t'));
-            if (tab >= 0)
-                description = description.left(tab).trimmed();
-            entry.insert(QStringLiteral("label"), code + QStringLiteral(" · ") + description);
-            entries.append(entry);
-        }
-        m_uefiEntries = entries;
+        const auto parsed = ContractParsers::parseUefiEntries(output.toUtf8());
+        m_uefiEntries = parsed.values;
         m_bootEntriesError.clear();
         emit bootEntriesChanged();
     });
@@ -268,33 +253,8 @@ void SystemBackend::refreshGrubEntries()
             return;
         }
 
-        QVariantList entries;
-        QString id;
-        QString title;
-        const auto commitEntry = [&entries, &id, &title]() {
-            if (id.isEmpty())
-                return;
-            QVariantMap entry;
-            entry.insert(QStringLiteral("id"), id);
-            entry.insert(QStringLiteral("label"), title.isEmpty() ? id : title);
-            entries.append(entry);
-            id.clear();
-            title.clear();
-        };
-
-        for (const QString &raw : output.split(QLatin1Char('\n'))) {
-            const QString line = raw.trimmed();
-            if (line.startsWith(QStringLiteral("index="))) {
-                commitEntry();
-            } else if (line.startsWith(QStringLiteral("title="))) {
-                title = line.mid(6).remove(QLatin1Char('"'));
-            } else if (line.startsWith(QStringLiteral("id="))) {
-                id = line.mid(3).remove(QLatin1Char('"'));
-            }
-        }
-        commitEntry();
-
-        m_grubEntries = entries;
+        const auto parsed = ContractParsers::parseGrubbyEntries(output.toUtf8());
+        m_grubEntries = parsed.values;
         m_bootEntriesError.clear();
         emit bootEntriesChanged();
     });
