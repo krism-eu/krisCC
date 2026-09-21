@@ -108,10 +108,11 @@ Kirigami.ScrollablePage {
         width: parent.width
         spacing: Kirigami.Units.largeSpacing
 
-        ColumnLayout {
+        Controls.Label {
             Layout.fillWidth: true
-            spacing: Kirigami.Units.smallSpacing
-            PageIntro { title: root.title; subtitle: qsTr("Ricerca, installazione e aggiornamenti delle applicazioni Flatpak nel tuo profilo utente.") }
+            wrapMode: Text.WordWrap
+            opacity: UiMetrics.secondaryOpacity
+            text: qsTr("Ricerca, installazione e aggiornamenti delle applicazioni Flatpak nel tuo profilo utente.")
         }
 
         Controls.TabBar {
@@ -220,8 +221,9 @@ Kirigami.ScrollablePage {
 
         ListView {
             Layout.fillWidth: true
-            Layout.preferredHeight: contentHeight
-            interactive: false
+            Layout.preferredHeight: Math.min(contentHeight, Kirigami.Units.gridUnit * 24)
+            Layout.minimumHeight: Math.min(contentHeight, Kirigami.Units.gridUnit * 8)
+            interactive: contentHeight > height
             clip: true
             spacing: Kirigami.Units.smallSpacing
             model: root.mode === "search" && root.lastQuery.length < 2 ? [] : root.rows()
@@ -286,6 +288,14 @@ Kirigami.ScrollablePage {
                             icon.name: "list-add"
                             enabled: !utilityBackend.busy
                             onClicked: root.installFlatpak(modelData[2], modelData[5] || "")
+                        }
+
+                        Controls.Button {
+                            visible: root.mode === "installed" && modelData.length >= 2
+                            text: qsTr("Avvia")
+                            icon.name: "media-playback-start"
+                            enabled: !utilityBackend.busy
+                            onClicked: SystemBackend.launchFlatpak(modelData[1])
                         }
 
                         Controls.Button {
