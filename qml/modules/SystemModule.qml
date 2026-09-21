@@ -79,7 +79,12 @@ Kirigami.ScrollablePage {
         width: parent.width
         spacing: Kirigami.Units.largeSpacing
 
-        PageIntro { title: root.title; subtitle: qsTr("Aggiornamenti, salute, avvio e strumenti essenziali. Le normali preferenze desktop restano nelle Impostazioni di sistema Plasma.") }
+        Controls.Label {
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            opacity: UiMetrics.secondaryOpacity
+            text: qsTr("Aggiornamenti, salute, avvio e strumenti essenziali. Le normali preferenze desktop restano nelle Impostazioni di sistema Plasma.")
+        }
 
         Controls.TabBar {
             id: sections
@@ -220,15 +225,6 @@ Kirigami.ScrollablePage {
                                 }
                             }
 
-                            Controls.CheckBox {
-                                id: bootTechnicalDetails
-                                text: qsTr("Dettagli tecnici")
-                            }
-                            OutputCard {
-                    visible: bootTechnicalDetails.checked
-                    embedded: true
-                    outputText: BootcBackend.statusText
-                }
                         }
                     }
 
