@@ -1,74 +1,172 @@
-#include <QByteArray>
+#include "Validators.h"
+
 #include <QCoreApplication>
-#include <QList>
-#include <QRegularExpression>
+#include <QElapsedTimer>
+#include <QProcess>
 #include <QStringList>
 #include <QTextStream>
-#include <QUrl>
 
-#include <cerrno>
-#include <cstring>
+#include <signal.h>
 #include <unistd.h>
 
 namespace {
 
-bool validRepositoryId(const QString &value)
-{
-    static const QRegularExpression pattern(
-        QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"));
-    return pattern.match(value).hasMatch();
-}
+struct Command {
+    QString program;
+    QStringList arguments;
+    int timeoutMs = 0;
+};
 
-bool validRepositoryUrl(const QString &value)
+bool buildCommand(const QStringList &args, Command *command)
 {
-    if (value.isEmpty() || value.size() > 2048
-        || value.contains(QRegularExpression(QStringLiteral("[\\s\\x00-\\x1f]"))))
+    if (!command || args.size() < 2)
         return false;
-    const QUrl url(value);
-    return url.isValid()
-        && url.scheme() == QStringLiteral("https")
-        && !url.host().isEmpty()
-        && url.userInfo().isEmpty();
-}
 
-bool validBootToken(const QString &value)
-{
-    static const QRegularExpression pattern(QStringLiteral("^[0-9A-Fa-f]{4}$"));
-    return pattern.match(value).hasMatch();
-}
+    const QString operation = args.at(1);
 
-bool validGrubEntry(const QString &value)
-{
-    if (value.isEmpty() || value.size() > 256 || value.startsWith(QLatin1Char('-')))
-        return false;
-    for (const QChar ch : value) {
-        if (ch.isNull() || ch.unicode() < 0x20 || ch.unicode() == 0x7f)
-            return false;
+    if (operation == QStringLiteral("bootc-check") && args.size() == 2) {
+        *command = {QStringLiteral("/usr/bin/bootc"),
+                    {QStringLiteral("upgrade"), QStringLiteral("--check")},
+                    30 * 60 * 1000};
+        return true;
     }
-    return true;
+    if (operation == QStringLiteral("bootc-download") && args.size() == 2) {
+        *command = {QStringLiteral("/usr/bin/bootc"),
+                    {QStringLiteral("upgrade"), QStringLiteral("--download-only")},
+                    30 * 60 * 1000};
+        return true;
+    }
+    if (operation == QStringLiteral("bootc-prepare") && args.size() == 2) {
+        *command = {QStringLiteral("/usr/bin/bootc"),
+                    {QStringLiteral("upgrade")},
+                    30 * 60 * 1000};
+        return true;
+    }
+    if (operation == QStringLiteral("bootc-apply-downloaded") && args.size() == 2) {
+        *command = {QStringLiteral("/usr/bin/bootc"),
+                    {QStringLiteral("upgrade"), QStringLiteral("--from-downloaded"),
+                     QStringLiteral("--apply")},
+                    30 * 60 * 1000};
+        return true;
+    }
+
+    if (operation == QStringLiteral("rk-sync") && args.size() == 2) {
+        *command = {QStringLiteral("/usr/bin/rk"), {QStringLiteral("sync")}, 30 * 60 * 1000};
+        return true;
+    }
+    if ((operation == QStringLiteral("rk-add")
+         || operation == QStringLiteral("rk-rm")
+         || operation == QStringLiteral("rk-forget"))
+        && args.size() == 3 && Validators::packageName(args.at(2))) {
+        const QString rkOperation = operation == QStringLiteral("rk-add")
+            ? QStringLiteral("add")
+            : operation == QStringLiteral("rk-rm")
+                ? QStringLiteral("rm") : QStringLiteral("forget");
+        *command = {QStringLiteral("/usr/bin/rk"), {rkOperation, args.at(2)}, 30 * 60 * 1000};
+        return true;
+    }
+
+    if ((operation == QStringLiteral("repo-enable")
+         || operation == QStringLiteral("repo-disable"))
+        && args.size() == 3 && Validators::repositoryId(args.at(2))) {
+        *command = {
+            QStringLiteral("/usr/bin/dnf5"),
+            {QStringLiteral("config-manager"),
+             operation == QStringLiteral("repo-enable")
+                 ? QStringLiteral("enable") : QStringLiteral("disable"),
+             args.at(2)},
+            5 * 60 * 1000
+        };
+        return true;
+    }
+
+    if (operation == QStringLiteral("repo-add") && args.size() == 3
+        && Validators::repositoryUrl(args.at(2))) {
+        *command = {
+            QStringLiteral("/usr/bin/dnf5"),
+            {QStringLiteral("config-manager"), QStringLiteral("addrepo"),
+             QStringLiteral("--from-repofile=") + args.at(2)},
+            5 * 60 * 1000
+        };
+        return true;
+    }
+
+    if (operation == QStringLiteral("boot-next-uefi") && args.size() == 3
+        && Validators::bootToken(args.at(2))) {
+        *command = {QStringLiteral("/usr/bin/efibootmgr"),
+                    {QStringLiteral("-n"), args.at(2).toUpper()},
+                    2 * 60 * 1000};
+        return true;
+    }
+
+    if (operation == QStringLiteral("boot-next-grub") && args.size() == 3
+        && Validators::grubEntry(args.at(2))) {
+        *command = {QStringLiteral("/usr/bin/grub2-reboot"), {args.at(2)}, 2 * 60 * 1000};
+        return true;
+    }
+
+    return false;
 }
 
-[[noreturn]] void execProgram(const QByteArray &program, const QStringList &arguments)
+void forwardOutput(QProcess &process)
 {
-    QList<QByteArray> encoded;
-    encoded.reserve(arguments.size() + 1);
-    encoded.append(program);
-    for (const QString &argument : arguments)
-        encoded.append(argument.toLocal8Bit());
+    const QByteArray data = process.readAllStandardOutput();
+    if (data.isEmpty())
+        return;
+    fwrite(data.constData(), 1, size_t(data.size()), stdout);
+    fflush(stdout);
+}
 
-    QList<char *> argv;
-    argv.reserve(encoded.size() + 1);
-    for (QByteArray &argument : encoded)
-        argv.append(argument.data());
-    argv.append(nullptr);
+int runCommand(const Command &command)
+{
+    QProcess process;
+    process.setProcessChannelMode(QProcess::MergedChannels);
+    process.setStandardInputFile(QProcess::nullDevice());
+    process.setChildProcessModifier([] {
+        (void)::setsid();
+    });
 
-    ::execv(program.constData(), argv.data());
-    QTextStream errorStream(stderr);
-    errorStream << "kriscc-admin: exec fallita per "
-                << QString::fromLocal8Bit(program)
-                << ": " << std::strerror(errno) << '\n';
-    errorStream.flush();
-    _exit(126);
+    process.start(command.program, command.arguments);
+    if (!process.waitForStarted(5000)) {
+        QTextStream(stderr) << "kriscc-admin: avvio fallito per "
+                            << command.program << ": " << process.errorString() << '\n';
+        return 69;
+    }
+
+    QElapsedTimer timer;
+    timer.start();
+
+    while (process.state() != QProcess::NotRunning) {
+        process.waitForReadyRead(200);
+        forwardOutput(process);
+
+        if (timer.elapsed() < command.timeoutMs)
+            continue;
+
+        QTextStream(stderr) << "kriscc-admin: timeout dell'operazione privilegiata.\n";
+        const qint64 pid = process.processId();
+        if (pid > 0)
+            (void)::kill(-pid, SIGTERM);
+        if (!process.waitForFinished(3000)) {
+            if (pid > 0)
+                (void)::kill(-pid, SIGKILL);
+            process.waitForFinished(3000);
+        }
+        forwardOutput(process);
+        return 124;
+    }
+
+    forwardOutput(process);
+    if (process.exitStatus() != QProcess::NormalExit)
+        return 70;
+
+    const int code = process.exitCode();
+    if (code == 126 || code == 127) {
+        QTextStream(stderr) << "kriscc-admin: il comando figlio è terminato con codice riservato "
+                            << code << ".\n";
+        return 70;
+    }
+    return code;
 }
 
 }
@@ -83,52 +181,11 @@ int main(int argc, char *argv[])
         return 77;
     }
 
-    const QStringList args = QCoreApplication::arguments();
-    if (args.size() < 2) {
-        err << "kriscc-admin: operazione mancante.\n";
+    Command command;
+    if (!buildCommand(QCoreApplication::arguments(), &command)) {
+        err << "kriscc-admin: operazione o argomenti non consentiti.\n";
         return 64;
     }
 
-    const QString operation = args.at(1);
-
-    if (operation == QStringLiteral("bootc-check") && args.size() == 2)
-        execProgram("/usr/bin/bootc", {QStringLiteral("upgrade"), QStringLiteral("--check")});
-    if (operation == QStringLiteral("bootc-download") && args.size() == 2)
-        execProgram("/usr/bin/bootc", {QStringLiteral("upgrade"), QStringLiteral("--download-only")});
-    if (operation == QStringLiteral("bootc-prepare") && args.size() == 2)
-        execProgram("/usr/bin/bootc", {QStringLiteral("upgrade")});
-    if (operation == QStringLiteral("bootc-apply-downloaded") && args.size() == 2)
-        execProgram("/usr/bin/bootc",
-                    {QStringLiteral("upgrade"), QStringLiteral("--from-downloaded"),
-                     QStringLiteral("--apply")});
-
-    if ((operation == QStringLiteral("repo-enable")
-         || operation == QStringLiteral("repo-disable"))
-        && args.size() == 3 && validRepositoryId(args.at(2))) {
-        execProgram("/usr/bin/dnf5",
-                    {QStringLiteral("config-manager"),
-                     operation == QStringLiteral("repo-enable")
-                         ? QStringLiteral("enable") : QStringLiteral("disable"),
-                     args.at(2)});
-    }
-
-    if (operation == QStringLiteral("repo-add") && args.size() == 3
-        && validRepositoryUrl(args.at(2))) {
-        execProgram("/usr/bin/dnf5",
-                    {QStringLiteral("config-manager"), QStringLiteral("addrepo"),
-                     QStringLiteral("--from-repofile=") + args.at(2)});
-    }
-
-    if (operation == QStringLiteral("boot-next-uefi") && args.size() == 3
-        && validBootToken(args.at(2))) {
-        execProgram("/usr/bin/efibootmgr", {QStringLiteral("-n"), args.at(2).toUpper()});
-    }
-
-    if (operation == QStringLiteral("boot-next-grub") && args.size() == 3
-        && validGrubEntry(args.at(2))) {
-        execProgram("/usr/bin/grub2-reboot", {args.at(2)});
-    }
-
-    err << "kriscc-admin: operazione o argomenti non consentiti.\n";
-    return 64;
+    return runCommand(command);
 }
