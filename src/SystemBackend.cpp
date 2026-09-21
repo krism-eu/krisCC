@@ -417,8 +417,8 @@ void SystemBackend::refreshTopMemoryProcesses()
     const QStringList pids = proc.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
     for (const QString &pid : pids) {
         bool numeric = false;
-        pid.toLongLong(&numeric);
-        if (!numeric)
+        const qlonglong parsedPid = pid.toLongLong(&numeric);
+        if (!numeric || parsedPid <= 0)
             continue;
 
         QFile status(proc.filePath(pid + QStringLiteral("/status")));
