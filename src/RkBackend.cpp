@@ -1,13 +1,13 @@
 #include "RkBackend.h"
 
 #include "PolkitHelper.h"
+#include "Validators.h"
 
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
-#include <QRegularExpression>
 #include <QTimer>
 
 namespace {
@@ -44,7 +44,6 @@ RkBackend::RkBackend(PolkitHelper *polkit, QObject *parent)
         });
     }
 
-    QTimer::singleShot(0, this, &RkBackend::refreshStatus);
 }
 
 bool RkBackend::canSync() const
@@ -239,9 +238,7 @@ void RkBackend::finishStatusError(const QString &message)
 
 bool RkBackend::validPackageName(const QString &packageName) const
 {
-    static const QRegularExpression pattern(
-        QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._+:-]{0,127}$"));
-    return pattern.match(packageName).hasMatch();
+    return Validators::packageName(packageName);
 }
 
 void RkBackend::startPrivileged(const QStringList &args)
@@ -255,5 +252,22 @@ void RkBackend::startPrivileged(const QStringList &args)
     m_operationOutput.clear();
     m_operationLines.clear();
     emit operationStateChanged();
-    m_polkit->execute(QStringLiteral("/usr/bin/rk"), args);
+    QStringList adminArgs;
+    if (args == QStringList{QStringLiteral("sync")}) {
+        adminArgs << QStringLiteral("rk-sync");
+    } else if (args.size() == 2) {
+        const QString verb = args.at(0);
+        adminArgs << (verb == QStringLiteral("add") ? QStringLiteral("rk-add")
+                    : verb == QStringLiteral("rm") ? QStringLiteral("rk-rm")
+                                                   : QStringLiteral("rk-forget"))
+                  << args.at(1);
+    } else {
+        m_operationOwned = false;
+        m_operationRunning = false;
+        m_operationState = QStringLiteral("error");
+        m_operationOutput = tr("Operazione rk non valida.");
+        emit operationStateChanged();
+        return;
+    }
+    m_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin"), adminArgs);
 }

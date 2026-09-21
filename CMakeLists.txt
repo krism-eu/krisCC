@@ -28,6 +28,7 @@ qt_add_executable(krisCC
     src/UtilityBackend.cpp src/UtilityBackend.h
     src/InstanceController.cpp src/InstanceController.h
     src/OperationLog.cpp src/OperationLog.h
+    src/Validators.cpp src/Validators.h
 )
 
 set_source_files_properties(qml/components/UiMetrics.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -67,6 +68,7 @@ target_compile_definitions(krisCC PRIVATE KRISCC_VERSION="${PROJECT_VERSION}-6")
 
 add_executable(kriscc-admin
     src/AdminHelper.cpp
+    src/Validators.cpp src/Validators.h
 )
 set_target_properties(kriscc-admin PROPERTIES OUTPUT_NAME admin)
 target_link_libraries(kriscc-admin PRIVATE Qt6::Core)

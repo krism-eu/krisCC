@@ -113,7 +113,6 @@ BootcBackend::BootcBackend(PolkitHelper *polkit, QObject *parent)
     }
 
     loadPackages();
-    QTimer::singleShot(0, this, &BootcBackend::refreshStatus);
 }
 
 bool BootcBackend::canOperate() const

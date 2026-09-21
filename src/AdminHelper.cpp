@@ -1,74 +1,63 @@
-#include <QByteArray>
+#include "Validators.h"
+
 #include <QCoreApplication>
-#include <QList>
-#include <QRegularExpression>
+#include <QProcess>
 #include <QStringList>
 #include <QTextStream>
-#include <QUrl>
 
-#include <cerrno>
-#include <cstring>
+#include <signal.h>
 #include <unistd.h>
 
 namespace {
 
-bool validRepositoryId(const QString &value)
-{
-    static const QRegularExpression pattern(
-        QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"));
-    return pattern.match(value).hasMatch();
-}
+constexpr int kShortTimeoutMs = 2 * 60 * 1000;
+constexpr int kRepositoryTimeoutMs = 5 * 60 * 1000;
+constexpr int kLongTimeoutMs = 30 * 60 * 1000;
 
-bool validRepositoryUrl(const QString &value)
+int runProgram(const QString &program, const QStringList &arguments, int timeoutMs)
 {
-    if (value.isEmpty() || value.size() > 2048
-        || value.contains(QRegularExpression(QStringLiteral("[\\s\\x00-\\x1f]"))))
-        return false;
-    const QUrl url(value);
-    return url.isValid()
-        && url.scheme() == QStringLiteral("https")
-        && !url.host().isEmpty()
-        && url.userInfo().isEmpty();
-}
+    QTextStream err(stderr);
+    QProcess process;
+    process.setProgram(program);
+    process.setArguments(arguments);
+    process.setProcessChannelMode(QProcess::ForwardedChannels);
+    process.setStandardInputFile(QProcess::nullDevice());
+    process.setChildProcessModifier([] {
+        (void)::setsid();
+    });
+    process.start();
 
-bool validBootToken(const QString &value)
-{
-    static const QRegularExpression pattern(QStringLiteral("^[0-9A-Fa-f]{4}$"));
-    return pattern.match(value).hasMatch();
-}
-
-bool validGrubEntry(const QString &value)
-{
-    if (value.isEmpty() || value.size() > 256 || value.startsWith(QLatin1Char('-')))
-        return false;
-    for (const QChar ch : value) {
-        if (ch.isNull() || ch.unicode() < 0x20 || ch.unicode() == 0x7f)
-            return false;
+    if (!process.waitForStarted(5000)) {
+        err << "kriscc-admin: avvio fallito per " << program
+            << ": " << process.errorString() << '\n';
+        return 125;
     }
-    return true;
-}
 
-[[noreturn]] void execProgram(const QByteArray &program, const QStringList &arguments)
-{
-    QList<QByteArray> encoded;
-    encoded.reserve(arguments.size() + 1);
-    encoded.append(program);
-    for (const QString &argument : arguments)
-        encoded.append(argument.toLocal8Bit());
+    if (process.waitForFinished(timeoutMs)) {
+        if (process.exitStatus() != QProcess::NormalExit) {
+            err << "kriscc-admin: processo terminato in modo anomalo: " << program << '\n';
+            return 125;
+        }
+        return process.exitCode();
+    }
 
-    QList<char *> argv;
-    argv.reserve(encoded.size() + 1);
-    for (QByteArray &argument : encoded)
-        argv.append(argument.data());
-    argv.append(nullptr);
+    const qint64 pid = process.processId();
+    err << "kriscc-admin: timeout per " << program << '\n';
+    err.flush();
 
-    ::execv(program.constData(), argv.data());
-    QTextStream errorStream(stderr);
-    errorStream << "kriscc-admin: exec fallita per "
-                << QString::fromLocal8Bit(program)
-                << ": " << std::strerror(errno) << '\n';
-    errorStream.flush();
-    _exit(126);
+    if (pid > 0)
+        (void)::kill(-pid, SIGTERM);
+    else
+        process.terminate();
+
+    if (!process.waitForFinished(3000)) {
+        if (pid > 0)
+            (void)::kill(-pid, SIGKILL);
+        else
+            process.kill();
+        process.waitForFinished(3000);
+    }
+    return 124;
 }
 
 }
@@ -92,41 +81,62 @@ int main(int argc, char *argv[])
     const QString operation = args.at(1);
 
     if (operation == QStringLiteral("bootc-check") && args.size() == 2)
-        execProgram("/usr/bin/bootc", {QStringLiteral("upgrade"), QStringLiteral("--check")});
+        return runProgram(QStringLiteral("/usr/bin/bootc"),
+                          {QStringLiteral("upgrade"), QStringLiteral("--check")},
+                          kLongTimeoutMs);
     if (operation == QStringLiteral("bootc-download") && args.size() == 2)
-        execProgram("/usr/bin/bootc", {QStringLiteral("upgrade"), QStringLiteral("--download-only")});
+        return runProgram(QStringLiteral("/usr/bin/bootc"),
+                          {QStringLiteral("upgrade"), QStringLiteral("--download-only")},
+                          kLongTimeoutMs);
     if (operation == QStringLiteral("bootc-prepare") && args.size() == 2)
-        execProgram("/usr/bin/bootc", {QStringLiteral("upgrade")});
+        return runProgram(QStringLiteral("/usr/bin/bootc"),
+                          {QStringLiteral("upgrade")}, kLongTimeoutMs);
     if (operation == QStringLiteral("bootc-apply-downloaded") && args.size() == 2)
-        execProgram("/usr/bin/bootc",
-                    {QStringLiteral("upgrade"), QStringLiteral("--from-downloaded"),
-                     QStringLiteral("--apply")});
+        return runProgram(QStringLiteral("/usr/bin/bootc"),
+                          {QStringLiteral("upgrade"), QStringLiteral("--from-downloaded"),
+                           QStringLiteral("--apply")}, kLongTimeoutMs);
+
+    if (operation == QStringLiteral("rk-sync") && args.size() == 2)
+        return runProgram(QStringLiteral("/usr/bin/rk"), {QStringLiteral("sync")}, kLongTimeoutMs);
+
+    if ((operation == QStringLiteral("rk-add")
+         || operation == QStringLiteral("rk-rm")
+         || operation == QStringLiteral("rk-forget"))
+        && args.size() == 3 && Validators::packageName(args.at(2))) {
+        const QString verb = operation == QStringLiteral("rk-add") ? QStringLiteral("add")
+                           : operation == QStringLiteral("rk-rm") ? QStringLiteral("rm")
+                                                                 : QStringLiteral("forget");
+        return runProgram(QStringLiteral("/usr/bin/rk"), {verb, args.at(2)}, kLongTimeoutMs);
+    }
 
     if ((operation == QStringLiteral("repo-enable")
          || operation == QStringLiteral("repo-disable"))
-        && args.size() == 3 && validRepositoryId(args.at(2))) {
-        execProgram("/usr/bin/dnf5",
-                    {QStringLiteral("config-manager"),
-                     operation == QStringLiteral("repo-enable")
-                         ? QStringLiteral("enable") : QStringLiteral("disable"),
-                     args.at(2)});
+        && args.size() == 3 && Validators::repositoryId(args.at(2))) {
+        return runProgram(QStringLiteral("/usr/bin/dnf5"),
+                          {QStringLiteral("config-manager"),
+                           operation == QStringLiteral("repo-enable")
+                               ? QStringLiteral("enable") : QStringLiteral("disable"),
+                           args.at(2)}, kRepositoryTimeoutMs);
     }
 
     if (operation == QStringLiteral("repo-add") && args.size() == 3
-        && validRepositoryUrl(args.at(2))) {
-        execProgram("/usr/bin/dnf5",
-                    {QStringLiteral("config-manager"), QStringLiteral("addrepo"),
-                     QStringLiteral("--from-repofile=") + args.at(2)});
+        && Validators::repositoryUrl(args.at(2))) {
+        return runProgram(QStringLiteral("/usr/bin/dnf5"),
+                          {QStringLiteral("config-manager"), QStringLiteral("addrepo"),
+                           QStringLiteral("--from-repofile=") + args.at(2)},
+                          kRepositoryTimeoutMs);
     }
 
     if (operation == QStringLiteral("boot-next-uefi") && args.size() == 3
-        && validBootToken(args.at(2))) {
-        execProgram("/usr/bin/efibootmgr", {QStringLiteral("-n"), args.at(2).toUpper()});
+        && Validators::bootToken(args.at(2))) {
+        return runProgram(QStringLiteral("/usr/bin/efibootmgr"),
+                          {QStringLiteral("-n"), args.at(2).toUpper()}, kShortTimeoutMs);
     }
 
     if (operation == QStringLiteral("boot-next-grub") && args.size() == 3
-        && validGrubEntry(args.at(2))) {
-        execProgram("/usr/bin/grub2-reboot", {args.at(2)});
+        && Validators::grubEntry(args.at(2))) {
+        return runProgram(QStringLiteral("/usr/bin/grub2-reboot"),
+                          {args.at(2)}, kShortTimeoutMs);
     }
 
     err << "kriscc-admin: operazione o argomenti non consentiti.\n";

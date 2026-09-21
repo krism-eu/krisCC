@@ -355,6 +355,7 @@ bool CustomActionsBackend::runAction(const QString &id)
 
     process->setWorkingDirectory(QDir::homePath());
     process->setProcessChannelMode(QProcess::MergedChannels);
+    process->setStandardInputFile(QProcess::nullDevice());
     process->setChildProcessModifier([] {
         (void)::setsid();
     });
