@@ -122,6 +122,11 @@ require('QStringLiteral("firewalld.service")' in system_cpp,
         "Dashboard firewall state is not sourced from firewalld")
 require("topMemoryProcesses" in read("src/SystemBackend.h"),
         "Dashboard top-memory model is missing")
+require("backupDirectory" in read("src/SystemBackend.h")
+        and "setBackupDirectory" in system_cpp,
+        "selectable backup destination is missing")
+require("partialFile.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner)" in system_cpp,
+        "backup partial file must be created as 0600")
 require("JSON.parse(" not in read("qml/modules/PodmanModule.qml"),
         "Podman JSON parsing must stay in C++")
 require('split("\\n")' not in read("qml/modules/FlatpakModule.qml"),

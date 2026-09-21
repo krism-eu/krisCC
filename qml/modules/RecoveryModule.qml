@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as Controls
+import QtQuick.Dialogs
 import org.kde.kirigami as Kirigami
 import org.kriscc
 
@@ -69,6 +70,12 @@ Kirigami.ScrollablePage {
                     }
                     Item { Layout.fillWidth: true }
                     Controls.Button {
+                        text: qsTr("Cambia cartella")
+                        icon.name: "folder-new"
+                        enabled: !SystemBackend.backupBusy
+                        onClicked: backupFolderDialog.open()
+                    }
+                    Controls.Button {
                         text: qsTr("Apri cartella")
                         icon.name: "folder-open"
                         onClicked: SystemBackend.openBackupFolder()
@@ -80,8 +87,8 @@ Kirigami.ScrollablePage {
                     wrapMode: Text.WordWrap
                     opacity: UiMetrics.secondaryOpacity
                     text: backupProfile.currentIndex === 0
-                          ? qsTr("Include le configurazioni utente supportate. Minimo 1 GiB libero.")
-                          : qsTr("Include la home, escludendo cache, cestino e backup precedenti. Minimo 5 GiB liberi.")
+                          ? qsTr("Include le configurazioni utente supportate. La destinazione deve essere disponibile e scrivibile.")
+                          : qsTr("Include la home, escludendo cache, cestino e backup precedenti. La destinazione deve essere disponibile e scrivibile.")
                 }
 
                 Kirigami.AbstractCard {
@@ -91,7 +98,7 @@ Kirigami.ScrollablePage {
                         Controls.Label {
                             Layout.fillWidth: true
                             opacity: UiMetrics.secondaryOpacity
-                            text: qsTr("Destinazione: ~/krisCC Backups")
+                            text: qsTr("Destinazione: %1").arg(SystemBackend.backupDirectory)
                         }
                         Repeater {
                             model: {
@@ -119,6 +126,15 @@ Kirigami.ScrollablePage {
                             }
                         }
                     }
+                }
+
+                Kirigami.InlineMessage {
+                    Layout.fillWidth: true
+                    type: SystemBackend.backupIsLocalSnapshot
+                          ? Kirigami.MessageType.Warning : Kirigami.MessageType.Information
+                    text: SystemBackend.backupIsLocalSnapshot
+                          ? qsTr("La destinazione è sullo stesso filesystem della home: questo è uno snapshot locale, non un backup contro il guasto del disco.")
+                          : qsTr("La destinazione è su un filesystem diverso dalla home.")
                 }
 
                 RowLayout {
@@ -386,6 +402,15 @@ Kirigami.ScrollablePage {
                     outputText: RkBackend.statusText
                 }
             }
+        }
+    }
+
+    FolderDialog {
+        id: backupFolderDialog
+        title: qsTr("Scegli la cartella dei backup")
+        onAccepted: {
+            if (SystemBackend.setBackupDirectory(selectedFolder.toString()))
+                root.refreshBackups()
         }
     }
 

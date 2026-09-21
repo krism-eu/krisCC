@@ -42,6 +42,8 @@ class SystemBackend : public QObject
     Q_PROPERTY(QString backupStatus READ backupStatus NOTIFY backupStatusChanged)
     Q_PROPERTY(QString backupPath READ backupPath NOTIFY backupStatusChanged)
     Q_PROPERTY(QString backupState READ backupState NOTIFY backupStatusChanged)
+    Q_PROPERTY(QString backupDirectory READ backupDirectory NOTIFY backupDirectoryChanged)
+    Q_PROPERTY(bool backupIsLocalSnapshot READ backupIsLocalSnapshot NOTIFY backupDirectoryChanged)
 
 public:
     explicit SystemBackend(PolkitHelper *polkit, QObject *parent = nullptr);
@@ -76,6 +78,8 @@ public:
     const QString &backupStatus() const { return m_backupStatus; }
     const QString &backupPath() const { return m_backupPath; }
     const QString &backupState() const { return m_backupState; }
+    const QString &backupDirectory() const { return m_backupDirectory; }
+    bool backupIsLocalSnapshot() const;
 
     Q_INVOKABLE QString quickSystemInfo() const;
     Q_INVOKABLE void copyToClipboard(const QString &text) const;
@@ -96,6 +100,7 @@ public:
     Q_INVOKABLE void notify(const QString &summary, const QString &body = QString()) const;
 
     Q_INVOKABLE bool createSnapshot(const QString &kind);
+    Q_INVOKABLE bool setBackupDirectory(const QString &pathOrUrl);
     Q_INVOKABLE bool cancelSnapshot();
     Q_INVOKABLE QVariantList backups() const;
     Q_INVOKABLE bool verifySnapshot(const QString &path);
@@ -111,6 +116,7 @@ public:
 signals:
     void backupBusyChanged();
     void backupStatusChanged();
+    void backupDirectoryChanged();
     void rebootFinished(bool success, const QString &message);
     void bootSelectionStateChanged();
     void bootSelectionFinished(const QString &kind, bool success, const QString &output);
@@ -125,6 +131,9 @@ private:
     QString toolProgram(const QString &toolId) const;
     QString resolveExecutable(const QString &program) const;
     bool validateBackupPath(const QString &path, QString *canonicalPath = nullptr) const;
+    QString defaultBackupDirectory() const;
+    bool validateBackupDirectory(const QString &path, QString *canonicalPath = nullptr) const;
+    QString currentBackupRoot() const;
     void setBackupBusy(bool busy);
     void setBackupResult(const QString &status, const QString &path = QString(),
                          const QString &state = QStringLiteral("idle"));
@@ -158,6 +167,7 @@ private:
     QString m_backupStatus;
     QString m_backupPath;
     QString m_backupState = QStringLiteral("idle");
+    QString m_backupDirectory;
     QString m_backupPartialPath;
     bool m_backupCancelled = false;
 };

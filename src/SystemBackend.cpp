@@ -28,6 +28,7 @@
 #include <QRegularExpression>
 #include <QSet>
 #include <QStandardPaths>
+#include <QSettings>
 #include <QStorageInfo>
 #include <QSysInfo>
 #include <QTextStream>
@@ -116,6 +117,15 @@ SystemBackend::SystemBackend(PolkitHelper *polkit, QObject *parent)
                 refreshGrubEntries();
         });
     }
+
+    QSettings settings;
+    const QString configuredBackupDirectory =
+        settings.value(QStringLiteral("backup/directory"), defaultBackupDirectory()).toString();
+    QString canonicalBackupDirectory;
+    if (validateBackupDirectory(configuredBackupDirectory, &canonicalBackupDirectory))
+        m_backupDirectory = canonicalBackupDirectory;
+    else
+        m_backupDirectory = defaultBackupDirectory();
 
     m_resourceTimer = new QTimer(this);
     m_resourceTimer->setInterval(2000);
@@ -742,10 +752,81 @@ void SystemBackend::notify(const QString &summary, const QString &body) const
                             QStringList(), QVariantMap(), 5000);
 }
 
+QString SystemBackend::defaultBackupDirectory() const
+{
+    return QDir::home().filePath(QStringLiteral("krisCC Backups"));
+}
+
+bool SystemBackend::validateBackupDirectory(const QString &path, QString *canonicalPath) const
+{
+    QString localPath = path.trimmed();
+    if (localPath.startsWith(QStringLiteral("file:")))
+        localPath = QUrl(localPath).toLocalFile();
+    if (localPath.isEmpty())
+        return false;
+
+    const QFileInfo info(localPath);
+    const QString canonical = info.canonicalFilePath();
+    if (canonical.isEmpty() || !info.isDir() || !info.isWritable())
+        return false;
+    if (canonicalPath)
+        *canonicalPath = canonical;
+    return true;
+}
+
+QString SystemBackend::currentBackupRoot() const
+{
+    QString canonical;
+    return validateBackupDirectory(m_backupDirectory, &canonical) ? canonical : QString();
+}
+
+bool SystemBackend::setBackupDirectory(const QString &pathOrUrl)
+{
+    if (m_backupBusy)
+        return false;
+
+    QString localPath = pathOrUrl.trimmed();
+    if (localPath.startsWith(QStringLiteral("file:")))
+        localPath = QUrl(localPath).toLocalFile();
+    if (localPath.isEmpty())
+        return false;
+
+    QDir directory(localPath);
+    if (!directory.exists() && !directory.mkpath(QStringLiteral(".")))
+        return false;
+
+    QString canonical;
+    if (!validateBackupDirectory(directory.absolutePath(), &canonical))
+        return false;
+    if (m_backupDirectory == canonical)
+        return true;
+
+    m_backupDirectory = canonical;
+    QSettings settings;
+    settings.setValue(QStringLiteral("backup/directory"), m_backupDirectory);
+    emit backupDirectoryChanged();
+    return true;
+}
+
+bool SystemBackend::backupIsLocalSnapshot() const
+{
+    const QString root = currentBackupRoot();
+    if (root.isEmpty())
+        return true;
+    const QStorageInfo backupStorage(root);
+    const QStorageInfo homeStorage(QDir::homePath());
+    if (!backupStorage.isValid() || !homeStorage.isValid())
+        return true;
+    return backupStorage.device() == homeStorage.device();
+}
+
 QVariantList SystemBackend::backups() const
 {
     QVariantList result;
-    const QDir backupDir(QDir::homePath() + QStringLiteral("/krisCC Backups"));
+    const QString backupRoot = currentBackupRoot();
+    if (backupRoot.isEmpty())
+        return result;
+    const QDir backupDir(backupRoot);
     if (!backupDir.exists())
         return result;
 
@@ -767,8 +848,7 @@ QVariantList SystemBackend::backups() const
 
 bool SystemBackend::validateBackupPath(const QString &path, QString *canonicalPath) const
 {
-    const QDir backupDir(QDir::homePath() + QStringLiteral("/krisCC Backups"));
-    const QString backupRoot = QFileInfo(backupDir.absolutePath()).canonicalFilePath();
+    const QString backupRoot = currentBackupRoot();
     const QFileInfo info(path);
     const QString canonical = info.canonicalFilePath();
     if (backupRoot.isEmpty() || canonical.isEmpty() || !info.isFile())
@@ -793,7 +873,7 @@ bool SystemBackend::verifySnapshot(const QString &path)
 
     QString canonical;
     if (!validateBackupPath(path, &canonical)) {
-        setBackupResult(tr("Archivio di backup non valido o fuori dalla cartella krisCC Backups."),
+        setBackupResult(tr("Archivio di backup non valido o fuori dalla cartella backup selezionata."),
                         QString(), QStringLiteral("error"));
         return false;
     }
@@ -866,7 +946,7 @@ bool SystemBackend::restoreSnapshot(const QString &path)
 
     QString canonical;
     if (!validateBackupPath(path, &canonical)) {
-        setBackupResult(tr("Archivio di backup non valido o fuori dalla cartella krisCC Backups."),
+        setBackupResult(tr("Archivio di backup non valido o fuori dalla cartella backup selezionata."),
                         QString(), QStringLiteral("error"));
         return false;
     }
@@ -997,11 +1077,25 @@ bool SystemBackend::createSnapshot(const QString &kind)
     }
 
     const QString home = QDir::homePath();
-    QDir backupDir(home + QStringLiteral("/krisCC Backups"));
+    QDir backupDir(m_backupDirectory.isEmpty() ? defaultBackupDirectory() : m_backupDirectory);
     if (!backupDir.exists() && !backupDir.mkpath(QStringLiteral("."))) {
         setBackupResult(tr("Impossibile creare la cartella dei backup."), QString(), QStringLiteral("error"));
         return false;
     }
+
+    QString canonicalBackupRoot;
+    if (!validateBackupDirectory(backupDir.absolutePath(), &canonicalBackupRoot)) {
+        setBackupResult(tr("La cartella backup selezionata non è disponibile o scrivibile."),
+                        QString(), QStringLiteral("error"));
+        return false;
+    }
+    if (m_backupDirectory != canonicalBackupRoot) {
+        m_backupDirectory = canonicalBackupRoot;
+        QSettings settings;
+        settings.setValue(QStringLiteral("backup/directory"), m_backupDirectory);
+        emit backupDirectoryChanged();
+    }
+    backupDir.setPath(canonicalBackupRoot);
 
     const QStorageInfo backupStorage(backupDir.absolutePath());
     if (backupStorage.isValid() && backupStorage.isReady()) {
@@ -1026,11 +1120,28 @@ bool SystemBackend::createSnapshot(const QString &kind)
     const QString output = backupDir.filePath(QStringLiteral("%1-%2.tar.gz").arg(label, stamp));
     const QString partial = output + QStringLiteral(".partial");
     QFile::remove(partial);
+    {
+        QFile partialFile(partial);
+        if (!partialFile.open(QIODevice::WriteOnly)
+            || !partialFile.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner)) {
+            setBackupResult(tr("Impossibile creare il file parziale del backup con permessi sicuri."),
+                            QString(), QStringLiteral("error"));
+            return false;
+        }
+    }
 
     QStringList args = {QStringLiteral("-czf"), partial};
     if (kind == QStringLiteral("home")) {
         for (const QString &excluded : backupHomeExcludes())
             args << QStringLiteral("--exclude=./") + excluded;
+
+        const QString canonicalHome = QFileInfo(home).canonicalFilePath();
+        if (!canonicalHome.isEmpty()
+            && canonicalBackupRoot.startsWith(canonicalHome + QLatin1Char('/'))) {
+            const QString relativeBackup = QDir(canonicalHome).relativeFilePath(canonicalBackupRoot);
+            if (!relativeBackup.isEmpty() && relativeBackup != QStringLiteral("."))
+                args << QStringLiteral("--exclude=./") + relativeBackup;
+        }
         args << QStringLiteral("-C") << home << QStringLiteral(".");
     } else {
         QStringList entries;
@@ -1158,3 +1269,239 @@ bool SystemBackend::deleteSnapshot(const QString &path)
         return false;
     OperationLog::append(QStringLiteral("Backup"), QStringLiteral("delete"),
                          QStringLiteral("success"), name);
+    setBackupResult(tr("Backup eliminato."), QString(), QStringLiteral("success"));
+    return true;
+}
+
+bool SystemBackend::openBackupFolder() const
+{
+    QString path = currentBackupRoot();
+    if (path.isEmpty()) {
+        path = m_backupDirectory.isEmpty() ? defaultBackupDirectory() : m_backupDirectory;
+        if (!QDir().mkpath(path))
+            return false;
+    }
+    return QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+}
+
+QVariantList SystemBackend::backupPreview(const QString &kind) const
+{
+    QVariantList result;
+    const QString home = QDir::homePath();
+
+    if (kind == QStringLiteral("config")) {
+        for (const QString &entry : backupConfigEntries()) {
+            QVariantMap item;
+            item.insert(QStringLiteral("path"), QStringLiteral("~/") + entry);
+            item.insert(QStringLiteral("included"), true);
+            item.insert(QStringLiteral("exists"), QFileInfo::exists(home + QLatin1Char('/') + entry));
+            result.append(item);
+        }
+        return result;
+    }
+
+    if (kind == QStringLiteral("home")) {
+        QVariantMap allHome;
+        allHome.insert(QStringLiteral("path"), QStringLiteral("~/"));
+        allHome.insert(QStringLiteral("included"), true);
+        allHome.insert(QStringLiteral("exists"), true);
+        result.append(allHome);
+        for (const QString &entry : backupHomeExcludes()) {
+            QVariantMap item;
+            item.insert(QStringLiteral("path"), QStringLiteral("~/") + entry);
+            item.insert(QStringLiteral("included"), false);
+            item.insert(QStringLiteral("exists"), QFileInfo::exists(home + QLatin1Char('/') + entry));
+            result.append(item);
+        }
+    }
+    return result;
+}
+
+void SystemBackend::setBackupBusy(bool busy)
+{
+    if (m_backupBusy == busy)
+        return;
+    m_backupBusy = busy;
+    emit backupBusyChanged();
+}
+
+void SystemBackend::setBackupResult(const QString &status, const QString &path, const QString &state)
+{
+    m_backupStatus = status;
+    m_backupPath = path;
+    m_backupState = state;
+    emit backupStatusChanged();
+}
+
+void SystemBackend::setResourceMonitoringEnabled(bool enabled)
+{
+    if (m_resourceMonitoringEnabled == enabled)
+        return;
+
+    m_resourceMonitoringEnabled = enabled;
+    if (!enabled) {
+        m_resourceTimer->stop();
+        m_previousCpuTotal = 0;
+        m_previousCpuIdle = 0;
+        return;
+    }
+
+    m_previousCpuTotal = 0;
+    m_previousCpuIdle = 0;
+    if (m_cpuUsagePercent != -1) {
+        m_cpuUsagePercent = -1;
+        emit resourcesChanged();
+    }
+    refreshResources();
+    m_resourceTimer->start();
+}
+
+void SystemBackend::refreshResources()
+{
+    if (!m_resourceMonitoringEnabled)
+        return;
+    int nextCpuUsage = m_cpuUsagePercent;
+    QFile stat(QStringLiteral("/proc/stat"));
+    if (stat.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        const QList<QByteArray> parts = stat.readLine().simplified().split(' ');
+        if (parts.size() >= 9 && parts.at(0) == "cpu") {
+            bool ok = true;
+            quint64 values[8] = {};
+            for (int i = 0; i < 8; ++i) {
+                bool fieldOk = false;
+                values[i] = parts.at(i + 1).toULongLong(&fieldOk);
+                ok = ok && fieldOk;
+            }
+            if (ok) {
+                const quint64 total = values[0] + values[1] + values[2] + values[3]
+                                    + values[4] + values[5] + values[6] + values[7];
+                const quint64 idle = values[3] + values[4];
+                if (m_previousCpuTotal > 0 && total > m_previousCpuTotal) {
+                    const quint64 totalDelta = total - m_previousCpuTotal;
+                    const quint64 idleDelta = idle >= m_previousCpuIdle ? idle - m_previousCpuIdle : 0;
+                    const double busy = totalDelta > 0
+                        ? 100.0 * double(totalDelta - qMin(idleDelta, totalDelta)) / double(totalDelta)
+                        : 0.0;
+                    nextCpuUsage = qBound(0, qRound(busy), 100);
+                }
+                m_previousCpuTotal = total;
+                m_previousCpuIdle = idle;
+            }
+        }
+    }
+
+    qint64 totalKiB = -1;
+    qint64 availableKiB = -1;
+    QFile meminfo(QStringLiteral("/proc/meminfo"));
+    if (meminfo.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        for (const QByteArray &rawLine : meminfo.readAll().split('\n')) {
+            const QByteArray line = rawLine.simplified();
+            if (line.startsWith("MemTotal:")) {
+                const QList<QByteArray> parts = line.split(' ');
+                if (parts.size() >= 2)
+                    totalKiB = parts.at(1).toLongLong();
+            } else if (line.startsWith("MemAvailable:")) {
+                const QList<QByteArray> parts = line.split(' ');
+                if (parts.size() >= 2)
+                    availableKiB = parts.at(1).toLongLong();
+            }
+        }
+    }
+
+    const qint64 nextTotalMiB = totalKiB >= 0 ? totalKiB / 1024 : -1;
+    const qint64 nextUsedMiB = totalKiB >= 0 && availableKiB >= 0
+        ? qMax<qint64>(0, totalKiB - availableKiB) / 1024
+        : -1;
+    const double nextTemperature = readCpuTemperature();
+
+    const bool changed = nextCpuUsage != m_cpuUsagePercent
+        || nextUsedMiB != m_memoryUsedMiB
+        || nextTotalMiB != m_memoryTotalMiB
+        || !qFuzzyCompare(nextTemperature + 1.0, m_cpuTemperatureC + 1.0);
+
+    m_cpuUsagePercent = nextCpuUsage;
+    m_memoryUsedMiB = nextUsedMiB;
+    m_memoryTotalMiB = nextTotalMiB;
+    m_cpuTemperatureC = nextTemperature;
+    if (changed)
+        emit resourcesChanged();
+    refreshTopMemoryProcesses();
+}
+
+double SystemBackend::readCpuTemperature() const
+{
+    const QDir hwmonRoot(QStringLiteral("/sys/class/hwmon"));
+    const QStringList hwmons = hwmonRoot.entryList(
+        QStringList{QStringLiteral("hwmon*")}, QDir::Dirs | QDir::NoDotAndDotDot);
+
+    int bestScore = -1;
+    double bestTemperature = -1.0;
+    for (const QString &directoryName : hwmons) {
+        const QDir directory(hwmonRoot.filePath(directoryName));
+        QFile nameFile(directory.filePath(QStringLiteral("name")));
+        QString sensorName;
+        if (nameFile.open(QIODevice::ReadOnly | QIODevice::Text))
+            sensorName = QString::fromUtf8(nameFile.readAll()).trimmed().toLower();
+
+        int baseScore = -1;
+        if (sensorName == QStringLiteral("k10temp")
+            || sensorName == QStringLiteral("coretemp")
+            || sensorName == QStringLiteral("zenpower"))
+            baseScore = 100;
+        else if (sensorName.contains(QStringLiteral("cpu")))
+            baseScore = 70;
+
+        const QStringList inputs = directory.entryList(
+            QStringList{QStringLiteral("temp*_input")}, QDir::Files);
+        for (const QString &inputName : inputs) {
+            QFile input(directory.filePath(inputName));
+            if (!input.open(QIODevice::ReadOnly | QIODevice::Text))
+                continue;
+            bool ok = false;
+            const qint64 milli = QString::fromUtf8(input.readAll()).trimmed().toLongLong(&ok);
+            if (!ok || milli < -20000 || milli > 150000)
+                continue;
+
+            QString label;
+            const QString labelName = inputName;
+            const QString prefix = labelName.left(labelName.indexOf(QLatin1Char('_')));
+            QFile labelFile(directory.filePath(prefix + QStringLiteral("_label")));
+            if (labelFile.open(QIODevice::ReadOnly | QIODevice::Text))
+                label = QString::fromUtf8(labelFile.readAll()).trimmed().toLower();
+
+            int score = baseScore;
+            if (label.contains(QStringLiteral("tctl"))
+                || label.contains(QStringLiteral("tdie"))
+                || label.contains(QStringLiteral("package"))
+                || label.contains(QStringLiteral("cpu")))
+                score = qMax(score, 80);
+            if (score < 0)
+                continue;
+
+            const double temperature = double(milli) / 1000.0;
+            if (score > bestScore) {
+                bestScore = score;
+                bestTemperature = temperature;
+            }
+        }
+    }
+    return bestTemperature;
+}
+
+QString SystemBackend::readOsName() const
+{
+    QFile file(QStringLiteral("/etc/os-release"));
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+        return QSysInfo::prettyProductName();
+
+    while (!file.atEnd()) {
+        QString line = QString::fromUtf8(file.readLine()).trimmed();
+        if (!line.startsWith(QStringLiteral("PRETTY_NAME=")))
+            continue;
+        QString value = line.mid(QStringLiteral("PRETTY_NAME=").size());
+        if (value.size() >= 2 && value.startsWith('"') && value.endsWith('"'))
+            value = value.mid(1, value.size() - 2);
+        return value;
+    }
+    return QSysInfo::prettyProductName();
+}
