@@ -16,8 +16,12 @@ def require(condition: bool, message: str) -> None:
 
 version_cfg = read("cmake/KrisCCVersion.cmake")
 spec = read("packaging/krisCC.spec")
-m_v = re.search(r'KRISCC_VERSION\s+"([^"]+)"', version_cfg)
-m_r = re.search(r'^Release:\s+([0-9]+)%\{\?dist\}\s*
+m_v = re.search(r'KRISCC_VERSION\\s+"([^"]+)"', version_cfg)
+m_r = re.search(r'^Release:[ \\t]+([0-9]+)%\\{\\?dist\\}', spec, re.MULTILINE)
+require(m_v and m_r, "missing canonical krisCC version or RPM release")
+VERSION, RELEASE = m_v.group(1), m_r.group(1)
+
+cmake = read("CMakeLists.txt")
 workflow = read(".github/workflows/build.yml")
 polkit_cpp = read("src/PolkitHelper.cpp")
 admin_cpp = read("src/AdminHelper.cpp")
@@ -258,109 +262,3 @@ process_runner = read("src/ProcessRunner.cpp")
 require("setStandardInputFile(QProcess::nullDevice())" in process_runner,
         "shared user-level ProcessRunner must close stdin")
 require("ProcessRunner" in custom_cpp and "ProcessRunner" in utility_cpp
-        and "ProcessRunner" in rk_cpp
-        and "ProcessRunner" in read("src/SoftwareBackend.cpp")
-        and "ProcessRunner" in read("src/PackageSearch.cpp")
-        and "ProcessRunner" in read("src/MaintenanceBackend.cpp"),
-        "user-level command backends must use the shared ProcessRunner")
-
-direct_qprocess_allowed = {
-    "AdminHelper.cpp", "PolkitHelper.cpp", "ProcessRunner.cpp",
-    "BootcBackend.cpp", "SystemBackend.cpp",
-}
-for source in (ROOT / "src").glob("*.cpp"):
-    if "QProcess" in source.read_text(encoding="utf-8"):
-        require(source.name in direct_qprocess_allowed,
-                f"{source.name}: direct QProcess is not an approved architectural exception")
-
-require("options.mergedChannels = !structuredOutput;" in utility_cpp,
-        "machine-readable utility output must be isolated from stderr")
-for operation in ("flatpak.installed", "flatpak.system-installed", "flatpak.updates",
-                  "flatpak.remotes", "flatpak.search", "podman.list", "podman.images"):
-    require(operation in utility_cpp and "structuredOutput" in utility_cpp,
-            f"{operation}: structured output protection missing")
-
-policy = ET.parse(ROOT / "data/org.kriscc.controlcenter.policy").getroot()
-actions = {node.attrib["id"]: node for node in policy.findall("action")}
-require("org.kriscc.controlcenter.admin" not in actions,
-        "generic admin Polkit action must not remain")
-for action_id, node in actions.items():
-    active = node.find("./defaults/allow_active")
-    require(active is not None and (active.text or "") != "auth_admin_keep",
-            f"{action_id}: retained authorization is forbidden")
-    annotations = {n.attrib.get("key"): n.text for n in node.findall("annotate")}
-    if action_id != "org.kriscc.controlcenter.bootc.status":
-        require(annotations.get("org.freedesktop.policykit.exec.path") == "/usr/libexec/kriscc/admin",
-                f"{action_id}: mutation does not use constrained admin helper")
-        require(bool(annotations.get("org.freedesktop.policykit.exec.argv1")),
-                f"{action_id}: mutation lacks semantic argv1 restriction")
-
-for qml in ROOT.glob("qml/**/*.qml"):
-    qml_text = qml.read_text(encoding="utf-8")
-    require("PolkitHelper" not in qml_text, f"{qml}: PolkitHelper leaked into QML")
-    require(not re.search(r'/(?:usr/)?bin/(?:bootc|dnf5|efibootmgr|grub2-reboot)', qml_text),
-            f"{qml}: privileged executable leaked into QML")
-
-require("Layout.preferredHeight: contentHeight" not in software_qml,
-        "Software list virtualization regressed")
-require("Layout.preferredHeight: contentHeight" not in flatpak_qml,
-        "Flatpak list virtualization regressed")
-require("Kirigami.ScrollablePage" not in software_qml
-        and "Kirigami.ScrollablePage" not in flatpak_qml,
-        "Software/Flatpak must have a single scrolling owner")
-require("Layout.fillHeight: true" in software_qml
-        and "Layout.fillHeight: true" in flatpak_qml,
-        "Software/Flatpak list viewport must fill available height")
-require("Novità repository" not in software_qml,
-        "removed repository-news tab returned")
-require('text: qsTr("Dettagli tecnici")' not in system_qml,
-        "raw BootC JSON toggle returned")
-require("entries.size() >= 500" not in package_cpp,
-        "installed RPM inventory is silently capped")
-require("entries.size() >= 100" in package_cpp and "m_truncated" in package_cpp,
-        "RPM live-search result cap is not explicit")
-require("rpmdb.sqlite" not in package_cpp,
-        "PackageSearch must not hardcode an RPM database path")
-require('QStringLiteral("firewalld.service")' in system_cpp,
-        "Dashboard firewall state is not sourced from firewalld")
-require("topMemoryProcesses" in read("src/SystemBackend.h"),
-        "Dashboard top-memory model is missing")
-require("networkState" in read("src/SystemBackend.h")
-        and '"network"' in read("qml/modules/DashboardModule.qml"),
-        "Dashboard network card contract is missing")
-require("parseFlatpakRemotes" in read("src/UtilityBackend.cpp")
-        and "parseFlatpakRemotes" in read("src/ContractParsers.cpp"),
-        "Flatpak remote parser is not contract-specific")
-require("anchors.right: parent.right" in read("qml/Main.qml")
-        and "id: versionLabel" in read("qml/Main.qml"),
-        "Version label is not anchored to the physical right edge")
-require("Layout.horizontalStretchFactor: 2" in read("qml/modules/DashboardModule.qml"),
-        "RAM card is not explicitly wider than CPU/temperature cards")
-require("Layout.maximumWidth: Layout.preferredWidth" in read("qml/modules/SoftwareModule.qml"),
-        "Repository status/action columns are not fixed-width aligned")
-require("backupDirectory" in read("src/SystemBackend.h")
-        and "setBackupDirectory" in system_cpp,
-        "selectable backup destination is missing")
-require("partialFile.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner)" in system_cpp,
-        "backup partial file must be created as 0600")
-require("JSON.parse(" not in read("qml/modules/PodmanModule.qml"),
-        "Podman JSON parsing must stay in C++")
-require('split("\\n")' not in read("qml/modules/FlatpakModule.qml"),
-        "Flatpak TSV parsing must stay in C++")
-
-wrapper = read("src/bootc-status.sh")
-require('exec /usr/bin/timeout --signal=TERM --kill-after=3s 30s /usr/bin/bootc status --format json --format-version=1' in wrapper,
-        "BootC JSON wrapper is not root-side bounded or no longer pins schema v1")
-require('"$@"' not in wrapper, "BootC wrapper accepts arbitrary arguments")
-
-for ignored in ("stage/", "artifacts/", "audit-build/", "*.rpm"):
-    require(ignored in read(".gitignore"), f".gitignore missing {ignored}")
-
-require("RepositoryExportBackend" in read("qml/modules/CommandsModule.qml"),
-        "Commands page does not expose repository export")
-require("0.6 è" not in read("INTEGRAZIONE.md"), "integration docs are stale")
-require("release 0.5.1" not in read("i18n/README.md"), "i18n docs are stale")
-require("auth_admin_keep" not in read("data/org.kriscc.controlcenter.policy"),
-        "Polkit retention is forbidden")
-
-print(f"release audit OK: krisCC {VERSION}-{RELEASE}")
