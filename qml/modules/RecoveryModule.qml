@@ -289,7 +289,7 @@ Kirigami.ScrollablePage {
                     Kirigami.AbstractCard {
                         Layout.fillWidth: true
                         contentItem: ColumnLayout {
-                            Controls.Label { font.bold: false; text: qsTr("Needs sync") }
+                            Controls.Label { font.bold: false; text: qsTr("Sincronizzazione richiesta") }
                             Controls.Label {
                                 font.bold: false
                                 text: !RkBackend.statusValid ? qsTr("Non disponibile")
