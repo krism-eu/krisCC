@@ -22,7 +22,10 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
+#include <QHostAddress>
 #include <QLocale>
+#include <QNetworkAddressEntry>
+#include <QNetworkInterface>
 #include <QHash>
 #include <QProcess>
 #include <QRegularExpression>
@@ -404,6 +407,7 @@ void SystemBackend::refreshDashboardState()
     emit storageSummaryChanged();
     refreshServiceStates();
     refreshTopMemoryProcesses();
+    refreshNetworkState();
 }
 
 void SystemBackend::refreshTopMemoryProcesses()
@@ -477,6 +481,67 @@ void SystemBackend::refreshTopMemoryProcesses()
     }
     m_topMemoryProcesses = result;
     emit topMemoryProcessesChanged();
+}
+
+void SystemBackend::refreshNetworkState()
+{
+    QString selectedInterface;
+    QString selectedAddress;
+    QString selectedState = QStringLiteral("down");
+    QString selectedKind = QStringLiteral("ethernet");
+    int bestScore = -1;
+
+    const QList<QNetworkInterface> interfaces = QNetworkInterface::allInterfaces();
+    for (const QNetworkInterface &iface : interfaces) {
+        const auto flags = iface.flags();
+        if (!flags.testFlag(QNetworkInterface::IsUp)
+            || !flags.testFlag(QNetworkInterface::IsRunning)
+            || flags.testFlag(QNetworkInterface::IsLoopBack)
+            || iface.type() == QNetworkInterface::Virtual)
+            continue;
+
+        QString ipv4;
+        QString ipv6;
+        for (const QNetworkAddressEntry &entry : iface.addressEntries()) {
+            const QHostAddress address = entry.ip();
+            if (address.isNull() || address.isLoopback() || address.isLinkLocal())
+                continue;
+            if (address.protocol() == QAbstractSocket::IPv4Protocol && ipv4.isEmpty())
+                ipv4 = address.toString();
+            else if (address.protocol() == QAbstractSocket::IPv6Protocol && ipv6.isEmpty())
+                ipv6 = address.toString();
+        }
+
+        int score = !ipv4.isEmpty() ? 100 : (!ipv6.isEmpty() ? 80 : 20);
+        if (iface.type() == QNetworkInterface::Ethernet)
+            score += 20;
+        else if (iface.type() == QNetworkInterface::Wifi)
+            score += 10;
+
+        if (score <= bestScore)
+            continue;
+        bestScore = score;
+        selectedInterface = iface.humanReadableName().isEmpty()
+            ? iface.name() : iface.humanReadableName();
+        selectedAddress = !ipv4.isEmpty() ? ipv4 : ipv6;
+        selectedState = !ipv4.isEmpty() ? QStringLiteral("ipv4")
+                      : !ipv6.isEmpty() ? QStringLiteral("ipv6")
+                                        : QStringLiteral("up");
+        selectedKind = iface.type() == QNetworkInterface::Wifi
+            ? QStringLiteral("wifi") : QStringLiteral("ethernet");
+    }
+
+    if (selectedInterface == m_networkInterface
+        && selectedAddress == m_networkAddress
+        && selectedState == m_networkState
+        && selectedKind == m_networkKind)
+        return;
+
+    m_networkInterface = selectedInterface;
+    m_networkAddress = selectedAddress;
+    m_networkState = selectedState;
+    m_networkKind = selectedKind;
+    emit networkChanged();
 }
 
 QString SystemBackend::desktopSession() const

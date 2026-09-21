@@ -44,6 +44,7 @@ Kirigami.ScrollablePage {
         if (kind === "selinux") return qsTr("SELinux")
         if (kind === "sync") return qsTr("Sincronizzazione")
         if (kind === "firewall") return qsTr("Firewall")
+        if (kind === "network") return qsTr("Rete")
         return qsTr("Spazio disco")
     }
 
@@ -52,6 +53,13 @@ Kirigami.ScrollablePage {
         if (kind === "selinux") return SystemBackend.selinuxState
         if (kind === "sync") return root.syncLabel()
         if (kind === "firewall") return root.firewallLabel()
+        if (kind === "network") {
+            if (SystemBackend.networkState === "ipv4" || SystemBackend.networkState === "ipv6")
+                return qsTr("Connessa")
+            if (SystemBackend.networkState === "up")
+                return qsTr("Interfaccia attiva")
+            return qsTr("Non connessa")
+        }
         return SystemBackend.storageSummary
     }
 
@@ -65,6 +73,13 @@ Kirigami.ScrollablePage {
                    ? qsTr("%1 richieste persistenti").arg(RkBackend.requests.length)
                    : qsTr("Stato rk non disponibile")
         if (kind === "firewall") return qsTr("firewalld")
+        if (kind === "network") {
+            if (SystemBackend.networkInterface.length === 0)
+                return qsTr("Nessuna interfaccia attiva")
+            if (SystemBackend.networkAddress.length === 0)
+                return SystemBackend.networkInterface + qsTr(" · nessun IP")
+            return SystemBackend.networkInterface + " · " + SystemBackend.networkAddress
+        }
         return qsTr("Storage dati")
     }
 
@@ -73,6 +88,8 @@ Kirigami.ScrollablePage {
         if (kind === "selinux") return "security-high"
         if (kind === "sync") return "view-refresh"
         if (kind === "firewall") return "security-medium"
+        if (kind === "network")
+            return SystemBackend.networkKind === "wifi" ? "network-wireless" : "network-wired"
         return "drive-harddisk"
     }
 
@@ -115,17 +132,37 @@ Kirigami.ScrollablePage {
             columnSpacing: Kirigami.Units.largeSpacing
             rowSpacing: Kirigami.Units.largeSpacing
             Repeater {
-                model: ["overlay", "selinux", "sync", "storage", "firewall"]
+                model: ["overlay", "selinux", "sync", "storage", "firewall", "network"]
                 delegate: Kirigami.AbstractCard {
                     required property string modelData
                     Layout.fillWidth: true
                     contentItem: ColumnLayout {
                         spacing: Kirigami.Units.smallSpacing
                         RowLayout {
-                            Kirigami.Icon {
-                                source: root.statusIcon(modelData)
+                            Item {
                                 Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
                                 Layout.preferredHeight: Layout.preferredWidth
+                                Kirigami.Icon {
+                                    anchors.fill: parent
+                                    source: root.statusIcon(modelData)
+                                }
+                                Rectangle {
+                                    visible: modelData === "network"
+                                    width: Kirigami.Units.smallSpacing + 2
+                                    height: width
+                                    radius: width / 2
+                                    anchors.right: parent.right
+                                    anchors.bottom: parent.bottom
+                                    border.width: 1
+                                    border.color: Kirigami.Theme.backgroundColor
+                                    color: SystemBackend.networkState === "ipv4"
+                                           ? "#2ecc71"
+                                           : SystemBackend.networkState === "ipv6"
+                                             ? "#3498db"
+                                             : SystemBackend.networkState === "up"
+                                               ? "#f39c12"
+                                               : "#e74c3c"
+                                }
                             }
                             Kirigami.Heading {
                                 Layout.fillWidth: true

@@ -36,6 +36,7 @@ BootcStatus parseBootcStatus(const QByteArray &data);
 Rows parseDnfRepoquery(const QByteArray &data);
 Rows parseDnfListJson(const QByteArray &data);
 Rows parseFlatpakTsv(const QByteArray &data, int expectedColumns);
+Rows parseFlatpakRemotes(const QByteArray &data);
 Rows parsePodmanJson(const QByteArray &data);
 Rows parseUefiEntries(const QByteArray &data);
 Rows parseGrubbyEntries(const QByteArray &data);

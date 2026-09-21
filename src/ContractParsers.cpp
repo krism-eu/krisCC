@@ -252,12 +252,31 @@ ContractParsers::Rows ContractParsers::parseFlatpakTsv(const QByteArray &data, i
         return result;
     }
     for (const QString &line : QString::fromUtf8(data).split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
-        const QStringList columns = line.split(QLatin1Char('\t'));
+        const QStringList columns = line.split(QLatin1Char('\t'), Qt::KeepEmptyParts);
         if (columns.size() != expectedColumns) {
             result.error = Error::InvalidShape;
             result.values.clear();
             return result;
         }
+        result.values.append(columns);
+    }
+    return result;
+}
+
+ContractParsers::Rows ContractParsers::parseFlatpakRemotes(const QByteArray &data)
+{
+    Rows result;
+    for (const QString &line : QString::fromUtf8(data).split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
+        QStringList columns = line.split(QLatin1Char('\t'), Qt::KeepEmptyParts);
+        if (columns.size() < 3 || columns.size() > 4
+            || columns.at(0).trimmed().isEmpty()
+            || columns.at(2).trimmed().isEmpty()) {
+            result.error = Error::InvalidShape;
+            result.values.clear();
+            return result;
+        }
+        while (columns.size() < 4)
+            columns.append(QString());
         result.values.append(columns);
     }
     return result;

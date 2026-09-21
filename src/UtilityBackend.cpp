@@ -150,9 +150,11 @@ void UtilityBackend::finish(const QString &message, const QString &state)
         if (completedOperation == QStringLiteral("flatpak.search")) {
             parsed = ContractParsers::parseFlatpakTsv(message.toUtf8(), 6);
             expectsRows = true;
+        } else if (completedOperation == QStringLiteral("flatpak.remotes")) {
+            parsed = ContractParsers::parseFlatpakRemotes(message.toUtf8());
+            expectsRows = true;
         } else if (completedOperation == QStringLiteral("flatpak.installed")
                    || completedOperation == QStringLiteral("flatpak.updates")
-                   || completedOperation == QStringLiteral("flatpak.remotes")
                    || completedOperation == QStringLiteral("flatpak.system-installed")) {
             parsed = ContractParsers::parseFlatpakTsv(message.toUtf8(), 4);
             expectsRows = true;

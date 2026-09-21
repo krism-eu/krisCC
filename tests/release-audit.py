@@ -122,6 +122,12 @@ require('QStringLiteral("firewalld.service")' in system_cpp,
         "Dashboard firewall state is not sourced from firewalld")
 require("topMemoryProcesses" in read("src/SystemBackend.h"),
         "Dashboard top-memory model is missing")
+require("networkState" in read("src/SystemBackend.h")
+        and '"network"' in read("qml/modules/DashboardModule.qml"),
+        "Dashboard network card contract is missing")
+require("parseFlatpakRemotes" in read("src/UtilityBackend.cpp")
+        and "parseFlatpakRemotes" in read("src/ContractParsers.cpp"),
+        "Flatpak remote parser is not contract-specific")
 require("anchors.right: parent.right" in read("qml/Main.qml")
         and "id: versionLabel" in read("qml/Main.qml"),
         "Version label is not anchored to the physical right edge")

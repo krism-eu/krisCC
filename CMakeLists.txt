@@ -13,7 +13,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 include(GNUInstallDirs)
 
-find_package(Qt6 6.7 REQUIRED COMPONENTS Core Gui Qml Quick DBus Test)
+find_package(Qt6 6.7 REQUIRED COMPONENTS Core Gui Qml Quick DBus Network Test)
 find_package(KF6Kirigami REQUIRED)
 qt_standard_project_setup(REQUIRES 6.7)
 
@@ -66,7 +66,7 @@ qt_add_qml_module(krisCC
 )
 
 target_link_libraries(krisCC PRIVATE
-    Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::DBus
+    Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::DBus Qt6::Network
     KF6::Kirigami
 )
 target_compile_definitions(krisCC PRIVATE KRISCC_VERSION="${PROJECT_VERSION}-${KRISCC_RELEASE}")

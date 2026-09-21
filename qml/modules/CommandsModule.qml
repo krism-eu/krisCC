@@ -93,7 +93,12 @@ Kirigami.ScrollablePage {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: Kirigami.Units.smallSpacing
-                    PageIntro { title: root.title; subtitle: qsTr("Comandi read-only difficili da ricordare ma utili nella diagnosi quotidiana. Le funzioni già coperte bene dalle pagine Flatpak, Container e dal Monitor di sistema non vengono duplicate qui.") }
+                    Controls.Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        opacity: UiMetrics.secondaryOpacity
+                        text: qsTr("Comandi read-only difficili da ricordare ma utili nella diagnosi quotidiana. Le funzioni già coperte bene dalle pagine Flatpak, Container e dal Monitor di sistema non vengono duplicate qui.")
+                    }
                     RowLayout {
                         Layout.fillWidth: true
                         Controls.TextField {

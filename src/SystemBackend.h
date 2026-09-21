@@ -38,6 +38,10 @@ class SystemBackend : public QObject
     Q_PROPERTY(double cpuTemperatureC READ cpuTemperatureC NOTIFY resourcesChanged)
     Q_PROPERTY(QVariantMap serviceStates READ serviceStates NOTIFY serviceStatesChanged)
     Q_PROPERTY(QVariantList topMemoryProcesses READ topMemoryProcesses NOTIFY topMemoryProcessesChanged)
+    Q_PROPERTY(QString networkInterface READ networkInterface NOTIFY networkChanged)
+    Q_PROPERTY(QString networkAddress READ networkAddress NOTIFY networkChanged)
+    Q_PROPERTY(QString networkState READ networkState NOTIFY networkChanged)
+    Q_PROPERTY(QString networkKind READ networkKind NOTIFY networkChanged)
     Q_PROPERTY(bool backupBusy READ backupBusy NOTIFY backupBusyChanged)
     Q_PROPERTY(QString backupStatus READ backupStatus NOTIFY backupStatusChanged)
     Q_PROPERTY(QString backupPath READ backupPath NOTIFY backupStatusChanged)
@@ -73,6 +77,10 @@ public:
     double cpuTemperatureC() const { return m_cpuTemperatureC; }
     const QVariantMap &serviceStates() const { return m_serviceStates; }
     const QVariantList &topMemoryProcesses() const { return m_topMemoryProcesses; }
+    const QString &networkInterface() const { return m_networkInterface; }
+    const QString &networkAddress() const { return m_networkAddress; }
+    const QString &networkState() const { return m_networkState; }
+    const QString &networkKind() const { return m_networkKind; }
 
     bool backupBusy() const { return m_backupBusy; }
     const QString &backupStatus() const { return m_backupStatus; }
@@ -125,6 +133,7 @@ signals:
     void serviceStatesChanged();
     void storageSummaryChanged();
     void topMemoryProcessesChanged();
+    void networkChanged();
 
 private:
     QString readOsName() const;
@@ -139,6 +148,7 @@ private:
                          const QString &state = QStringLiteral("idle"));
     void refreshResources();
     void refreshTopMemoryProcesses();
+    void refreshNetworkState();
     double readCpuTemperature() const;
 
     PolkitHelper *m_polkit = nullptr;
@@ -161,6 +171,10 @@ private:
     double m_cpuTemperatureC = -1.0;
     QVariantMap m_serviceStates;
     QVariantList m_topMemoryProcesses;
+    QString m_networkInterface;
+    QString m_networkAddress;
+    QString m_networkState = QStringLiteral("down");
+    QString m_networkKind = QStringLiteral("ethernet");
     quint64 m_serviceRefreshGeneration = 0;
     QPointer<QProcess> m_backupProcess;
     bool m_backupBusy = false;
