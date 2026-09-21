@@ -43,7 +43,7 @@ Kirigami.ScrollablePage {
         utilityBackend.runPodman(root.mode === "images" ? "images" : "list")
     }
 
-    function parseResult() {
+    function applyResult() {
         if (utilityBackend.busy)
             return
         var expected = root.mode === "images" ? "podman.images" : "podman.list"
@@ -55,18 +55,11 @@ Kirigami.ScrollablePage {
             root.parseError = utilityBackend.output.length > 0 ? utilityBackend.output : qsTr("Impossibile leggere i dati Podman.")
             return
         }
-        try {
-            var data = JSON.parse(utilityBackend.output || "[]")
-            if (root.mode === "images")
-                root.images = Array.isArray(data) ? data : []
-            else
-                root.containers = Array.isArray(data) ? data : []
-            root.parseError = ""
-        } catch (e) {
-            if (root.mode === "images") root.images = []
-            else root.containers = []
-            root.parseError = utilityBackend.output.length > 0 ? utilityBackend.output : qsTr("Output Podman non leggibile.")
-        }
+        if (root.mode === "images")
+            root.images = utilityBackend.rows
+        else
+            root.containers = utilityBackend.rows
+        root.parseError = ""
     }
 
     function containerName(item) {
@@ -147,7 +140,7 @@ Kirigami.ScrollablePage {
                 root.refreshAfterAction = false
                 refreshTimer.restart()
             } else {
-                root.parseResult()
+                root.applyResult()
             }
         }
     }

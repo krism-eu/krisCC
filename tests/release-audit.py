@@ -116,6 +116,10 @@ require('QStringLiteral("firewalld.service")' in system_cpp,
         "Dashboard firewall state is not sourced from firewalld")
 require("topMemoryProcesses" in read("src/SystemBackend.h"),
         "Dashboard top-memory model is missing")
+require("JSON.parse(" not in read("qml/modules/PodmanModule.qml"),
+        "Podman JSON parsing must stay in C++")
+require('split("\\n")' not in read("qml/modules/FlatpakModule.qml"),
+        "Flatpak TSV parsing must stay in C++")
 
 wrapper = read("src/bootc-status.sh")
 require('exec /usr/bin/timeout --signal=TERM --kill-after=3s 30s /usr/bin/bootc status --format json --format-version=1' in wrapper,

@@ -1,6 +1,7 @@
 #include "UtilityBackend.h"
 
 #include "OperationLog.h"
+#include "ContractParsers.h"
 #include "ProcessRunner.h"
 #include "Validators.h"
 
@@ -78,6 +79,7 @@ bool UtilityBackend::start(const QString &program, const QStringList &args, cons
     m_title = title;
     m_operationId = operationId;
     m_output.clear();
+    m_rows.clear();
     m_resultState = QStringLiteral("running");
     emit stateChanged();
 
@@ -139,9 +141,39 @@ void UtilityBackend::finish(const QString &message, const QString &state)
     }
     m_busy = false;
     m_output = message;
+    m_rows.clear();
     m_resultState = state;
+
+    if (state == QStringLiteral("success")) {
+        ContractParsers::Rows parsed;
+        bool expectsRows = false;
+        if (completedOperation == QStringLiteral("flatpak.search")) {
+            parsed = ContractParsers::parseFlatpakTsv(message.toUtf8(), 6);
+            expectsRows = true;
+        } else if (completedOperation == QStringLiteral("flatpak.installed")
+                   || completedOperation == QStringLiteral("flatpak.updates")
+                   || completedOperation == QStringLiteral("flatpak.remotes")
+                   || completedOperation == QStringLiteral("flatpak.system-installed")) {
+            parsed = ContractParsers::parseFlatpakTsv(message.toUtf8(), 4);
+            expectsRows = true;
+        } else if (completedOperation == QStringLiteral("podman.list")
+                   || completedOperation == QStringLiteral("podman.images")) {
+            parsed = ContractParsers::parsePodmanJson(message.toUtf8());
+            expectsRows = true;
+        }
+
+        if (expectsRows) {
+            if (!parsed.ok()) {
+                m_resultState = QStringLiteral("error");
+                m_output = tr("Formato di output non riconosciuto per %1.").arg(completedOperation);
+            } else {
+                m_rows = parsed.values;
+            }
+        }
+    }
+
     if (shouldLogOperation(completedOperation))
-        OperationLog::append(QStringLiteral("krisCC"), completedOperation, state, m_title);
+        OperationLog::append(QStringLiteral("krisCC"), completedOperation, m_resultState, m_title);
     emit stateChanged();
 }
 
@@ -156,6 +188,7 @@ void UtilityBackend::clearResult()
         return;
     m_title.clear();
     m_output.clear();
+    m_rows.clear();
     m_operationId.clear();
     m_resultState = QStringLiteral("idle");
     emit stateChanged();
@@ -252,6 +285,11 @@ bool UtilityBackend::runFlatpak(const QString &mode, const QString &query, const
                      {QStringLiteral("list"), QStringLiteral("--user"), QStringLiteral("--app"),
                       QStringLiteral("--columns=name,application,version,origin")},
                      tr("Flatpak installati"), QStringLiteral("flatpak.installed"), kRepositoryQueryTimeoutMs);
+    if (mode == QStringLiteral("system-installed"))
+        return start(QStringLiteral("/usr/bin/flatpak"),
+                     {QStringLiteral("list"), QStringLiteral("--system"), QStringLiteral("--app"),
+                      QStringLiteral("--columns=name,application,version,origin")},
+                     tr("Flatpak di sistema"), QStringLiteral("flatpak.system-installed"), kRepositoryQueryTimeoutMs);
     if (mode == QStringLiteral("updates"))
         return start(QStringLiteral("/usr/bin/flatpak"),
                      {QStringLiteral("remote-ls"), QStringLiteral("--user"), QStringLiteral("--updates"), QStringLiteral("--app"),

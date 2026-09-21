@@ -14,6 +14,7 @@ class UtilityBackend : public QObject
     Q_PROPERTY(QString output READ output NOTIFY stateChanged)
     Q_PROPERTY(QString operationId READ operationId NOTIFY stateChanged)
     Q_PROPERTY(QString resultState READ resultState NOTIFY stateChanged)
+    Q_PROPERTY(QVariantList rows READ rows NOTIFY stateChanged)
 
 public:
     explicit UtilityBackend(QObject *parent = nullptr);
@@ -23,6 +24,7 @@ public:
     const QString &output() const { return m_output; }
     const QString &operationId() const { return m_operationId; }
     const QString &resultState() const { return m_resultState; }
+    const QVariantList &rows() const { return m_rows; }
 
     Q_INVOKABLE bool runBookmark(const QString &id);
     Q_INVOKABLE bool previewRpmInstall(const QString &packageName);
@@ -50,4 +52,5 @@ private:
     QString m_output;
     QString m_operationId;
     QString m_resultState = QStringLiteral("idle");
+    QVariantList m_rows;
 };
