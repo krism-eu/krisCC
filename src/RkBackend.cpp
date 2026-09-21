@@ -239,7 +239,10 @@ void RkBackend::startPrivileged(const QStringList &args)
     QStringList adminArgs;
     if (args == QStringList{QStringLiteral("sync")}) {
         adminArgs << QStringLiteral("rk-sync");
-    } else if (args.size() == 2) {
+    } else if (args.size() == 2
+               && (args.at(0) == QStringLiteral("add")
+                   || args.at(0) == QStringLiteral("rm")
+                   || args.at(0) == QStringLiteral("forget"))) {
         const QString verb = args.at(0);
         adminArgs << (verb == QStringLiteral("add") ? QStringLiteral("rk-add")
                     : verb == QStringLiteral("rm") ? QStringLiteral("rk-rm")

@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QDBusConnection>
 #include <QDBusInterface>
+#include <QDebug>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -67,6 +68,8 @@ int main(int argc, char *argv[])
 
     // Never leave an unreachable hidden process when the session bus or activation object is unavailable.
     const bool startHidden = parser.isSet(backgroundOption) && singleInstanceReady;
+    if (parser.isSet(backgroundOption) && !singleInstanceReady)
+        qWarning("krisCC: --background requested without a usable session D-Bus single-instance service; showing the window instead.");
 
     qmlRegisterType<PackageSearch>("org.kriscc", 1, 0, "PackageSearch");
     qmlRegisterType<UtilityBackend>("org.kriscc", 1, 0, "UtilityBackend");
