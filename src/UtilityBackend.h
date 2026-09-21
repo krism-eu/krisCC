@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QString>
+#include <QVariantList>
 
 class ProcessRunner;
 

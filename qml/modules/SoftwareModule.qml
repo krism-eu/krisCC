@@ -386,13 +386,14 @@ Kirigami.Page {
             }
 
             Controls.ScrollView {
+                id: repositoryScroll
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
                 contentWidth: availableWidth
 
                 ColumnLayout {
-                    width: parent.availableWidth
+                    width: repositoryScroll.availableWidth
                     spacing: Kirigami.Units.smallSpacing
                     Controls.Label {
                         Layout.fillWidth: true
