@@ -38,6 +38,7 @@ public:
     Q_INVOKABLE void loadInstalled(const QString &filter = QString());
     Q_INVOKABLE void loadUpgrades();
     Q_INVOKABLE void loadRecent();
+    Q_INVOKABLE void setLocalFilter(const QString &text);
     bool searching() const { return m_searching; }
     int count() const { return m_results.size(); }
     bool truncated() const { return m_truncated; }
@@ -70,19 +71,17 @@ private:
     void startListQuery(const QString &filter, bool installedEntries);
     void stopActiveProcess();
     void refreshPersistentSet();
-    bool installedCacheCurrent() const;
-    QString rpmDatabasePath() const;
+    void applyLocalFilter();
     static QString sanitizeTerm(const QString &term);
 
     QList<Entry> m_results;
+    QList<Entry> m_sourceResults;
     QSet<QString> m_owned;
     QSet<QString> m_installed;
     QSet<QString> m_persistent;
     QPointer<QProcess> m_process;
-    QDateTime m_installedCacheMtime;
-    QString m_installedCacheDbPath;
-    bool m_installedCacheValid = false;
     QString m_installedFilter = QStringLiteral("all");
+    QString m_localFilter;
     bool m_searching = false;
     bool m_truncated = false;
     quint64 m_generation = 0;

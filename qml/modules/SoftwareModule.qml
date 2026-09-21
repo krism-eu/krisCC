@@ -4,7 +4,7 @@ import QtQuick.Controls as Controls
 import org.kde.kirigami as Kirigami
 import org.kriscc
 
-Kirigami.ScrollablePage {
+Kirigami.Page {
     id: root
     padding: UiMetrics.pageMargin
     title: qsTr("Software RPM")
@@ -122,7 +122,7 @@ Kirigami.ScrollablePage {
     }
 
     ColumnLayout {
-        width: parent.width
+        anchors.fill: parent
         spacing: Kirigami.Units.largeSpacing
 
         Controls.TabBar {
@@ -145,9 +145,11 @@ Kirigami.ScrollablePage {
 
         StackLayout {
             Layout.fillWidth: true
+            Layout.fillHeight: true
             currentIndex: tabs.currentIndex
 
             ColumnLayout {
+                Layout.fillHeight: true
                 spacing: Kirigami.Units.smallSpacing
                 Controls.TextField {
                     id: searchField
@@ -169,9 +171,8 @@ Kirigami.ScrollablePage {
 
                 ListView {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Math.min(contentHeight, Kirigami.Units.gridUnit * 24)
-                    Layout.minimumHeight: Math.min(contentHeight, Kirigami.Units.gridUnit * 8)
-                    interactive: contentHeight > height
+                    Layout.fillHeight: true
+                    interactive: true
                     model: searchModel
                     clip: true
                     spacing: Kirigami.Units.smallSpacing
@@ -256,6 +257,7 @@ Kirigami.ScrollablePage {
             }
 
             ColumnLayout {
+                Layout.fillHeight: true
                 RowLayout {
                     Layout.fillWidth: true
                     Controls.Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: qsTr("Pacchetti presenti nel sistema, filtrabili per origine. “Layer non richiesti” include dipendenze del layer RPM non presenti nella lista delle richieste esplicite.") }
@@ -286,6 +288,13 @@ Kirigami.ScrollablePage {
                     }
                     Item { Layout.fillWidth: true }
                 }
+                Controls.TextField {
+                    id: installedTextFilter
+                    Layout.fillWidth: true
+                    placeholderText: qsTr("Filtra localmente per nome, versione, architettura o repository…")
+                    selectByMouse: true
+                    onTextChanged: installedModel.setLocalFilter(text)
+                }
                 Controls.BusyIndicator { visible: installedModel.searching; running: visible; Layout.alignment: Qt.AlignHCenter }
                 Kirigami.InlineMessage {
                     Layout.fillWidth: true
@@ -296,9 +305,8 @@ Kirigami.ScrollablePage {
                 }
                 ListView {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Math.min(contentHeight, Kirigami.Units.gridUnit * 24)
-                    Layout.minimumHeight: Math.min(contentHeight, Kirigami.Units.gridUnit * 8)
-                    interactive: contentHeight > height
+                    Layout.fillHeight: true
+                    interactive: true
                     model: installedModel
                     clip: true
                     spacing: Kirigami.Units.smallSpacing
@@ -306,6 +314,7 @@ Kirigami.ScrollablePage {
                         width: ListView.view.width
                         contentItem: RowLayout {
                             ColumnLayout {
+                Layout.fillHeight: true
                                 Layout.fillWidth: true
                                 Controls.Label { Layout.fillWidth: true; font.bold: false; text: model.name + (model.arch ? "." + model.arch : "") }
                                 Controls.Label { Layout.fillWidth: true; opacity: UiMetrics.secondaryOpacity; text: (model.version || "") + (model.repository ? " · " + model.repository : ""); elide: Text.ElideRight }
@@ -349,9 +358,8 @@ Kirigami.ScrollablePage {
                 Controls.BusyIndicator { visible: upgradesModel.searching; running: visible; Layout.alignment: Qt.AlignHCenter }
                 ListView {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: Math.min(contentHeight, Kirigami.Units.gridUnit * 24)
-                    Layout.minimumHeight: Math.min(contentHeight, Kirigami.Units.gridUnit * 8)
-                    interactive: contentHeight > height
+                    Layout.fillHeight: true
+                    interactive: true
                     model: upgradesModel
                     clip: true
                     spacing: Kirigami.Units.smallSpacing
@@ -377,67 +385,76 @@ Kirigami.ScrollablePage {
                 }
             }
 
-            ColumnLayout {
-                spacing: Kirigami.Units.smallSpacing
-                Controls.Label {
-                    Layout.fillWidth: true
-                    wrapMode: Text.WordWrap
-                    opacity: UiMetrics.secondaryOpacity
-                    text: qsTr("Repository DNF configurati nel sistema. Puoi aggiungere un file .repo remoto via HTTPS e abilitare o disabilitare repository esistenti. rk usa solo repository abilitati e verifica le firme RPM prima di ogni transazione.")
-                }
-                RowLayout {
-                    Layout.fillWidth: true
-                    Controls.Button {
-                        text: qsTr("Aggiungi repository")
-                        icon.name: "list-add"
-                        enabled: !SoftwareBackend.busy && SoftwareBackend.canModifyRepositories
-                        onClicked: addRepoDialog.open()
-                    }
-                    Item { Layout.fillWidth: true }
-                    Controls.Button { text: qsTr("Aggiorna"); icon.name: "view-refresh"; onClicked: SoftwareBackend.refreshRepositories() }
-                }
-                Controls.BusyIndicator { visible: SoftwareBackend.busy || SoftwareBackend.operationRunning; running: visible; Layout.alignment: Qt.AlignHCenter }
-                Kirigami.InlineMessage { Layout.fillWidth: true; visible: SoftwareBackend.errorText.length > 0; type: Kirigami.MessageType.Error; text: SoftwareBackend.errorText }
-                Kirigami.InlineMessage { Layout.fillWidth: true; visible: root.repoValidationError.length > 0; type: Kirigami.MessageType.Error; text: root.repoValidationError }
+            Controls.ScrollView {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                contentWidth: availableWidth
 
-                Repeater {
-                    model: SoftwareBackend.repositories
-                    delegate: Kirigami.AbstractCard {
-                        required property var modelData
+                ColumnLayout {
+                    width: parent.availableWidth
+                    spacing: Kirigami.Units.smallSpacing
+                    Controls.Label {
                         Layout.fillWidth: true
-                        contentItem: RowLayout {
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                Controls.Label { font.bold: false; text: modelData.name }
-                                Controls.Label { text: modelData.id; opacity: UiMetrics.secondaryOpacity }
-                            }
-                            Controls.Label {
-                                Layout.preferredWidth: 110
-                                horizontalAlignment: Text.AlignHCenter
-                                text: modelData.enabled ? qsTr("attivo") : qsTr("inattivo")
-                                font.bold: false
-                                opacity: modelData.enabled ? 1.0 : 0.68
-                            }
-                            Controls.Button {
-                                Layout.preferredWidth: 120
-                                enabled: SoftwareBackend.canModifyRepositories
-                                text: modelData.enabled ? qsTr("Disattiva") : qsTr("Attiva")
-                                icon.name: modelData.enabled ? "media-playback-stop" : "media-playback-start"
-                                onClicked: {
-                                    if (modelData.enabled) {
-                                        root.requestAction(
-                                            "repo-disable", modelData.id,
-                                            qsTr("Disattivare %1?").arg(modelData.id),
-                                            qsTr("I pacchetti di questo repository non saranno più disponibili per ricerca e transazioni rk finché non verrà riattivato.")
-                                        )
-                                    } else {
-                                        root.operationDomain = "repo"
-                                        SoftwareBackend.enableRepository(modelData.id)
+                        wrapMode: Text.WordWrap
+                        opacity: UiMetrics.secondaryOpacity
+                        text: qsTr("Repository DNF configurati nel sistema. Puoi aggiungere un file .repo remoto via HTTPS e abilitare o disabilitare repository esistenti. rk usa solo repository abilitati e verifica le firme RPM prima di ogni transazione.")
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Controls.Button {
+                            text: qsTr("Aggiungi repository")
+                            icon.name: "list-add"
+                            enabled: !SoftwareBackend.busy && SoftwareBackend.canModifyRepositories
+                            onClicked: addRepoDialog.open()
+                        }
+                        Item { Layout.fillWidth: true }
+                        Controls.Button { text: qsTr("Aggiorna"); icon.name: "view-refresh"; onClicked: SoftwareBackend.refreshRepositories() }
+                    }
+                    Controls.BusyIndicator { visible: SoftwareBackend.busy || SoftwareBackend.operationRunning; running: visible; Layout.alignment: Qt.AlignHCenter }
+                    Kirigami.InlineMessage { Layout.fillWidth: true; visible: SoftwareBackend.errorText.length > 0; type: Kirigami.MessageType.Error; text: SoftwareBackend.errorText }
+                    Kirigami.InlineMessage { Layout.fillWidth: true; visible: root.repoValidationError.length > 0; type: Kirigami.MessageType.Error; text: root.repoValidationError }
+    
+                    Repeater {
+                        model: SoftwareBackend.repositories
+                        delegate: Kirigami.AbstractCard {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            contentItem: RowLayout {
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    Controls.Label { font.bold: false; text: modelData.name }
+                                    Controls.Label { text: modelData.id; opacity: UiMetrics.secondaryOpacity }
+                                }
+                                Controls.Label {
+                                    Layout.preferredWidth: 110
+                                    horizontalAlignment: Text.AlignHCenter
+                                    text: modelData.enabled ? qsTr("attivo") : qsTr("inattivo")
+                                    font.bold: false
+                                    opacity: modelData.enabled ? 1.0 : 0.68
+                                }
+                                Controls.Button {
+                                    Layout.preferredWidth: 120
+                                    enabled: SoftwareBackend.canModifyRepositories
+                                    text: modelData.enabled ? qsTr("Disattiva") : qsTr("Attiva")
+                                    icon.name: modelData.enabled ? "media-playback-stop" : "media-playback-start"
+                                    onClicked: {
+                                        if (modelData.enabled) {
+                                            root.requestAction(
+                                                "repo-disable", modelData.id,
+                                                qsTr("Disattivare %1?").arg(modelData.id),
+                                                qsTr("I pacchetti di questo repository non saranno più disponibili per ricerca e transazioni rk finché non verrà riattivato.")
+                                            )
+                                        } else {
+                                            root.operationDomain = "repo"
+                                            SoftwareBackend.enableRepository(modelData.id)
+                                        }
                                     }
                                 }
                             }
                         }
                     }
+    
                 }
             }
         }

@@ -4,7 +4,7 @@ import QtQuick.Controls as Controls
 import org.kde.kirigami as Kirigami
 import org.kriscc
 
-Kirigami.ScrollablePage {
+Kirigami.Page {
     id: root
     padding: UiMetrics.pageMargin
     title: qsTr("Flatpak")
@@ -99,7 +99,7 @@ Kirigami.ScrollablePage {
     }
 
     ColumnLayout {
-        width: parent.width
+        anchors.fill: parent
         spacing: Kirigami.Units.largeSpacing
 
         Controls.TabBar {
@@ -218,9 +218,8 @@ Kirigami.ScrollablePage {
 
         ListView {
             Layout.fillWidth: true
-            Layout.preferredHeight: Math.min(contentHeight, Kirigami.Units.gridUnit * 24)
-            Layout.minimumHeight: Math.min(contentHeight, Kirigami.Units.gridUnit * 8)
-            interactive: contentHeight > height
+            Layout.fillHeight: true
+            interactive: true
             clip: true
             spacing: Kirigami.Units.smallSpacing
             model: root.mode === "search" && root.lastQuery.length < 2 ? [] : utilityBackend.rows

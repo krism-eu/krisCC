@@ -83,10 +83,7 @@ void PackageSearch::search(const QString &term)
         emit truncatedChanged();
     }
     setSearching(true);
-    if (installedCacheCurrent())
-        startRepoQuery(sanitized);
-    else
-        startInstalledQuery(sanitized);
+    startInstalledQuery(sanitized);
 }
 
 void PackageSearch::loadInstalled(const QString &filter)
@@ -144,12 +141,6 @@ void PackageSearch::startInstalledQuery(const QString &term)
                     m_installed.insert(name);
             }
 
-            m_installedCacheDbPath = rpmDatabasePath();
-            const QFileInfo dbInfo(m_installedCacheDbPath);
-            m_installedCacheMtime = dbInfo.exists() ? dbInfo.lastModified() : QDateTime();
-            m_installedCacheValid = true;
-        } else {
-            m_installedCacheValid = false;
         }
 
         m_process = nullptr;
@@ -166,7 +157,6 @@ void PackageSearch::startInstalledQuery(const QString &term)
             return;
 
         m_installed.clear();
-        m_installedCacheValid = false;
         m_process = nullptr;
         process->deleteLater();
         emit searchError(tr("Impossibile avviare rpm per leggere i pacchetti installati."));
@@ -361,10 +351,15 @@ void PackageSearch::startListQuery(const QString &filter, bool installedEntries)
             entries.append(entry);
         }
 
-        beginResetModel();
-        m_results = entries;
-        endResetModel();
-        emit countChanged();
+        if (installedEntries) {
+            m_sourceResults = entries;
+            applyLocalFilter();
+        } else {
+            beginResetModel();
+            m_results = entries;
+            endResetModel();
+            emit countChanged();
+        }
         setSearching(false);
         emit searchFinished();
     });
@@ -403,6 +398,7 @@ void PackageSearch::clearResults()
         return;
     beginResetModel();
     m_results.clear();
+    m_sourceResults.clear();
     endResetModel();
     emit countChanged();
 }
@@ -454,29 +450,36 @@ void PackageSearch::refreshPersistentSet()
     }
 }
 
-bool PackageSearch::installedCacheCurrent() const
+void PackageSearch::setLocalFilter(const QString &text)
 {
-    if (!m_installedCacheValid)
-        return false;
-    const QString dbPath = rpmDatabasePath();
-    if (dbPath.isEmpty() || dbPath != m_installedCacheDbPath)
-        return false;
-    const QFileInfo info(dbPath);
-    return info.exists() && info.lastModified() == m_installedCacheMtime;
+    const QString next = text.trimmed();
+    if (m_localFilter == next)
+        return;
+    m_localFilter = next;
+    applyLocalFilter();
 }
 
-QString PackageSearch::rpmDatabasePath() const
+void PackageSearch::applyLocalFilter()
 {
-    static const QStringList candidates = {
-        QStringLiteral("/usr/share/rpm/rpmdb.sqlite"),
-        QStringLiteral("/usr/lib/sysimage/rpm/rpmdb.sqlite"),
-        QStringLiteral("/var/lib/rpm/rpmdb.sqlite")
-    };
-    for (const QString &path : candidates) {
-        if (QFileInfo::exists(path))
-            return path;
+    QList<Entry> filtered;
+    if (m_localFilter.isEmpty()) {
+        filtered = m_sourceResults;
+    } else {
+        for (const Entry &entry : m_sourceResults) {
+            const bool matches =
+                entry.name.contains(m_localFilter, Qt::CaseInsensitive)
+                || entry.version.contains(m_localFilter, Qt::CaseInsensitive)
+                || entry.repository.contains(m_localFilter, Qt::CaseInsensitive)
+                || entry.arch.contains(m_localFilter, Qt::CaseInsensitive);
+            if (matches)
+                filtered.append(entry);
+        }
     }
-    return {};
+
+    beginResetModel();
+    m_results = filtered;
+    endResetModel();
+    emit countChanged();
 }
 
 QString PackageSearch::sanitizeTerm(const QString &term)

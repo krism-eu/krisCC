@@ -102,6 +102,12 @@ require("Layout.preferredHeight: contentHeight" not in software_qml,
         "Software list virtualization regressed")
 require("Layout.preferredHeight: contentHeight" not in flatpak_qml,
         "Flatpak list virtualization regressed")
+require("Kirigami.ScrollablePage" not in software_qml
+        and "Kirigami.ScrollablePage" not in flatpak_qml,
+        "Software/Flatpak must have a single scrolling owner")
+require("Layout.fillHeight: true" in software_qml
+        and "Layout.fillHeight: true" in flatpak_qml,
+        "Software/Flatpak list viewport must fill available height")
 require("Novità repository" not in software_qml,
         "removed repository-news tab returned")
 require('text: qsTr("Dettagli tecnici")' not in system_qml,
@@ -110,8 +116,8 @@ require("entries.size() >= 500" not in package_cpp,
         "installed RPM inventory is silently capped")
 require("entries.size() >= 100" in package_cpp and "m_truncated" in package_cpp,
         "RPM live-search result cap is not explicit")
-require('QStringLiteral("/usr/share/rpm/rpmdb.sqlite")' in package_cpp,
-        "Fedora 44 RPM DB cache path is missing")
+require("rpmdb.sqlite" not in package_cpp,
+        "PackageSearch must not hardcode an RPM database path")
 require('QStringLiteral("firewalld.service")' in system_cpp,
         "Dashboard firewall state is not sourced from firewalld")
 require("topMemoryProcesses" in read("src/SystemBackend.h"),
