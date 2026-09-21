@@ -16,6 +16,8 @@ Kirigami.ScrollablePage {
     property string restorePath: ""
     property string restoreName: ""
     property string restoreKind: ""
+    property string deletePath: ""
+    property string deleteName: ""
 
     function humanSize(bytes) {
         if (!bytes || bytes <= 0) return "0 B"
@@ -52,7 +54,12 @@ Kirigami.ScrollablePage {
         width: parent.width
         spacing: Kirigami.Units.largeSpacing
 
-        PageIntro { title: root.title; subtitle: qsTr("Archivi locali tar.gz in ~/krisCC Backups. Configurazione e home restano dati utente e non modificano il deployment BootC.") }
+        Controls.Label {
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            opacity: UiMetrics.secondaryOpacity
+            text: qsTr("Archivi locali tar.gz in ~/krisCC Backups. Configurazione e home restano dati utente e non modificano il deployment BootC.")
+        }
 
         Kirigami.AbstractCard {
             Layout.fillWidth: true
@@ -110,7 +117,7 @@ Kirigami.ScrollablePage {
                                 }
                                 Controls.Label {
                                     Layout.fillWidth: true
-                                    font.bold: modelData.included
+                                    font.bold: false
                                     text: (modelData.included ? qsTr("Incluso: ") : qsTr("Escluso: ")) + modelData.path
                                 }
                                 Controls.Label {
@@ -206,6 +213,16 @@ Kirigami.ScrollablePage {
                                     root.restoreName = modelData.name
                                     root.restoreKind = modelData.kind
                                     restoreDialog.open()
+                                }
+                            }
+                            Controls.Button {
+                                text: qsTr("Elimina")
+                                icon.name: "edit-delete"
+                                enabled: !SystemBackend.backupBusy
+                                onClicked: {
+                                    root.deletePath = modelData.path
+                                    root.deleteName = modelData.name
+                                    deleteDialog.open()
                                 }
                             }
                         }
@@ -394,6 +411,23 @@ Kirigami.ScrollablePage {
             text: qsTr("La home può essere grande e contenere dati sensibili. Cache, cestino, runtime/app Flatpak (~/.local/share/flatpak), storage Podman inclusi volumi (~/.local/share/containers) e backup precedenti vengono esclusi. I dati personali delle app Flatpak in ~/.var/app restano inclusi.")
         }
         onAccepted: SystemBackend.createSnapshot("home")
+    }
+
+    Controls.Dialog {
+        id: deleteDialog
+        modal: true
+        parent: Controls.Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30,
+                        parent ? parent.width - Kirigami.Units.largeSpacing * 2
+                               : Kirigami.Units.gridUnit * 30)
+        title: qsTr("Eliminare %1?").arg(root.deleteName)
+        standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
+        contentItem: Controls.Label {
+            wrapMode: Text.WordWrap
+            text: qsTr("Elimina definitivamente questo archivio di backup.")
+        }
+        onAccepted: SystemBackend.removeSnapshot(root.deletePath)
     }
 
     Controls.Dialog {
