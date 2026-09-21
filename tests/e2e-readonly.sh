@@ -15,7 +15,8 @@ if grep -RniE '/usr/bin/(bootc|dnf5|efibootmgr|grub2-reboot)|PolkitHelper' qml; 
   exit 1
 fi
 
-grep -Fq 'setStandardInputFile(QProcess::nullDevice())' src/CustomActionsBackend.cpp
+grep -Fq 'ProcessRunner' src/CustomActionsBackend.cpp
+grep -Fq 'setStandardInputFile(QProcess::nullDevice())' src/ProcessRunner.cpp
 grep -Fq 'setStandardInputFile(QProcess::nullDevice())' src/AdminHelper.cpp
 grep -Fq 'AdminPolicy::resolve' src/AdminHelper.cpp
 grep -Fq 'AdminPolicy::resolve' src/PolkitHelper.cpp
