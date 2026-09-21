@@ -11,7 +11,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 include(GNUInstallDirs)
 
-find_package(Qt6 6.7 REQUIRED COMPONENTS Core Gui Qml Quick DBus)
+find_package(Qt6 6.7 REQUIRED COMPONENTS Core Gui Qml Quick DBus Test)
 find_package(KF6Kirigami REQUIRED)
 qt_standard_project_setup(REQUIRES 6.7)
 
@@ -28,6 +28,7 @@ qt_add_executable(krisCC
     src/UtilityBackend.cpp src/UtilityBackend.h
     src/InstanceController.cpp src/InstanceController.h
     src/OperationLog.cpp src/OperationLog.h
+    src/Validators.cpp src/Validators.h
 )
 
 set_source_files_properties(qml/components/UiMetrics.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -68,9 +69,18 @@ target_compile_definitions(krisCC PRIVATE KRISCC_VERSION="${PROJECT_VERSION}-${K
 
 add_executable(kriscc-admin
     src/AdminHelper.cpp
+    src/Validators.cpp src/Validators.h
 )
 set_target_properties(kriscc-admin PROPERTIES OUTPUT_NAME admin)
 target_link_libraries(kriscc-admin PRIVATE Qt6::Core)
+
+enable_testing()
+add_executable(kriscc-test-validators
+    tests/test_validators.cpp
+    src/Validators.cpp src/Validators.h
+)
+target_link_libraries(kriscc-test-validators PRIVATE Qt6::Core Qt6::Test)
+add_test(NAME validators COMMAND kriscc-test-validators)
 
 add_executable(kriscc-maintenance
     src/MaintenanceHelper.cpp
