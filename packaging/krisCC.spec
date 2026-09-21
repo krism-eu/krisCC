@@ -1,6 +1,6 @@
 Name:           krisCC
 Version:        0.7.0
-Release:        6%{?dist}
+Release:        7%{?dist}
 Summary:        krisCC personal control center for KrisOS and Fedora bootc
 License:        MIT
 URL:            https://github.com/krism-eu/krisCC
@@ -53,6 +53,11 @@ Settings.
 %{_datadir}/icons/hicolor/scalable/apps/krisCC.svg
 
 %changelog
+* Mon Sep 21 2026 krism-eu - 0.7.0-7
+- Consolidate confirmed structural fixes and refreshed KrisOS control-center UI
+- Make dashboard state refreshable and reduce RPM/Flatpak list memory retention
+- Harden command execution, information, history, Podman and backup workflows
+
 * Sun Sep 20 2026 krism-eu - 0.7.0-6
 - Fix resource sampling and load pages on demand
 - Unify native cards, output panels and responsive tools
