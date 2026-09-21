@@ -1,6 +1,6 @@
 Name:           krisCC
 Version:        0.7.1
-Release:        4%{?dist}
+Release:        5%{?dist}
 Summary:        krisCC personal control center for KrisOS and Fedora bootc
 License:        MIT
 URL:            https://github.com/krism-eu/krisCC
@@ -22,6 +22,7 @@ Requires:       dnf5
 Requires:       dnf5-plugins
 Requires:       bootc
 Requires:       tar
+Requires:       bash
 
 %description
 krisCC is a compact personal Kirigami control center for KrisOS and Fedora bootc
@@ -53,6 +54,13 @@ Settings.
 %{_datadir}/icons/hicolor/scalable/apps/krisCC.svg
 
 %changelog
+* Mon Sep 21 2026 krism-eu - 0.7.1-5
+- Make downloaded BootC apply-and-reboot match the UI contract
+- Normalize sidebar page indices and fail closed on unexpected rk verbs
+- Reduce top-process sampling cost and harden DNF summary parsing
+- Fix overlay-relative dialog sizing, background diagnostics and bash dependency
+- Verify Fedora GNU tar traversal behavior in CI
+
 * Mon Sep 21 2026 krism-eu - 0.7.1-4
 - Keep Flatpak and Podman machine-readable stdout isolated from diagnostic stderr
 - Add regression coverage for structured stdout accompanied by stderr warnings
