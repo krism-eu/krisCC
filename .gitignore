@@ -5,3 +5,7 @@ CMakeFiles/
 *.user
 *.autosave
 compile_commands.json
+stage/
+artifacts/
+audit-build/
+*.rpm
