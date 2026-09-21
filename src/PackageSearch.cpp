@@ -80,6 +80,10 @@ void PackageSearch::search(const QString &term)
         return;
     }
 
+    if (m_truncated) {
+        m_truncated = false;
+        emit truncatedChanged();
+    }
     setSearching(true);
     if (installedCacheCurrent())
         startRepoQuery(sanitized);
@@ -220,6 +224,7 @@ void PackageSearch::startRepoQuery(const QString &term)
         QList<Entry> entries;
         QSet<QString> seen;
         bool contractInvalid = false;
+        bool truncated = false;
         const auto lines = QString::fromUtf8(stdoutData).split('\n', Qt::SkipEmptyParts);
         for (const QString &line : lines) {
             const QStringList parts = line.split(QLatin1Char('\t'));
@@ -255,9 +260,11 @@ void PackageSearch::startRepoQuery(const QString &term)
             entry.installed = m_installed.contains(name);
             entry.owned = m_owned.contains(name);
             entry.persistent = m_persistent.contains(name);
-            entries.append(entry);
-            if (entries.size() >= 200)
+            if (entries.size() >= 100) {
+                truncated = true;
                 break;
+            }
+            entries.append(entry);
         }
 
         if (contractInvalid) {
@@ -271,6 +278,10 @@ void PackageSearch::startRepoQuery(const QString &term)
         beginResetModel();
         m_results = entries;
         endResetModel();
+        if (m_truncated != truncated) {
+            m_truncated = truncated;
+            emit truncatedChanged();
+        }
         emit countChanged();
         setSearching(false);
         emit searchFinished();
@@ -407,10 +418,8 @@ void PackageSearch::startListQuery(const QString &filter, bool installedEntries)
                 }
 
                 entries.append(entry);
-                if (entries.size() >= 500)
-                    break;
             }
-            if (contractInvalid || entries.size() >= 500)
+            if (contractInvalid)
                 break;
         }
 
@@ -528,6 +537,7 @@ bool PackageSearch::installedCacheCurrent() const
 QString PackageSearch::rpmDatabasePath() const
 {
     static const QStringList candidates = {
+        QStringLiteral("/usr/share/rpm/rpmdb.sqlite"),
         QStringLiteral("/usr/lib/sysimage/rpm/rpmdb.sqlite"),
         QStringLiteral("/var/lib/rpm/rpmdb.sqlite")
     };

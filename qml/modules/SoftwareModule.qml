@@ -98,8 +98,7 @@ Kirigami.ScrollablePage {
         root.listError = ""
         if (tabs.currentIndex === 1) installedModel.loadInstalled(root.installFilter)
         else if (tabs.currentIndex === 2) upgradesModel.loadUpgrades()
-        else if (tabs.currentIndex === 3) recentModel.loadRecent()
-        else if (tabs.currentIndex === 4) SoftwareBackend.refreshRepositories()
+        else if (tabs.currentIndex === 3) SoftwareBackend.refreshRepositories()
     }
 
     Component.onCompleted: SoftwareBackend.refreshRepositories()
@@ -107,7 +106,6 @@ Kirigami.ScrollablePage {
     PackageSearch { id: searchModel; onSearchError: function(message) { root.searchError = message } }
     PackageSearch { id: installedModel; onSearchError: function(message) { root.listError = message } }
     PackageSearch { id: upgradesModel; onSearchError: function(message) { root.listError = message } }
-    PackageSearch { id: recentModel; onSearchError: function(message) { root.listError = message } }
 
     Connections {
         target: RkBackend
@@ -127,12 +125,6 @@ Kirigami.ScrollablePage {
         width: parent.width
         spacing: Kirigami.Units.largeSpacing
 
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Kirigami.Units.smallSpacing
-            PageIntro { title: root.title; subtitle: qsTr("Base immutabile, pacchetti persistenti gestiti da rk e pacchetti locali vengono distinti chiaramente. La ricerca usa i repository DNF abilitati; l'installazione persistente resta validata dalla policy rk.") }
-        }
-
         Controls.TabBar {
             id: tabs
             Layout.fillWidth: true
@@ -141,7 +133,6 @@ Kirigami.ScrollablePage {
             Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: true; text: qsTr("Cerca") }
             Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: true; text: qsTr("Installati") }
             Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: true; text: qsTr("Aggiornabili") }
-            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: true; text: qsTr("Novità repository") }
             Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: true; text: qsTr("Repository") }
         }
 
@@ -178,8 +169,9 @@ Kirigami.ScrollablePage {
 
                 ListView {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: contentHeight
-                    interactive: false
+                    Layout.preferredHeight: Math.min(contentHeight, Kirigami.Units.gridUnit * 24)
+                    Layout.minimumHeight: Math.min(contentHeight, Kirigami.Units.gridUnit * 8)
+                    interactive: contentHeight > height
                     model: searchModel
                     clip: true
                     spacing: Kirigami.Units.smallSpacing
@@ -251,6 +243,12 @@ Kirigami.ScrollablePage {
                 }
                 Kirigami.InlineMessage {
                     Layout.fillWidth: true
+                    visible: searchModel.truncated && !searchModel.searching
+                    type: Kirigami.MessageType.Information
+                    text: qsTr("Mostrati i primi 100 risultati. Restringi la ricerca per vedere risultati più specifici.")
+                }
+                Kirigami.InlineMessage {
+                    Layout.fillWidth: true
                     visible: searchField.text.trim().length >= 2 && !searchModel.searching && searchModel.count === 0
                     type: Kirigami.MessageType.Information
                     text: qsTr("Nessun risultato.")
@@ -260,7 +258,7 @@ Kirigami.ScrollablePage {
             ColumnLayout {
                 RowLayout {
                     Layout.fillWidth: true
-                    Controls.Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: qsTr("Pacchetti presenti nel sistema, filtrabili per provenienza.") }
+                    Controls.Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: qsTr("Pacchetti presenti nel sistema, filtrabili per origine. “Layer non richiesti” include dipendenze del layer RPM non presenti nella lista delle richieste esplicite.") }
                     Controls.Button { text: qsTr("Aggiorna"); icon.name: "view-refresh"; onClicked: installedModel.loadInstalled(root.installFilter) }
                 }
                 Controls.ButtonGroup { id: installFilterGroup }
@@ -282,7 +280,7 @@ Kirigami.ScrollablePage {
                         onClicked: { root.installFilter = "persistent"; installedModel.loadInstalled(root.installFilter) }
                     }
                     Controls.RadioButton {
-                        text: qsTr("Locali")
+                        text: qsTr("Layer non richiesti")
                         Controls.ButtonGroup.group: installFilterGroup
                         onClicked: { root.installFilter = "local"; installedModel.loadInstalled(root.installFilter) }
                     }
@@ -298,8 +296,9 @@ Kirigami.ScrollablePage {
                 }
                 ListView {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: contentHeight
-                    interactive: false
+                    Layout.preferredHeight: Math.min(contentHeight, Kirigami.Units.gridUnit * 24)
+                    Layout.minimumHeight: Math.min(contentHeight, Kirigami.Units.gridUnit * 8)
+                    interactive: contentHeight > height
                     model: installedModel
                     clip: true
                     spacing: Kirigami.Units.smallSpacing
@@ -350,8 +349,9 @@ Kirigami.ScrollablePage {
                 Controls.BusyIndicator { visible: upgradesModel.searching; running: visible; Layout.alignment: Qt.AlignHCenter }
                 ListView {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: contentHeight
-                    interactive: false
+                    Layout.preferredHeight: Math.min(contentHeight, Kirigami.Units.gridUnit * 24)
+                    Layout.minimumHeight: Math.min(contentHeight, Kirigami.Units.gridUnit * 8)
+                    interactive: contentHeight > height
                     model: upgradesModel
                     clip: true
                     spacing: Kirigami.Units.smallSpacing
@@ -374,41 +374,6 @@ Kirigami.ScrollablePage {
                     visible: !upgradesModel.searching && upgradesModel.count === 0
                     type: Kirigami.MessageType.Positive
                     text: qsTr("Nessun aggiornamento RPM disponibile nei repository abilitati.")
-                }
-            }
-
-            ColumnLayout {
-                RowLayout {
-                    Controls.Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: qsTr("Pacchetti cambiati di recente nei repository DNF abilitati. Non indica la cronologia delle installazioni locali.") }
-                    Controls.Button { text: qsTr("Aggiorna"); icon.name: "view-refresh"; onClicked: recentModel.loadRecent() }
-                }
-                Controls.BusyIndicator { visible: recentModel.searching; running: visible; Layout.alignment: Qt.AlignHCenter }
-                ListView {
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: contentHeight
-                    interactive: false
-                    model: recentModel
-                    clip: true
-                    spacing: Kirigami.Units.smallSpacing
-                    delegate: Kirigami.AbstractCard {
-                        width: ListView.view.width
-                        contentItem: RowLayout {
-                            Controls.Label { Layout.fillWidth: true; font.bold: false; text: model.name + (model.arch ? "." + model.arch : "") }
-                            Controls.Label { text: model.version || ""; opacity: UiMetrics.secondaryOpacity }
-                            Controls.Label { text: model.repository || ""; opacity: UiMetrics.secondaryOpacity }
-                            Controls.Button {
-                                text: qsTr("Dettagli")
-                                icon.name: "documentinfo"
-                                onClicked: root.showPackageDetails(model)
-                            }
-                        }
-                    }
-                }
-                Kirigami.InlineMessage {
-                    Layout.fillWidth: true
-                    visible: !recentModel.searching && recentModel.count === 0
-                    type: Kirigami.MessageType.Information
-                    text: qsTr("Nessuna novità repository disponibile.")
                 }
             }
 

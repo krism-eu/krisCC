@@ -2,8 +2,10 @@
 
 #include "OperationLog.h"
 #include "PolkitHelper.h"
+#include "Validators.h"
 
 #include <QClipboard>
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDBusInterface>
 #include <QDBusObjectPath>
@@ -35,6 +37,8 @@
 
 #include <sys/sysinfo.h>
 
+#include <algorithm>
+
 namespace {
 QString humanGiB(quint64 bytes)
 {
@@ -53,7 +57,8 @@ const QSet<QString> &allowedServices()
     static const QSet<QString> services = {
         QStringLiteral("NetworkManager.service"),
         QStringLiteral("cups.service"),
-        QStringLiteral("bluetooth.service")
+        QStringLiteral("bluetooth.service"),
+        QStringLiteral("firewalld.service")
     };
     return services;
 }
@@ -78,6 +83,7 @@ const QStringList &backupHomeExcludes()
         QStringLiteral(".local/share/Trash"),
         QStringLiteral(".local/share/flatpak"),
         QStringLiteral(".local/share/containers"),
+        QStringLiteral(".var/app/*/cache"),
         QStringLiteral("krisCC Backups"),
         QStringLiteral("KCC Backups"),
         QStringLiteral("K-ControlC Backups")
@@ -185,7 +191,11 @@ void SystemBackend::refreshUefiEntries()
             QVariantMap entry;
             const QString code = match.captured(1).toUpper();
             entry.insert(QStringLiteral("code"), code);
-            entry.insert(QStringLiteral("label"), code + QStringLiteral(" · ") + match.captured(2).trimmed());
+            QString description = match.captured(2).trimmed();
+            const qsizetype tab = description.indexOf(QLatin1Char('\t'));
+            if (tab >= 0)
+                description = description.left(tab).trimmed();
+            entry.insert(QStringLiteral("label"), code + QStringLiteral(" · ") + description);
             entries.append(entry);
         }
         m_uefiEntries = entries;
@@ -319,8 +329,7 @@ bool SystemBackend::selectNextUefi(const QString &value)
     if (!canSelectNextBoot())
         return false;
     const QString token = value.trimmed();
-    static const QRegularExpression pattern(QStringLiteral("^[0-9A-Fa-f]{4}$"));
-    if (!pattern.match(token).hasMatch())
+    if (!Validators::bootToken(token))
         return false;
 
     m_bootSelectionOwned = true;
@@ -338,12 +347,8 @@ bool SystemBackend::selectNextGrub(const QString &value)
     if (!canSelectNextBoot())
         return false;
     const QString entry = value.trimmed();
-    if (entry.isEmpty() || entry.size() > 256 || entry.startsWith(QLatin1Char('-')))
+    if (!Validators::grubEntry(entry))
         return false;
-    for (const QChar ch : entry) {
-        if (ch.isNull() || ch.unicode() < 0x20 || ch.unicode() == 0x7f)
-            return false;
-    }
 
     m_bootSelectionOwned = true;
     m_bootSelectionRunning = true;
@@ -423,6 +428,65 @@ QString SystemBackend::storageSummary() const
     return tr("%1 liberi su %2").arg(humanGiB(storage.bytesAvailable()), humanGiB(storage.bytesTotal()));
 }
 
+void SystemBackend::refreshDashboardState()
+{
+    emit storageSummaryChanged();
+    refreshServiceStates();
+    refreshTopMemoryProcesses();
+}
+
+void SystemBackend::refreshTopMemoryProcesses()
+{
+    struct ProcessMemory {
+        QString name;
+        qint64 rssKiB = 0;
+    };
+
+    QList<ProcessMemory> entries;
+    const QDir proc(QStringLiteral("/proc"));
+    const QStringList pids = proc.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    for (const QString &pid : pids) {
+        bool numeric = false;
+        pid.toLongLong(&numeric);
+        if (!numeric)
+            continue;
+
+        QFile status(proc.filePath(pid + QStringLiteral("/status")));
+        if (!status.open(QIODevice::ReadOnly | QIODevice::Text))
+            continue;
+
+        QString name;
+        qint64 rssKiB = 0;
+        while (!status.atEnd()) {
+            const QByteArray raw = status.readLine();
+            if (raw.startsWith("Name:"))
+                name = QString::fromUtf8(raw.mid(5)).trimmed();
+            else if (raw.startsWith("VmRSS:")) {
+                const QList<QByteArray> fields = raw.simplified().split(' ');
+                if (fields.size() >= 2)
+                    rssKiB = fields.at(1).toLongLong();
+            }
+        }
+        if (!name.isEmpty() && rssKiB > 0)
+            entries.append({name, rssKiB});
+    }
+
+    std::sort(entries.begin(), entries.end(), [](const ProcessMemory &a, const ProcessMemory &b) {
+        return a.rssKiB > b.rssKiB;
+    });
+
+    QVariantList result;
+    const int limit = std::min(5, entries.size());
+    for (int i = 0; i < limit; ++i) {
+        QVariantMap row;
+        row.insert(QStringLiteral("name"), entries.at(i).name);
+        row.insert(QStringLiteral("memoryMiB"), qRound64(double(entries.at(i).rssKiB) / 1024.0));
+        result.append(row);
+    }
+    m_topMemoryProcesses = result;
+    emit topMemoryProcessesChanged();
+}
+
 QString SystemBackend::desktopSession() const
 {
     const QString desktop = qEnvironmentVariable("XDG_CURRENT_DESKTOP", tr("Desktop sconosciuto"));
@@ -453,6 +517,7 @@ QString SystemBackend::quickSystemInfo() const
     QString text;
     QTextStream out(&text);
     out << tr("Informazioni rapide di sistema") << '\n';
+    out << tr("krisCC: ") << QCoreApplication::applicationVersion() << '\n';
     out << tr("Sistema operativo: ") << osName() << '\n';
     out << tr("Host: ") << hostName() << '\n';
     out << tr("Kernel: ") << kernelVersion() << '\n';
@@ -520,6 +585,15 @@ QString SystemBackend::flatpakIconPath(const QString &appId) const
         }
     }
     return {};
+}
+
+bool SystemBackend::launchFlatpak(const QString &appId) const
+{
+    const QString id = appId.trimmed();
+    const QString flatpak = resolveExecutable(QStringLiteral("flatpak"));
+    if (flatpak.isEmpty() || !Validators::flatpakId(id))
+        return false;
+    return QProcess::startDetached(flatpak, {QStringLiteral("run"), id});
 }
 
 QString SystemBackend::resolveExecutable(const QString &program) const
@@ -1052,6 +1126,7 @@ bool SystemBackend::createSnapshot(const QString &kind)
                 return;
             }
             m_backupPartialPath.clear();
+            QFile::setPermissions(output, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
             if (exitCode == 0) {
                 setBackupResult(tr("Snapshot creato correttamente."), output, QStringLiteral("success"));
                 OperationLog::append(QStringLiteral("Backup"), QStringLiteral("create"),
@@ -1108,6 +1183,22 @@ bool SystemBackend::cancelSnapshot()
         if (guarded && guarded->state() != QProcess::NotRunning)
             guarded->kill();
     });
+    return true;
+}
+
+bool SystemBackend::deleteSnapshot(const QString &path)
+{
+    if (m_backupBusy)
+        return false;
+    QString canonical;
+    if (!validateBackupPath(path, &canonical))
+        return false;
+    const QString name = QFileInfo(canonical).fileName();
+    if (!QFile::remove(canonical))
+        return false;
+    OperationLog::append(QStringLiteral("Backup"), QStringLiteral("delete"),
+                         QStringLiteral("success"), name);
+    setBackupResult(tr("Backup eliminato."), QString(), QStringLiteral("success"));
     return true;
 }
 

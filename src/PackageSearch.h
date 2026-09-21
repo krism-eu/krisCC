@@ -12,6 +12,7 @@ class PackageSearch : public QAbstractListModel
     Q_OBJECT
     Q_PROPERTY(bool searching READ searching NOTIFY searchingChanged)
     Q_PROPERTY(int count READ count NOTIFY countChanged)
+    Q_PROPERTY(bool truncated READ truncated NOTIFY truncatedChanged)
 
 public:
     enum Roles {
@@ -39,10 +40,12 @@ public:
     Q_INVOKABLE void loadRecent();
     bool searching() const { return m_searching; }
     int count() const { return m_results.size(); }
+    bool truncated() const { return m_truncated; }
 
 signals:
     void searchingChanged();
     void countChanged();
+    void truncatedChanged();
     void searchFinished();
     void searchError(const QString &message);
 
@@ -81,5 +84,6 @@ private:
     bool m_installedCacheValid = false;
     QString m_installedFilter = QStringLiteral("all");
     bool m_searching = false;
+    bool m_truncated = false;
     quint64 m_generation = 0;
 };

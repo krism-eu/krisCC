@@ -52,8 +52,6 @@ Kirigami.ScrollablePage {
         width: parent.width
         spacing: Kirigami.Units.largeSpacing
 
-        PageIntro { title: root.title; subtitle: qsTr("Archivi locali tar.gz in ~/krisCC Backups. Configurazione e home restano dati utente e non modificano il deployment BootC.") }
-
         Kirigami.AbstractCard {
             Layout.fillWidth: true
             contentItem: ColumnLayout {
@@ -110,7 +108,7 @@ Kirigami.ScrollablePage {
                                 }
                                 Controls.Label {
                                     Layout.fillWidth: true
-                                    font.bold: modelData.included
+                                    font.bold: false
                                     text: (modelData.included ? qsTr("Incluso: ") : qsTr("Escluso: ")) + modelData.path
                                 }
                                 Controls.Label {
@@ -208,6 +206,16 @@ Kirigami.ScrollablePage {
                                     restoreDialog.open()
                                 }
                             }
+                            Controls.Button {
+                                text: qsTr("Elimina")
+                                icon.name: "edit-delete"
+                                enabled: !SystemBackend.backupBusy
+                                onClicked: {
+                                    root.restorePath = modelData.path
+                                    root.restoreName = modelData.name
+                                    deleteBackupDialog.open()
+                                }
+                            }
                         }
                     }
                 }
@@ -272,7 +280,7 @@ Kirigami.ScrollablePage {
                     Kirigami.AbstractCard {
                         Layout.fillWidth: true
                         contentItem: ColumnLayout {
-                            Controls.Label { font.bold: false; text: qsTr("Needs sync") }
+                            Controls.Label { font.bold: false; text: qsTr("Da sincronizzare") }
                             Controls.Label {
                                 font.bold: false
                                 text: !RkBackend.statusValid ? qsTr("Non disponibile")
@@ -411,6 +419,24 @@ Kirigami.ScrollablePage {
                   : qsTr("Le configurazioni esistenti con lo stesso percorso possono essere sovrascritte. Il ripristino avviene come utente, senza modificare il deployment KrisOS.")
         }
         onAccepted: SystemBackend.restoreSnapshot(root.restorePath)
+    }
+
+    Controls.Dialog {
+        id: deleteBackupDialog
+        modal: true
+        parent: Controls.Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
+        title: qsTr("Eliminare %1?").arg(root.restoreName)
+        standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
+        contentItem: Controls.Label {
+            wrapMode: Text.WordWrap
+            text: qsTr("Elimina definitivamente questo archivio di backup locale.")
+        }
+        onAccepted: {
+            if (SystemBackend.deleteSnapshot(root.restorePath))
+                root.refreshBackups()
+        }
     }
 
     Controls.Dialog {

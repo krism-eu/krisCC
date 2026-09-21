@@ -120,6 +120,7 @@ Kirigami.ApplicationWindow {
                             hoverEnabled: true
                             leftPadding: Kirigami.Units.largeSpacing
                             rightPadding: Kirigami.Units.largeSpacing
+                            Accessible.name: modelData.label
                             onClicked: root.showIndex(modelData.section)
 
                             contentItem: RowLayout {
@@ -182,7 +183,7 @@ Kirigami.ApplicationWindow {
                         Layout.preferredHeight: 42
                         text: qsTr("Informazioni")
                         icon.name: "help-about"
-                        onClicked: root.showIndex(4)
+                        onClicked: informationDialog.open()
                     }
                 }
             }
@@ -227,7 +228,8 @@ Kirigami.ApplicationWindow {
                         ColumnLayout {
                             spacing: 1
                             Controls.Label {
-                                Layout.alignment: Qt.AlignRight
+                                Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                                horizontalAlignment: Text.AlignRight
                                 text: qsTr("v%1").arg(Qt.application.version)
                                 opacity: UiMetrics.secondaryOpacity
                             }
@@ -312,6 +314,36 @@ Kirigami.ApplicationWindow {
                         sourceComponent: Component { RecoveryModule { Layout.fillWidth: true; Layout.fillHeight: true } }
                     }
                 }
+            }
+        }
+    }
+
+    Controls.Dialog {
+        id: informationDialog
+        modal: true
+        parent: Controls.Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 34,
+                        parent ? parent.width - Kirigami.Units.largeSpacing * 2
+                               : Kirigami.Units.gridUnit * 34)
+        title: qsTr("Informazioni")
+        standardButtons: Controls.Dialog.Close
+        contentItem: ColumnLayout {
+            spacing: Kirigami.Units.smallSpacing
+            Controls.TextArea {
+                id: informationText
+                Layout.fillWidth: true
+                Layout.preferredHeight: Kirigami.Units.gridUnit * 15
+                readOnly: true
+                selectByMouse: true
+                wrapMode: Text.Wrap
+                text: informationDialog.visible ? SystemBackend.quickSystemInfo() : ""
+            }
+            Controls.Button {
+                Layout.alignment: Qt.AlignRight
+                text: qsTr("Copia")
+                icon.name: "edit-copy"
+                onClicked: SystemBackend.copyToClipboard(informationText.text)
             }
         }
     }

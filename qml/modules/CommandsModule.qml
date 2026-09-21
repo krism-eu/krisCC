@@ -75,8 +75,6 @@ Kirigami.ScrollablePage {
     ColumnLayout {
         width: parent.width
         spacing: Kirigami.Units.largeSpacing
-        PageIntro { title: root.title; subtitle: qsTr("Diagnostica e comandi personali eseguiti con i privilegi del tuo utente.") }
-
         Controls.TabBar {
             id: commandTabs
             Layout.fillWidth: true

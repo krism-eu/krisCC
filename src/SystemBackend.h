@@ -19,7 +19,7 @@ class SystemBackend : public QObject
     Q_PROPERTY(QString architecture READ architecture CONSTANT)
     Q_PROPERTY(QString hostName READ hostName CONSTANT)
     Q_PROPERTY(QString memorySummary READ memorySummary CONSTANT)
-    Q_PROPERTY(QString storageSummary READ storageSummary CONSTANT)
+    Q_PROPERTY(QString storageSummary READ storageSummary NOTIFY storageSummaryChanged)
     Q_PROPERTY(QString desktopSession READ desktopSession CONSTANT)
     Q_PROPERTY(QString selinuxState READ selinuxState CONSTANT)
     Q_PROPERTY(bool bootSelectionRunning READ bootSelectionRunning NOTIFY bootSelectionStateChanged)
@@ -37,6 +37,7 @@ class SystemBackend : public QObject
     Q_PROPERTY(qint64 memoryTotalMiB READ memoryTotalMiB NOTIFY resourcesChanged)
     Q_PROPERTY(double cpuTemperatureC READ cpuTemperatureC NOTIFY resourcesChanged)
     Q_PROPERTY(QVariantMap serviceStates READ serviceStates NOTIFY serviceStatesChanged)
+    Q_PROPERTY(QVariantList topMemoryProcesses READ topMemoryProcesses NOTIFY topMemoryProcessesChanged)
     Q_PROPERTY(bool backupBusy READ backupBusy NOTIFY backupBusyChanged)
     Q_PROPERTY(QString backupStatus READ backupStatus NOTIFY backupStatusChanged)
     Q_PROPERTY(QString backupPath READ backupPath NOTIFY backupStatusChanged)
@@ -69,6 +70,7 @@ public:
     qint64 memoryTotalMiB() const { return m_memoryTotalMiB; }
     double cpuTemperatureC() const { return m_cpuTemperatureC; }
     const QVariantMap &serviceStates() const { return m_serviceStates; }
+    const QVariantList &topMemoryProcesses() const { return m_topMemoryProcesses; }
 
     bool backupBusy() const { return m_backupBusy; }
     const QString &backupStatus() const { return m_backupStatus; }
@@ -78,6 +80,8 @@ public:
     Q_INVOKABLE QString quickSystemInfo() const;
     Q_INVOKABLE void copyToClipboard(const QString &text) const;
     Q_INVOKABLE QString flatpakIconPath(const QString &appId) const;
+    Q_INVOKABLE bool launchFlatpak(const QString &appId) const;
+    Q_INVOKABLE void refreshDashboardState();
     Q_INVOKABLE bool toolAvailable(const QString &toolId) const;
     Q_INVOKABLE bool launchTool(const QString &toolId) const;
     Q_INVOKABLE bool programAvailable(const QString &program) const;
@@ -96,6 +100,7 @@ public:
     Q_INVOKABLE QVariantList backups() const;
     Q_INVOKABLE bool verifySnapshot(const QString &path);
     Q_INVOKABLE bool restoreSnapshot(const QString &path);
+    Q_INVOKABLE bool deleteSnapshot(const QString &path);
     Q_INVOKABLE bool openBackupFolder() const;
     Q_INVOKABLE QVariantList backupPreview(const QString &kind) const;
 
@@ -112,6 +117,8 @@ signals:
     void bootEntriesChanged();
     void resourcesChanged();
     void serviceStatesChanged();
+    void storageSummaryChanged();
+    void topMemoryProcessesChanged();
 
 private:
     QString readOsName() const;
@@ -122,6 +129,7 @@ private:
     void setBackupResult(const QString &status, const QString &path = QString(),
                          const QString &state = QStringLiteral("idle"));
     void refreshResources();
+    void refreshTopMemoryProcesses();
     double readCpuTemperature() const;
 
     PolkitHelper *m_polkit = nullptr;
@@ -143,6 +151,7 @@ private:
     qint64 m_memoryTotalMiB = -1;
     double m_cpuTemperatureC = -1.0;
     QVariantMap m_serviceStates;
+    QVariantList m_topMemoryProcesses;
     quint64 m_serviceRefreshGeneration = 0;
     QPointer<QProcess> m_backupProcess;
     bool m_backupBusy = false;

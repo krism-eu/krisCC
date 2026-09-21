@@ -1,6 +1,7 @@
 #include "UtilityBackend.h"
 
 #include "OperationLog.h"
+#include "Validators.h"
 
 #include <QDebug>
 #include <QFileInfo>
@@ -27,6 +28,7 @@ bool shouldLogOperation(const QString &id)
         || id == QStringLiteral("podman.stop")
         || id == QStringLiteral("podman.restart")
         || id == QStringLiteral("podman.rename")
+        || id == QStringLiteral("podman.remove")
         || id == QStringLiteral("podman.image-remove");
 }
 }
@@ -38,14 +40,12 @@ UtilityBackend::UtilityBackend(QObject *parent)
 
 bool UtilityBackend::validPackageName(const QString &name) const
 {
-    static const QRegularExpression pattern(QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._+:-]{0,127}$"));
-    return pattern.match(name).hasMatch();
+    return Validators::packageName(name);
 }
 
 bool UtilityBackend::validContainerName(const QString &name) const
 {
-    static const QRegularExpression pattern(QStringLiteral("^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"));
-    return pattern.match(name).hasMatch();
+    return Validators::containerName(name);
 }
 
 void UtilityBackend::setImmediateError(const QString &title, const QString &operationId, const QString &message)
@@ -87,6 +87,7 @@ bool UtilityBackend::start(const QString &program, const QStringList &args, cons
     const QPointer<QProcess> guarded(process);
     m_process = process;
     process->setProcessChannelMode(QProcess::MergedChannels);
+    process->setStandardInputFile(QProcess::nullDevice());
 
     connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
             [this, guarded](int exitCode, QProcess::ExitStatus status) {
@@ -145,7 +146,7 @@ void UtilityBackend::finish(const QString &message, const QString &state)
     m_output = message;
     m_resultState = state;
     if (shouldLogOperation(completedOperation))
-        OperationLog::append(QStringLiteral("krisCC"), completedOperation, state);
+        OperationLog::append(QStringLiteral("krisCC"), completedOperation, state, m_title);
     emit stateChanged();
 }
 
@@ -344,6 +345,8 @@ bool UtilityBackend::runPodman(const QString &mode, const QString &container, co
         return start(QStringLiteral("/usr/bin/podman"), {QStringLiteral("stop"), name}, tr("Arresto container: %1").arg(name), QStringLiteral("podman.stop"), kPodmanActionTimeoutMs);
     if (mode == QStringLiteral("restart"))
         return start(QStringLiteral("/usr/bin/podman"), {QStringLiteral("restart"), name}, tr("Riavvio container: %1").arg(name), QStringLiteral("podman.restart"), kPodmanActionTimeoutMs);
+    if (mode == QStringLiteral("remove"))
+        return start(QStringLiteral("/usr/bin/podman"), {QStringLiteral("rm"), name}, tr("Elimina container: %1").arg(name), QStringLiteral("podman.remove"), kPodmanActionTimeoutMs);
     if (mode == QStringLiteral("rename") && validContainerName(value.trimmed()))
         return start(QStringLiteral("/usr/bin/podman"), {QStringLiteral("rename"), name, value.trimmed()}, tr("Rinomina container: %1").arg(name), QStringLiteral("podman.rename"), kPodmanActionTimeoutMs);
     if (mode == QStringLiteral("image-remove") && validPackageName(name))

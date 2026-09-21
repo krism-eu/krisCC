@@ -47,15 +47,19 @@ Kirigami.ScrollablePage {
         return value.length > 28 ? value.substring(0, 28) + "…" : value
     }
 
-    Component.onCompleted: {
+    function refreshPage() {
         root.historyEntries = SystemBackend.operationHistoryEntries()
         BootcBackend.refreshStatus()
+        BootcBackend.refreshPackages()
         if (SystemBackend.uefiBootAvailable)
             SystemBackend.refreshUefiEntries()
         if (SystemBackend.grubEntriesAvailable)
             SystemBackend.refreshGrubEntries()
         SystemBackend.refreshServiceStates()
     }
+
+    onVisibleChanged: if (visible) root.refreshPage()
+    Component.onCompleted: if (visible) root.refreshPage()
 
     Connections {
         target: BootcBackend
@@ -78,8 +82,6 @@ Kirigami.ScrollablePage {
     ColumnLayout {
         width: parent.width
         spacing: Kirigami.Units.largeSpacing
-
-        PageIntro { title: root.title; subtitle: qsTr("Aggiornamenti, salute, avvio e strumenti essenziali. Le normali preferenze desktop restano nelle Impostazioni di sistema Plasma.") }
 
         Controls.TabBar {
             id: sections
@@ -220,15 +222,6 @@ Kirigami.ScrollablePage {
                                 }
                             }
 
-                            Controls.CheckBox {
-                                id: bootTechnicalDetails
-                                text: qsTr("Dettagli tecnici")
-                            }
-                            OutputCard {
-                    visible: bootTechnicalDetails.checked
-                    embedded: true
-                    outputText: BootcBackend.statusText
-                }
                         }
                     }
 
