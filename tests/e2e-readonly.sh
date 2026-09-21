@@ -19,7 +19,10 @@ grep -Fq 'setStandardInputFile(QProcess::nullDevice())' src/CustomActionsBackend
 grep -Fq 'setStandardInputFile(QProcess::nullDevice())' src/AdminHelper.cpp
 grep -Fq 'AdminPolicy::resolve' src/AdminHelper.cpp
 grep -Fq 'AdminPolicy::resolve' src/PolkitHelper.cpp
-grep -Fq 'QStringLiteral("/usr/share/rpm/rpmdb.sqlite")' src/PackageSearch.cpp
+if grep -Fq 'rpmdb.sqlite' src/PackageSearch.cpp; then
+  echo "ERROR: PackageSearch hardcodes an RPM database path" >&2
+  exit 1
+fi
 
 if grep -Fq 'Layout.preferredHeight: contentHeight' qml/modules/SoftwareModule.qml; then
   echo "ERROR: Software list virtualization regressed" >&2
