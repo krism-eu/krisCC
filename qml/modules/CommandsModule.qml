@@ -17,8 +17,6 @@ Kirigami.ScrollablePage {
     property string deleteCustomId: ""
     property string deleteCustomName: ""
 
-    Component.onCompleted: RepositoryExportBackend.refreshBranches("krisCC")
-
     property var commands: [
         { id: "failed-units", title: qsTr("Unità di sistema fallite"), command: "systemctl --failed --no-pager --plain", note: qsTr("Servizi e unità systemd in errore.") },
         { id: "user-failed-units", title: qsTr("Unità utente fallite"), command: "systemctl --user --failed --no-pager --plain", note: qsTr("Servizi della sessione utente in errore.") },
@@ -121,40 +119,28 @@ Kirigami.ScrollablePage {
                     Layout.fillWidth: true
                     contentItem: ColumnLayout {
                         spacing: Kirigami.Units.smallSpacing
-                        Kirigami.Heading { level: 3; font.bold: true; text: qsTr("Esporta repository") }
+                        Kirigami.Heading { level: 3; font.bold: true; text: qsTr("Esporta ultima build verde") }
                         Controls.Label {
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
                             opacity: UiMetrics.secondaryOpacity
-                            text: qsTr("Scarica un branch pubblico di krisCC o KrisOS e crea nella Home un unico file di testo con tutti i file testuali del repository. Binari e symlink vengono rappresentati con marcatori.")
+                            text: qsTr("Individua l'ultima Build GitHub conclusa con successo, scarica lo ZIP dell'esatto commit e crea nella Home un unico TXT con tutti i file testuali. Il file registra branch e SHA sorgente.")
                         }
                         RowLayout {
                             Layout.fillWidth: true
-                            Controls.ComboBox {
-                                id: exportRepository
-                                Layout.preferredWidth: Kirigami.Units.gridUnit * 9
-                                model: ["krisCC", "KrisOS"]
-                                enabled: !RepositoryExportBackend.busy
-                                onActivated: RepositoryExportBackend.refreshBranches(currentText)
-                            }
-                            Controls.ComboBox {
-                                id: exportBranch
-                                Layout.fillWidth: true
-                                model: RepositoryExportBackend.branches
-                                enabled: !RepositoryExportBackend.busy && count > 0
-                            }
                             Controls.Button {
-                                text: qsTr("Aggiorna branch")
-                                icon.name: "view-refresh"
-                                enabled: !RepositoryExportBackend.busy
-                                onClicked: RepositoryExportBackend.refreshBranches(exportRepository.currentText)
-                            }
-                            Controls.Button {
-                                text: qsTr("Esporta in Home")
+                                text: qsTr("Esporta krisCC")
                                 icon.name: "document-export"
-                                enabled: !RepositoryExportBackend.busy && exportBranch.currentText.length > 0
-                                onClicked: RepositoryExportBackend.exportBranch(exportRepository.currentText, exportBranch.currentText)
+                                enabled: !RepositoryExportBackend.busy
+                                onClicked: RepositoryExportBackend.exportLatestGreen("krisCC")
                             }
+                            Controls.Button {
+                                text: qsTr("Esporta KrisOS")
+                                icon.name: "document-export"
+                                enabled: !RepositoryExportBackend.busy
+                                onClicked: RepositoryExportBackend.exportLatestGreen("KrisOS")
+                            }
+                            Item { Layout.fillWidth: true }
                             Controls.Button {
                                 visible: RepositoryExportBackend.busy
                                 text: qsTr("Annulla")
@@ -195,13 +181,6 @@ Kirigami.ScrollablePage {
                                 icon.name: "edit-copy"
                                 onClicked: SystemBackend.copyToClipboard(RepositoryExportBackend.outputPath)
                             }
-                        }
-                    }
-                    Connections {
-                        target: RepositoryExportBackend
-                        function onBranchesChanged() {
-                            if (exportBranch.count > 0)
-                                exportBranch.currentIndex = 0
                         }
                     }
                 }

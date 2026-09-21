@@ -66,9 +66,19 @@ require("src/RepositoryExportBackend.cpp src/RepositoryExportBackend.h" in cmake
         and "src/RepositoryExportCore.cpp src/RepositoryExportCore.h" in cmake,
         "repository export backend/core not linked")
 repo_export_core = read("src/RepositoryExportCore.cpp")
+repo_export_backend = read("src/RepositoryExportBackend.cpp")
 require('QStringLiteral("krism-eu/krisCC")' in repo_export_core
         and 'QStringLiteral("krism-eu/KrisOS")' in repo_export_core,
         "repository export allowlist is incomplete")
+require("parseLatestGreenRun" in repo_export_core
+        and "actions/runs?status=success" in repo_export_backend,
+        "repository export does not resolve the latest successful build")
+require('QStringLiteral("repository.zip")' in repo_export_backend
+        and 'QStringLiteral("-m"), QStringLiteral("zipfile"), QStringLiteral("-e")' in repo_export_backend,
+        "repository export must download and extract a ZIP")
+require("exportBranch" not in repo_export_backend
+        and "refreshBranches" not in repo_export_backend,
+        "arbitrary branch export must not remain")
 require("AdminPolicy::resolve" in admin_cpp and "AdminPolicy::resolve" in polkit_cpp,
         "client/root privileged allowlist does not share AdminPolicy")
 require('QStringLiteral("/usr/bin/rk")' in admin_policy
