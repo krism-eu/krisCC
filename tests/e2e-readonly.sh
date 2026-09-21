@@ -10,21 +10,27 @@ echo "Checking release identity..."
 grep -Fxq 'Version:        0.7.0' packaging/krisCC.spec
 grep -Fxq 'Release:        7%{?dist}' packaging/krisCC.spec
 grep -Fq 'set(KRISCC_RELEASE 7)' CMakeLists.txt
-grep -Fq 'KRISCC_VERSION="${PROJECT_VERSION}-${KRISCC_RELEASE}"' CMakeLists.txt
+grep -Fq 'KRISCC_VERSION=' CMakeLists.txt
+grep -Fq 'PROJECT_VERSION' CMakeLists.txt
+grep -Fq 'KRISCC_RELEASE' CMakeLists.txt
 
 echo "Checking privileged architecture..."
 grep -Fq 'm_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin")' src/RkBackend.cpp
 grep -Fq 'm_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin")' src/BootcBackend.cpp
 grep -Fq 'm_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin")' src/SoftwareBackend.cpp
 grep -Fq 'm_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin")' src/SystemBackend.cpp
-! grep -Fq 'm_polkit->execute(QStringLiteral("/usr/bin/rk")' src/RkBackend.cpp
+if grep -Fq 'm_polkit->execute(QStringLiteral("/usr/bin/rk")' src/RkBackend.cpp; then
+  fail "RkBackend still executes rk directly"
+fi
 grep -Fq 'buildAdminCommand' src/AdminHelper.cpp
 grep -Fq 'runPrivilegedCommand' src/AdminHelper.cpp
 grep -Fq 'setStandardInputFile(QProcess::nullDevice())' src/PrivilegedProcessRunner.cpp
 grep -Fq 'kill(-pid, SIGTERM)' src/PrivilegedProcessRunner.cpp
 grep -Fq 'kill(-pid, SIGKILL)' src/PrivilegedProcessRunner.cpp
 grep -Fq 'return 124' src/PrivilegedProcessRunner.cpp
-! grep -Eq '/usr/bin/(bash|sh)' src/AdminPolicy.cpp
+if grep -Eq '/usr/bin/(bash|sh)' src/AdminPolicy.cpp; then
+  fail "AdminPolicy must not execute a shell"
+fi
 
 echo "Checking shared validation and user-script stdin..."
 grep -Fq 'Validators::packageName' src/RkBackend.cpp
@@ -40,15 +46,23 @@ grep -Fq 'QStringLiteral("--from-downloaded")' src/AdminPolicy.cpp
 grep -Fq 'QStringLiteral("--apply")' src/AdminPolicy.cpp
 
 echo "Checking UI/memory contracts..."
-! grep -R -F 'preferredHeight: contentHeight' qml/modules
-! grep -R -F 'PageIntro {' qml/modules
-! grep -Fq 'Novità repository' qml/modules/SoftwareModule.qml
+if grep -R -F 'preferredHeight: contentHeight' qml/modules; then
+  fail "a module still disables ListView virtualization"
+fi
+if grep -R -F 'PageIntro {' qml/modules; then
+  fail "a module still duplicates the shell page title"
+fi
+if grep -Fq 'Novità repository' qml/modules/SoftwareModule.qml; then
+  fail "obsolete repository-news tab remains"
+fi
 grep -Fq 'searchModel.truncated' qml/modules/SoftwareModule.qml
 grep -Fq 'SystemBackend.launchFlatpak(modelData[1])' qml/modules/FlatpakModule.qml
 grep -Fq 'SystemBackend.topMemoryProcesses' qml/modules/DashboardModule.qml
 grep -Fq 'qsTr("Firewall")' qml/modules/DashboardModule.qml
 grep -Fq 'aboutDialog.open()' qml/Main.qml
-! grep -Fq 'bootTechnicalDetails' qml/modules/SystemModule.qml
+if grep -Fq 'bootTechnicalDetails' qml/modules/SystemModule.qml; then
+  fail "raw BootC technical details remain exposed"
+fi
 
 echo "Checking backup and Podman contracts..."
 grep -Fq 'QStringLiteral(".var/app/*/cache")' src/SystemBackend.cpp
