@@ -4,6 +4,8 @@
 
 #include "ProcessRunner.h"
 
+Q_DECLARE_METATYPE(ProcessRunner::Outcome)
+
 class ProcessRunnerTest final : public QObject
 {
     Q_OBJECT
@@ -80,6 +82,5 @@ private slots:
     }
 };
 
-Q_DECLARE_METATYPE(ProcessRunner::Outcome)
 QTEST_APPLESS_MAIN(ProcessRunnerTest)
 #include "test_process_runner.moc"

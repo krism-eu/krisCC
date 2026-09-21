@@ -138,8 +138,6 @@ void UtilityBackend::finish(const QString &message, const QString &state)
         m_runner = nullptr;
     }
     m_busy = false;
-    m_cancelRequested = false;
-    m_timedOut = false;
     m_output = message;
     m_resultState = state;
     if (shouldLogOperation(completedOperation))
