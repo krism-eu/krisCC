@@ -1,13 +1,13 @@
 #include "RkBackend.h"
 
 #include "PolkitHelper.h"
+#include "Validators.h"
 
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
-#include <QRegularExpression>
 #include <QTimer>
 
 namespace {
@@ -239,9 +239,7 @@ void RkBackend::finishStatusError(const QString &message)
 
 bool RkBackend::validPackageName(const QString &packageName) const
 {
-    static const QRegularExpression pattern(
-        QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._+:-]{0,127}$"));
-    return pattern.match(packageName).hasMatch();
+    return Validators::packageName(packageName);
 }
 
 void RkBackend::startPrivileged(const QStringList &args)
@@ -255,5 +253,21 @@ void RkBackend::startPrivileged(const QStringList &args)
     m_operationOutput.clear();
     m_operationLines.clear();
     emit operationStateChanged();
-    m_polkit->execute(QStringLiteral("/usr/bin/rk"), args);
+    if (args.isEmpty())
+        return;
+
+    QStringList adminArgs;
+    const QString operation = args.at(0);
+    if (operation == QStringLiteral("sync"))
+        adminArgs << QStringLiteral("rk-sync");
+    else if (operation == QStringLiteral("add") && args.size() == 2)
+        adminArgs << QStringLiteral("rk-add") << args.at(1);
+    else if (operation == QStringLiteral("rm") && args.size() == 2)
+        adminArgs << QStringLiteral("rk-rm") << args.at(1);
+    else if (operation == QStringLiteral("forget") && args.size() == 2)
+        adminArgs << QStringLiteral("rk-forget") << args.at(1);
+    else
+        return;
+
+    m_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin"), adminArgs);
 }
