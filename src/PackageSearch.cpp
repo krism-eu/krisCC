@@ -2,6 +2,7 @@
 
 #include <QFile>
 #include <QFileInfo>
+#include <QDir>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -68,6 +69,7 @@ QHash<int, QByteArray> PackageSearch::roleNames() const
 
 void PackageSearch::search(const QString &term)
 {
+    m_truncated = false;
     const QString sanitized = sanitizeTerm(term);
     refreshPersistentSet();
     ++m_generation;
@@ -89,6 +91,7 @@ void PackageSearch::search(const QString &term)
 
 void PackageSearch::loadInstalled(const QString &filter)
 {
+    m_truncated = false;
     static const QSet<QString> allowed = {
         QStringLiteral("all"), QStringLiteral("base"),
         QStringLiteral("persistent"), QStringLiteral("local")
@@ -102,6 +105,7 @@ void PackageSearch::loadInstalled(const QString &filter)
 
 void PackageSearch::loadUpgrades()
 {
+    m_truncated = false;
     refreshPersistentSet();
     ++m_generation;
     stopActiveProcess();
@@ -110,6 +114,7 @@ void PackageSearch::loadUpgrades()
 
 void PackageSearch::loadRecent()
 {
+    m_truncated = false;
     refreshPersistentSet();
     ++m_generation;
     stopActiveProcess();
@@ -256,8 +261,10 @@ void PackageSearch::startRepoQuery(const QString &term)
             entry.owned = m_owned.contains(name);
             entry.persistent = m_persistent.contains(name);
             entries.append(entry);
-            if (entries.size() >= 200)
+            if (entries.size() >= 100) {
+                m_truncated = true;
                 break;
+            }
         }
 
         if (contractInvalid) {
@@ -407,10 +414,8 @@ void PackageSearch::startListQuery(const QString &filter, bool installedEntries)
                 }
 
                 entries.append(entry);
-                if (entries.size() >= 500)
-                    break;
             }
-            if (contractInvalid || entries.size() >= 500)
+            if (contractInvalid)
                 break;
         }
 
@@ -527,7 +532,26 @@ bool PackageSearch::installedCacheCurrent() const
 
 QString PackageSearch::rpmDatabasePath() const
 {
+    static const QString detected = [] {
+        QProcess process;
+        process.setProcessChannelMode(QProcess::SeparateChannels);
+        process.setStandardInputFile(QProcess::nullDevice());
+        process.start(QStringLiteral("/usr/bin/rpm"),
+                      {QStringLiteral("--eval"), QStringLiteral("%{_dbpath}")});
+        if (!process.waitForFinished(2000) || process.exitStatus() != QProcess::NormalExit
+            || process.exitCode() != 0)
+            return QString();
+        const QString directory = QString::fromUtf8(process.readAllStandardOutput()).trimmed();
+        if (directory.isEmpty())
+            return QString();
+        const QString sqlite = QDir(directory).filePath(QStringLiteral("rpmdb.sqlite"));
+        return QFileInfo::exists(sqlite) ? QFileInfo(sqlite).canonicalFilePath() : directory;
+    }();
+    if (!detected.isEmpty())
+        return detected;
+
     static const QStringList candidates = {
+        QStringLiteral("/usr/share/rpm/rpmdb.sqlite"),
         QStringLiteral("/usr/lib/sysimage/rpm/rpmdb.sqlite"),
         QStringLiteral("/var/lib/rpm/rpmdb.sqlite")
     };
