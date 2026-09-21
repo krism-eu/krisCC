@@ -1350,6 +1350,7 @@ void SystemBackend::refreshResources()
     m_cpuTemperatureC = nextTemperature;
     if (changed)
         emit resourcesChanged();
+    refreshTopMemoryProcesses();
 }
 
 double SystemBackend::readCpuTemperature() const

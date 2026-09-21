@@ -110,8 +110,8 @@ require("topMemoryProcesses" in read("src/SystemBackend.h"),
         "Dashboard top-memory model is missing")
 
 wrapper = read("src/bootc-status.sh")
-require('exec /usr/bin/bootc status --format json --format-version=1' in wrapper,
-        "BootC JSON wrapper no longer pins schema v1")
+require('exec /usr/bin/timeout --signal=TERM --kill-after=3s 30s /usr/bin/bootc status --format json --format-version=1' in wrapper,
+        "BootC JSON wrapper is not root-side bounded or no longer pins schema v1")
 require('"$@"' not in wrapper, "BootC wrapper accepts arbitrary arguments")
 
 for ignored in ("stage/", "artifacts/", "audit-build/", "*.rpm"):
