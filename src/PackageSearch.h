@@ -3,9 +3,10 @@
 #include <QAbstractListModel>
 #include <QDateTime>
 #include <QPointer>
-#include <QProcess>
 #include <QSet>
 #include <QString>
+
+class ProcessRunner;
 
 class PackageSearch : public QAbstractListModel
 {
@@ -79,7 +80,7 @@ private:
     QSet<QString> m_owned;
     QSet<QString> m_installed;
     QSet<QString> m_persistent;
-    QPointer<QProcess> m_process;
+    QPointer<ProcessRunner> m_runner;
     QString m_installedFilter = QStringLiteral("all");
     QString m_localFilter;
     bool m_searching = false;

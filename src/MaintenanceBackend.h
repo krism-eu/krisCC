@@ -2,8 +2,9 @@
 
 #include <QObject>
 #include <QPointer>
-#include <QProcess>
 #include <QString>
+
+class ProcessRunner;
 
 class MaintenanceBackend : public QObject
 {
@@ -33,10 +34,8 @@ signals:
 private:
     void complete(const QString &state, const QString &output, bool success);
 
-    QPointer<QProcess> m_process;
+    QPointer<ProcessRunner> m_runner;
     bool m_running = false;
-    bool m_cancelRequested = false;
-    bool m_timedOut = false;
     QString m_resultState = QStringLiteral("idle");
     QString m_output;
     QString m_scope;

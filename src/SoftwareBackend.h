@@ -2,11 +2,11 @@
 
 #include <QObject>
 #include <QPointer>
-#include <QProcess>
 #include <QVariantList>
 #include <QStringList>
 
 class PolkitHelper;
+class ProcessRunner;
 
 class SoftwareBackend : public QObject
 {
@@ -51,7 +51,7 @@ private:
 
     PolkitHelper *m_polkit = nullptr;
     QVariantList m_repositories;
-    QPointer<QProcess> m_process;
+    QPointer<ProcessRunner> m_runner;
     bool m_busy = false;
     QString m_errorText;
     bool m_operationOwned = false;

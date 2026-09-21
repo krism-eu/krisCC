@@ -1,16 +1,15 @@
 #include "RkBackend.h"
 
-#include "PolkitHelper.h"
-#include "Validators.h"
 #include "ContractParsers.h"
+#include "PolkitHelper.h"
+#include "ProcessRunner.h"
+#include "Validators.h"
 
 #include <QFileInfo>
-#include <QTimer>
 
 namespace {
 constexpr int kStatusTimeoutMs = 30 * 1000;
 }
-
 
 RkBackend::RkBackend(PolkitHelper *polkit, QObject *parent)
     : QObject(parent)
@@ -30,7 +29,6 @@ RkBackend::RkBackend(PolkitHelper *polkit, QObject *parent)
                 [this](bool success, const QString &output) {
             if (!m_operationOwned)
                 return;
-
             m_operationOwned = false;
             m_operationRunning = false;
             m_operationState = success ? QStringLiteral("success") : QStringLiteral("error");
@@ -40,29 +38,19 @@ RkBackend::RkBackend(PolkitHelper *polkit, QObject *parent)
             refreshStatus();
         });
     }
-
 }
 
 bool RkBackend::canSync() const
 {
-    return m_statusValid
-        && m_overlayState == QStringLiteral("ready")
-        && m_needsSync
-        && !m_pendingRecovery
-        && !m_busy
-        && m_polkit
-        && !m_polkit->running();
+    return m_statusValid && m_overlayState == QStringLiteral("ready") && m_needsSync
+        && !m_pendingRecovery && !m_busy && m_polkit && !m_polkit->running();
 }
 
 bool RkBackend::canChangePackages() const
 {
-    return m_statusValid
-        && m_overlayState == QStringLiteral("ready")
-        && !m_pendingRecovery
-        && !m_needsSync
-        && !m_busy
-        && m_polkit
-        && !m_polkit->running();
+    return m_statusValid && m_overlayState == QStringLiteral("ready")
+        && !m_pendingRecovery && !m_needsSync && !m_busy
+        && m_polkit && !m_polkit->running();
 }
 
 bool RkBackend::canForget() const
@@ -74,76 +62,62 @@ void RkBackend::refreshStatus()
 {
     if (m_busy)
         return;
-
     const QFileInfo rk(QStringLiteral("/usr/bin/rk"));
     if (!rk.exists() || !rk.isExecutable()) {
         finishStatusError(tr("rk non è disponibile su questo sistema."));
         return;
     }
 
+    auto *runner = new ProcessRunner(this);
+    m_runner = runner;
     m_busy = true;
     emit stateChanged();
 
-    auto *rawProcess = new QProcess(this);
-    const QPointer<QProcess> process(rawProcess);
-    m_process = rawProcess;
-    rawProcess->setProcessChannelMode(QProcess::MergedChannels);
-
-    connect(rawProcess, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-            [this, process](int exitCode, QProcess::ExitStatus status) {
-        if (!process || process != m_process)
+    connect(runner, &ProcessRunner::finished, this,
+            [this, runner](ProcessRunner::Outcome outcome, int exitCode,
+                           const QByteArray &out, const QByteArray &err, const QString &error) {
+        if (runner != m_runner) {
+            runner->deleteLater();
             return;
-
-        const bool timedOut = process->property("krisccTimedOut").toBool();
-        const QByteArray outputData = process->readAllStandardOutput();
-        const QString output = QString::fromUtf8(outputData).trimmed();
-        m_process = nullptr;
-        process->deleteLater();
+        }
+        m_runner = nullptr;
+        runner->deleteLater();
         m_busy = false;
 
-        if (timedOut) {
+        if (outcome == ProcessRunner::Success) {
+            parseStatus(out);
+            return;
+        }
+        if (outcome == ProcessRunner::TimedOut) {
             finishStatusError(tr("Tempo massimo superato durante rk status."));
             return;
         }
-        if (status != QProcess::NormalExit || exitCode != 0) {
-            finishStatusError(output.isEmpty()
-                                  ? tr("rk status è terminato con codice %1.").arg(exitCode)
-                                  : output);
+        if (outcome == ProcessRunner::FailedToStart) {
+            finishStatusError(tr("Impossibile avviare rk status: %1").arg(error));
             return;
         }
-
-        parseStatus(outputData);
+        const QString details = QString::fromUtf8(err.isEmpty() ? out : err).trimmed();
+        finishStatusError(details.isEmpty()
+                              ? tr("rk status è terminato con codice %1.").arg(exitCode)
+                              : details);
     });
 
-    connect(rawProcess, &QProcess::errorOccurred, this,
-            [this, process](QProcess::ProcessError error) {
-        if (!process || process != m_process || error != QProcess::FailedToStart)
-            return;
-        const QString reason = process->errorString();
-        m_process = nullptr;
-        process->deleteLater();
-        m_busy = false;
-        finishStatusError(tr("Impossibile avviare rk status: %1").arg(reason));
-    });
-
-    rawProcess->start(QStringLiteral("/usr/bin/rk"),
-                      {QStringLiteral("status"), QStringLiteral("--json")});
-    QTimer::singleShot(kStatusTimeoutMs, rawProcess, [process] {
-        if (!process || process->state() == QProcess::NotRunning)
-            return;
-        process->setProperty("krisccTimedOut", true);
-        process->terminate();
-        QTimer::singleShot(2000, process, [process] {
-            if (process && process->state() != QProcess::NotRunning)
-                process->kill();
-        });
-    });
+    ProcessRunner::Options options;
+    options.program = QStringLiteral("/usr/bin/rk");
+    options.arguments = {QStringLiteral("status"), QStringLiteral("--json")};
+    options.timeoutMs = kStatusTimeoutMs;
+    options.maxOutputBytes = 512 * 1024;
+    options.mergedChannels = false;
+    if (!runner->start(options)) {
+        m_runner = nullptr;
+        runner->deleteLater();
+        finishStatusError(tr("Impossibile inizializzare rk status."));
+    }
 }
 
 bool RkBackend::sync()
 {
-    if (!canSync())
-        return false;
+    if (!canSync()) return false;
     startPrivileged({QStringLiteral("sync")});
     return true;
 }
@@ -151,8 +125,7 @@ bool RkBackend::sync()
 bool RkBackend::addPackage(const QString &packageName)
 {
     const QString package = packageName.trimmed();
-    if (!canChangePackages() || !validPackageName(package))
-        return false;
+    if (!canChangePackages() || !validPackageName(package)) return false;
     startPrivileged({QStringLiteral("add"), package});
     return true;
 }
@@ -160,8 +133,7 @@ bool RkBackend::addPackage(const QString &packageName)
 bool RkBackend::removePackage(const QString &packageName)
 {
     const QString package = packageName.trimmed();
-    if (!canChangePackages() || !validPackageName(package))
-        return false;
+    if (!canChangePackages() || !validPackageName(package)) return false;
     startPrivileged({QStringLiteral("rm"), package});
     return true;
 }
@@ -169,8 +141,7 @@ bool RkBackend::removePackage(const QString &packageName)
 bool RkBackend::forget(const QString &packageName)
 {
     const QString package = packageName.trimmed();
-    if (!canForget() || !validPackageName(package))
-        return false;
+    if (!canForget() || !validPackageName(package)) return false;
     startPrivileged({QStringLiteral("forget"), package});
     return true;
 }
@@ -181,23 +152,13 @@ void RkBackend::parseStatus(const QByteArray &data)
     if (!parsed.ok()) {
         using Error = ContractParsers::Error;
         switch (parsed.error) {
-        case Error::InvalidJson:
-            finishStatusError(tr("rk status --json non valido."));
-            return;
-        case Error::UnsupportedContract:
-            finishStatusError(tr("Versione del contratto rk status non supportata."));
-            return;
-        case Error::InvalidShape:
-            finishStatusError(tr("rk status --json è incompleto."));
-            return;
-        case Error::InvalidValue:
-            finishStatusError(tr("rk status contiene valori non riconosciuti."));
-            return;
-        case Error::None:
-            break;
+        case Error::InvalidJson: finishStatusError(tr("rk status --json non valido.")); return;
+        case Error::UnsupportedContract: finishStatusError(tr("Versione del contratto rk status non supportata.")); return;
+        case Error::InvalidShape: finishStatusError(tr("rk status --json è incompleto.")); return;
+        case Error::InvalidValue: finishStatusError(tr("rk status contiene valori non riconosciuti.")); return;
+        case Error::None: break;
         }
     }
-
     m_statusText = parsed.formatted;
     m_errorText.clear();
     m_overlayState = parsed.overlay;
@@ -227,15 +188,14 @@ bool RkBackend::validPackageName(const QString &packageName) const
 
 void RkBackend::startPrivileged(const QStringList &args)
 {
-    if (!m_polkit)
-        return;
-
+    if (!m_polkit) return;
     m_operationOwned = true;
     m_operationRunning = true;
     m_operationState = QStringLiteral("running");
     m_operationOutput.clear();
     m_operationLines.clear();
     emit operationStateChanged();
+
     QStringList adminArgs;
     if (args == QStringList{QStringLiteral("sync")}) {
         adminArgs << QStringLiteral("rk-sync");

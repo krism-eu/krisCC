@@ -2,11 +2,11 @@
 
 #include <QObject>
 #include <QPointer>
-#include <QProcess>
 #include <QString>
 #include <QStringList>
 
 class PolkitHelper;
+class ProcessRunner;
 
 class RkBackend : public QObject
 {
@@ -64,7 +64,7 @@ private:
     void startPrivileged(const QStringList &args);
 
     PolkitHelper *m_polkit = nullptr;
-    QPointer<QProcess> m_process;
+    QPointer<ProcessRunner> m_runner;
     bool m_busy = false;
     bool m_statusValid = false;
     bool m_pendingRecovery = false;

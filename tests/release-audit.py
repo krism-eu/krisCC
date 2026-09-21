@@ -84,8 +84,21 @@ require('m_polkit->execute(QStringLiteral("/usr/bin/rk")' not in rk_cpp,
 process_runner = read("src/ProcessRunner.cpp")
 require("setStandardInputFile(QProcess::nullDevice())" in process_runner,
         "shared user-level ProcessRunner must close stdin")
-require("ProcessRunner" in custom_cpp and "ProcessRunner" in utility_cpp,
-        "custom actions and utility commands must use the shared ProcessRunner")
+require("ProcessRunner" in custom_cpp and "ProcessRunner" in utility_cpp
+        and "ProcessRunner" in rk_cpp
+        and "ProcessRunner" in read("src/SoftwareBackend.cpp")
+        and "ProcessRunner" in read("src/PackageSearch.cpp")
+        and "ProcessRunner" in read("src/MaintenanceBackend.cpp"),
+        "user-level command backends must use the shared ProcessRunner")
+
+direct_qprocess_allowed = {
+    "AdminHelper.cpp", "PolkitHelper.cpp", "ProcessRunner.cpp",
+    "BootcBackend.cpp", "SystemBackend.cpp",
+}
+for source in (ROOT / "src").glob("*.cpp"):
+    if "QProcess" in source.read_text(encoding="utf-8"):
+        require(source.name in direct_qprocess_allowed,
+                f"{source.name}: direct QProcess is not an approved architectural exception")
 
 require("options.mergedChannels = !structuredOutput;" in utility_cpp,
         "machine-readable utility output must be isolated from stderr")
