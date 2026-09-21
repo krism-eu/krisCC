@@ -171,6 +171,7 @@ private:
     double m_cpuTemperatureC = -1.0;
     QVariantMap m_serviceStates;
     QVariantList m_topMemoryProcesses;
+    qint64 m_lastTopMemoryRefreshMs = 0;
     QString m_networkInterface;
     QString m_networkAddress;
     QString m_networkState = QStringLiteral("down");

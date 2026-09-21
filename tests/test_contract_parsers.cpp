@@ -31,6 +31,12 @@ private slots:
         const auto repo = ContractParsers::parseDnfRepoquery("tree\tTree utility\t2.2.1-4.fc44\tfedora\tx86_64\t1234\t5678\n");
         QVERIFY(repo.ok());
         QCOMPARE(repo.values.size(), 1);
+        const auto repoWithTabSummary = ContractParsers::parseDnfRepoquery(
+            "tree\tTree utility\twith tab\t2.2.1-4.fc44\tfedora\tx86_64\t1234\t5678\n");
+        QVERIFY(repoWithTabSummary.ok());
+        QCOMPARE(repoWithTabSummary.values.size(), 1);
+        QCOMPARE(repoWithTabSummary.values.at(0).toMap().value(QStringLiteral("summary")).toString(),
+                 QStringLiteral("Tree utility with tab"));
         QVERIFY(!ContractParsers::parseDnfRepoquery("tree\tbad\n").ok());
 
         const auto list = ContractParsers::parseDnfListJson("{\"installed\":[{\"name\":\"bash\",\"arch\":\"x86_64\",\"evr\":\"5.3-1.fc44\",\"repository\":\"@System\"}]}");

@@ -148,19 +148,20 @@ ContractParsers::Rows ContractParsers::parseDnfRepoquery(const QByteArray &data)
     Rows result;
     QSet<QString> seen;
     for (const QString &line : QString::fromUtf8(data).split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
-        const QStringList parts = line.split(QLatin1Char('\t'));
-        if (parts.size() != 7) {
+        const QStringList parts = line.split(QLatin1Char('\t'), Qt::KeepEmptyParts);
+        if (parts.size() < 7) {
             result.error = Error::InvalidShape;
             result.values.clear();
             return result;
         }
 
+        const qsizetype n = parts.size();
         bool downloadOk = false;
         bool installOk = false;
-        const quint64 downloadSize = parts.at(5).toULongLong(&downloadOk);
-        const quint64 installSize = parts.at(6).toULongLong(&installOk);
+        const quint64 downloadSize = parts.at(n - 2).toULongLong(&downloadOk);
+        const quint64 installSize = parts.at(n - 1).toULongLong(&installOk);
         const QString name = parts.at(0).trimmed();
-        const QString arch = parts.at(4).trimmed();
+        const QString arch = parts.at(n - 3).trimmed();
         if (name.isEmpty() || arch.isEmpty() || !downloadOk || !installOk) {
             result.error = Error::InvalidValue;
             result.values.clear();
@@ -174,9 +175,9 @@ ContractParsers::Rows ContractParsers::parseDnfRepoquery(const QByteArray &data)
 
         QVariantMap row;
         row.insert(QStringLiteral("name"), name);
-        row.insert(QStringLiteral("summary"), parts.at(1).simplified().left(512));
-        row.insert(QStringLiteral("version"), parts.at(2).trimmed());
-        row.insert(QStringLiteral("repository"), parts.at(3).trimmed());
+        row.insert(QStringLiteral("summary"), parts.mid(1, n - 6).join(QLatin1Char('\t')).simplified().left(512));
+        row.insert(QStringLiteral("version"), parts.at(n - 5).trimmed());
+        row.insert(QStringLiteral("repository"), parts.at(n - 4).trimmed());
         row.insert(QStringLiteral("arch"), arch);
         row.insert(QStringLiteral("downloadSize"), QVariant::fromValue(downloadSize));
         row.insert(QStringLiteral("installSize"), QVariant::fromValue(installSize));

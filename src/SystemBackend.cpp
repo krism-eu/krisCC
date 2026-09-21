@@ -1435,6 +1435,7 @@ void SystemBackend::setResourceMonitoringEnabled(bool enabled)
 
     m_previousCpuTotal = 0;
     m_previousCpuIdle = 0;
+    m_lastTopMemoryRefreshMs = 0;
     if (m_cpuUsagePercent != -1) {
         m_cpuUsagePercent = -1;
         emit resourcesChanged();
@@ -1512,7 +1513,12 @@ void SystemBackend::refreshResources()
     m_cpuTemperatureC = nextTemperature;
     if (changed)
         emit resourcesChanged();
-    refreshTopMemoryProcesses();
+
+    const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+    if (m_lastTopMemoryRefreshMs == 0 || nowMs - m_lastTopMemoryRefreshMs >= 6000) {
+        refreshTopMemoryProcesses();
+        m_lastTopMemoryRefreshMs = nowMs;
+    }
 }
 
 double SystemBackend::readCpuTemperature() const
