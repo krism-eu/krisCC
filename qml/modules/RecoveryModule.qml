@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as Controls
+import QtQuick.Dialogs as Dialogs
 import org.kde.kirigami as Kirigami
 import org.kriscc
 
@@ -48,6 +49,9 @@ Kirigami.ScrollablePage {
             if (!SystemBackend.backupBusy)
                 root.refreshBackups()
         }
+        function onBackupRootChanged() {
+            root.refreshBackups()
+        }
     }
 
     ColumnLayout {
@@ -84,13 +88,35 @@ Kirigami.ScrollablePage {
                     }
                 }
 
+                RowLayout {
+                    Layout.fillWidth: true
+                    Controls.Label {
+                        Layout.fillWidth: true
+                        elide: Text.ElideMiddle
+                        text: qsTr("Destinazione: %1").arg(SystemBackend.backupRoot)
+                        opacity: UiMetrics.secondaryOpacity
+                    }
+                    Controls.Button {
+                        text: qsTr("Scegli destinazione")
+                        icon.name: "folder-new"
+                        enabled: !SystemBackend.backupBusy
+                        onClicked: backupRootDialog.open()
+                    }
+                    Controls.Button {
+                        text: qsTr("Usa cartella locale")
+                        icon.name: "edit-undo"
+                        enabled: !SystemBackend.backupBusy
+                        onClicked: SystemBackend.resetBackupRoot()
+                    }
+                }
+
                 Controls.Label {
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap
                     opacity: UiMetrics.secondaryOpacity
                     text: backupProfile.currentIndex === 0
-                          ? qsTr("Include le configurazioni utente supportate. Minimo 1 GiB libero.")
-                          : qsTr("Include la home, escludendo cache, cestino e backup precedenti. Minimo 5 GiB liberi.")
+                          ? qsTr("Include le configurazioni utente supportate. L'archivio viene creato in modo privato nella destinazione scelta.")
+                          : qsTr("Include la home, escludendo cache, cestino, runtime ricostruibili e la destinazione stessa quando si trova dentro la home.")
                 }
 
                 Kirigami.AbstractCard {
@@ -411,6 +437,12 @@ Kirigami.ScrollablePage {
             text: qsTr("La home può essere grande e contenere dati sensibili. Cache, cestino, runtime/app Flatpak (~/.local/share/flatpak), storage Podman inclusi volumi (~/.local/share/containers) e backup precedenti vengono esclusi. I dati personali delle app Flatpak in ~/.var/app restano inclusi.")
         }
         onAccepted: SystemBackend.createSnapshot("home")
+    }
+
+    Dialogs.FolderDialog {
+        id: backupRootDialog
+        title: qsTr("Scegli destinazione backup")
+        onAccepted: SystemBackend.setBackupRoot(selectedFolder)
     }
 
     Controls.Dialog {
