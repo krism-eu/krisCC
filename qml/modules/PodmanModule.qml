@@ -85,7 +85,19 @@ Kirigami.ScrollablePage {
 
     function containerSize(item) {
         if (!item) return qsTr("n/d")
-        if (item.Size) return root.humanSize(item.Size)
+        if (item.Size && typeof item.Size === "object") {
+            var objectRw = item.Size.rwSize !== undefined ? item.Size.rwSize
+                         : item.Size.RwSize !== undefined ? item.Size.RwSize
+                         : item.Size.rw !== undefined ? item.Size.rw : 0
+            var objectRoot = item.Size.rootFsSize !== undefined ? item.Size.rootFsSize
+                           : item.Size.RootFsSize !== undefined ? item.Size.RootFsSize
+                           : item.Size.rootfs !== undefined ? item.Size.rootfs : 0
+            return qsTr("RW %1 · totale %2")
+                    .arg(root.humanSize(objectRw))
+                    .arg(root.humanSize(objectRoot))
+        }
+        if (item.Size !== undefined && item.Size !== null)
+            return root.humanSize(item.Size)
         if (item.SizeRw !== undefined || item.SizeRootFs !== undefined) {
             var rw = item.SizeRw !== undefined ? item.SizeRw : 0
             var rootfs = item.SizeRootFs !== undefined ? item.SizeRootFs : 0
@@ -158,10 +170,11 @@ Kirigami.ScrollablePage {
         width: parent.width
         spacing: Kirigami.Units.largeSpacing
 
-        ColumnLayout {
+        Controls.Label {
             Layout.fillWidth: true
-            spacing: Kirigami.Units.smallSpacing
-            PageIntro { title: root.title; subtitle: qsTr("Container e immagini locali dell'utente corrente, con stato, dimensione e azioni esplicite.") }
+            wrapMode: Text.WordWrap
+            opacity: UiMetrics.secondaryOpacity
+            text: qsTr("Container e immagini locali dell'utente corrente, con stato, dimensione e azioni esplicite.")
         }
 
         Controls.TabBar {
@@ -280,6 +293,15 @@ Kirigami.ScrollablePage {
                                     renameDialog.open()
                                 }
                             }
+                            Controls.Button {
+                                icon.name: "edit-delete"
+                                text: qsTr("Elimina")
+                                enabled: !utilityBackend.busy
+                                onClicked: {
+                                    root.selectedName = root.containerName(modelData)
+                                    containerRemoveDialog.open()
+                                }
+                            }
                         }
                     }
                 }
@@ -381,6 +403,26 @@ Kirigami.ScrollablePage {
                 root.refreshAfterAction = true
                 utilityBackend.runPodman("rename", root.selectedName, next)
             }
+        }
+    }
+
+    Controls.Dialog {
+        id: containerRemoveDialog
+        modal: true
+        parent: Controls.Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30,
+                        parent ? parent.width - Kirigami.Units.largeSpacing * 2
+                               : Kirigami.Units.gridUnit * 30)
+        title: qsTr("Eliminare il container?")
+        standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
+        contentItem: Controls.Label {
+            wrapMode: Text.WordWrap
+            text: qsTr("%1\n\nIl container viene rimosso senza --force. Se è in esecuzione Podman rifiuterà l'operazione.").arg(root.selectedName)
+        }
+        onAccepted: {
+            root.refreshAfterAction = true
+            utilityBackend.runPodman("remove", root.selectedName)
         }
     }
 
