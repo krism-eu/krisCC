@@ -2,6 +2,7 @@
 
 #include "OperationLog.h"
 #include "PolkitHelper.h"
+#include "Validators.h"
 
 #include <QClipboard>
 #include <QDateTime>
@@ -483,9 +484,8 @@ void SystemBackend::copyToClipboard(const QString &text) const
 
 QString SystemBackend::flatpakIconPath(const QString &appId) const
 {
-    static const QRegularExpression safeId(QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$"));
     const QString id = appId.trimmed();
-    if (!safeId.match(id).hasMatch())
+    if (!Validators::flatpakId(id))
         return {};
 
     const QString home = QDir::homePath();
@@ -562,6 +562,16 @@ QString SystemBackend::toolProgram(const QString &toolId) const
         {QStringLiteral("konsole"), QStringLiteral("konsole")}
     };
     return resolveExecutable(names.value(toolId));
+}
+
+bool SystemBackend::launchFlatpak(const QString &appId) const
+{
+    const QString id = appId.trimmed();
+    const QString flatpak = resolveExecutable(QStringLiteral("flatpak"));
+    if (flatpak.isEmpty() || !Validators::flatpakId(id))
+        return false;
+    return QProcess::startDetached(flatpak,
+                                   {QStringLiteral("run"), QStringLiteral("--user"), id});
 }
 
 bool SystemBackend::toolAvailable(const QString &toolId) const
