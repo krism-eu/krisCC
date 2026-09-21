@@ -80,6 +80,7 @@ public:
     Q_INVOKABLE QString quickSystemInfo() const;
     Q_INVOKABLE void copyToClipboard(const QString &text) const;
     Q_INVOKABLE QString flatpakIconPath(const QString &appId) const;
+    Q_INVOKABLE bool launchFlatpak(const QString &appId) const;
     Q_INVOKABLE bool toolAvailable(const QString &toolId) const;
     Q_INVOKABLE bool launchTool(const QString &toolId) const;
     Q_INVOKABLE bool programAvailable(const QString &program) const;
