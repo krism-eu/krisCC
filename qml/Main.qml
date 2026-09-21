@@ -182,7 +182,7 @@ Kirigami.ApplicationWindow {
                         Layout.preferredHeight: 42
                         text: qsTr("Informazioni")
                         icon.name: "help-about"
-                        onClicked: root.showIndex(4)
+                        onClicked: aboutDialog.open()
                     }
                 }
             }
@@ -225,13 +225,15 @@ Kirigami.ApplicationWindow {
                         }
 
                         ColumnLayout {
+                            Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+                            Layout.minimumWidth: Kirigami.Units.gridUnit * 7
                             spacing: 1
                             Controls.Label {
-                                Layout.alignment: Qt.AlignRight
+                                Layout.fillWidth: true
+                                horizontalAlignment: Text.AlignRight
                                 text: qsTr("v%1").arg(Qt.application.version)
                                 opacity: UiMetrics.secondaryOpacity
                             }
-
                         }
                     }
 
@@ -257,11 +259,14 @@ Kirigami.ApplicationWindow {
                         property bool visited: false
                         active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 0)
                         onLoaded: Qt.callLater(function() { visited = true })
-                        sourceComponent: Component { DashboardModule {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        onOpenRequested: function(pageId) { root.openById(pageId) }
-                    } }
+                        sourceComponent: Component {
+                            DashboardModule {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                active: root.visible && root.currentSection === 0
+                                onOpenRequested: function(pageId) { root.openById(pageId) }
+                            }
+                        }
                     }
                     Loader {
                         Layout.fillWidth: true
@@ -311,6 +316,61 @@ Kirigami.ApplicationWindow {
                         onLoaded: Qt.callLater(function() { visited = true })
                         sourceComponent: Component { RecoveryModule { Layout.fillWidth: true; Layout.fillHeight: true } }
                     }
+                }
+            }
+        }
+    }
+
+    Controls.Dialog {
+        id: aboutDialog
+        modal: true
+        parent: Controls.Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 34,
+                        parent ? parent.width - Kirigami.Units.largeSpacing * 2
+                               : Kirigami.Units.gridUnit * 34)
+        title: qsTr("Informazioni")
+        standardButtons: Controls.Dialog.Close
+
+        contentItem: ColumnLayout {
+            spacing: Kirigami.Units.largeSpacing
+            RowLayout {
+                Layout.fillWidth: true
+                Kirigami.Icon {
+                    source: "krisCC"
+                    Layout.preferredWidth: Kirigami.Units.iconSizes.huge
+                    Layout.preferredHeight: Layout.preferredWidth
+                }
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Kirigami.Heading {
+                        level: 2
+                        font.bold: true
+                        text: qsTr("krisCC %1").arg(Qt.application.version)
+                    }
+                    Controls.Label {
+                        text: qsTr("Centro di controllo KrisOS")
+                        opacity: UiMetrics.secondaryOpacity
+                    }
+                }
+            }
+            Controls.TextArea {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Kirigami.Units.gridUnit * 12
+                readOnly: true
+                selectByMouse: true
+                wrapMode: TextEdit.Wrap
+                text: SystemBackend.quickSystemInfo()
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                Controls.Button {
+                    text: qsTr("Copia informazioni")
+                    icon.name: "edit-copy"
+                    onClicked: SystemBackend.copyToClipboard(
+                        qsTr("krisCC %1\n").arg(Qt.application.version)
+                        + SystemBackend.quickSystemInfo())
                 }
             }
         }
