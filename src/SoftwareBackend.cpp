@@ -1,14 +1,13 @@
 #include "SoftwareBackend.h"
 
 #include "PolkitHelper.h"
+#include "Validators.h"
 
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTimer>
-#include <QRegularExpression>
-#include <QUrl>
 
 #include <algorithm>
 
@@ -49,22 +48,12 @@ bool SoftwareBackend::canModifyRepositories() const
 
 bool SoftwareBackend::validRepositoryId(const QString &repoId) const
 {
-    static const QRegularExpression pattern(
-        QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"));
-    return pattern.match(repoId.trimmed()).hasMatch();
+    return Validators::repositoryId(repoId.trimmed());
 }
 
 bool SoftwareBackend::validRepositoryUrl(const QString &value) const
 {
-    const QString urlText = value.trimmed();
-    if (urlText.isEmpty() || urlText.size() > 2048
-        || urlText.contains(QRegularExpression(QStringLiteral("[\\s\\x00-\\x1f]"))))
-        return false;
-    const QUrl url(urlText);
-    return url.isValid()
-        && url.scheme() == QStringLiteral("https")
-        && !url.host().isEmpty()
-        && url.userInfo().isEmpty();
+    return Validators::repositoryUrl(value.trimmed());
 }
 
 bool SoftwareBackend::startPrivileged(const QStringList &args)
