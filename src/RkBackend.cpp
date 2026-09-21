@@ -44,7 +44,6 @@ RkBackend::RkBackend(PolkitHelper *polkit, QObject *parent)
         });
     }
 
-    QTimer::singleShot(0, this, &RkBackend::refreshStatus);
 }
 
 bool RkBackend::canSync() const
