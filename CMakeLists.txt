@@ -33,6 +33,7 @@ qt_add_executable(krisCC
     src/Validators.cpp src/Validators.h
     src/AdminPolicy.cpp src/AdminPolicy.h
     src/ProcessRunner.cpp src/ProcessRunner.h
+    src/ContractParsers.cpp src/ContractParsers.h
 )
 
 set_source_files_properties(qml/components/UiMetrics.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -104,6 +105,15 @@ if(BUILD_TESTING)
     target_include_directories(kriscc-test-process-runner PRIVATE src)
     target_link_libraries(kriscc-test-process-runner PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME process-runner COMMAND kriscc-test-process-runner)
+
+    add_executable(kriscc-test-parsers
+        tests/test_contract_parsers.cpp
+        src/ContractParsers.cpp src/ContractParsers.h
+        src/Validators.cpp src/Validators.h
+    )
+    target_include_directories(kriscc-test-parsers PRIVATE src)
+    target_link_libraries(kriscc-test-parsers PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME parsers COMMAND kriscc-test-parsers)
 endif()
 
 add_executable(kriscc-maintenance
