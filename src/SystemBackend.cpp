@@ -1453,3 +1453,44 @@ double SystemBackend::readCpuTemperature() const
 
             QString label;
             const QString labelName = inputName;
+            const QString prefix = labelName.left(labelName.indexOf(QLatin1Char('_')));
+            QFile labelFile(directory.filePath(prefix + QStringLiteral("_label")));
+            if (labelFile.open(QIODevice::ReadOnly | QIODevice::Text))
+                label = QString::fromUtf8(labelFile.readAll()).trimmed().toLower();
+
+            int score = baseScore;
+            if (label.contains(QStringLiteral("tctl"))
+                || label.contains(QStringLiteral("tdie"))
+                || label.contains(QStringLiteral("package"))
+                || label.contains(QStringLiteral("cpu")))
+                score = qMax(score, 80);
+            if (score < 0)
+                continue;
+
+            const double temperature = double(milli) / 1000.0;
+            if (score > bestScore) {
+                bestScore = score;
+                bestTemperature = temperature;
+            }
+        }
+    }
+    return bestTemperature;
+}
+
+QString SystemBackend::readOsName() const
+{
+    QFile file(QStringLiteral("/etc/os-release"));
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+        return QSysInfo::prettyProductName();
+
+    while (!file.atEnd()) {
+        QString line = QString::fromUtf8(file.readLine()).trimmed();
+        if (!line.startsWith(QStringLiteral("PRETTY_NAME=")))
+            continue;
+        QString value = line.mid(QStringLiteral("PRETTY_NAME=").size());
+        if (value.size() >= 2 && value.startsWith('"') && value.endsWith('"'))
+            value = value.mid(1, value.size() - 2);
+        return value;
+    }
+    return QSysInfo::prettyProductName();
+}
