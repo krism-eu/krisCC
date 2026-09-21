@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as Controls
+import QtQuick.Controls.Basic as Basic
 import org.kde.kirigami as Kirigami
 import org.kriscc
 
@@ -330,7 +331,7 @@ Kirigami.ApplicationWindow {
         standardButtons: Controls.Dialog.Close
         contentItem: ColumnLayout {
             spacing: Kirigami.Units.smallSpacing
-            Controls.TextArea {
+            Basic.TextArea {
                 id: informationText
                 Layout.fillWidth: true
                 Layout.preferredHeight: Kirigami.Units.gridUnit * 15
