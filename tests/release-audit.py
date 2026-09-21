@@ -37,8 +37,10 @@ system_qml = read("qml/modules/SystemModule.qml")
 
 require(f'Version:        {VERSION}' in spec, "RPM Version differs from canonical version")
 require(f'Release:        {RELEASE}%{{?dist}}' in spec, "RPM Release differs from canonical release")
-require('KRISCC_VERSION="${PROJECT_VERSION}-${KRISCC_RELEASE}"' in cmake,
-        "UI version is not derived from canonical build version")
+require('KRISCC_VERSION="${PROJECT_VERSION}"' in cmake,
+        "UI version must be exactly the canonical X.Y.Z build version")
+require("KRISCC_RELEASE" not in cmake,
+        "RPM Release must not leak into the application version")
 require(f'krisCC-{VERSION}-{RELEASE}.fc44.x86_64.rpm' in workflow,
         "CI artifact identity differs from canonical version")
 require(f'<release version="{VERSION}"' in read("data/org.kriscc.KrisCC.metainfo.xml"),

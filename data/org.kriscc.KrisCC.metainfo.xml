@@ -13,6 +13,9 @@
   <provides><binary>krisCC</binary></provides>
   <categories><category>Settings</category><category>System</category></categories>
   <releases>
+    <release version="0.8.0" date="2026-09-21">
+      <description><p>Structural consolidation, live network health, repository source export and simplified semantic versioning.</p></description>
+    </release>
     <release version="0.7.1" date="2026-09-21">
       <description><p>Structural hardening, bounded privileged execution, virtualized software lists, refreshed dashboard health state and consolidated control-center UX.</p></description>
     </release>
