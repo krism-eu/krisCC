@@ -17,6 +17,8 @@ Kirigami.ScrollablePage {
     property string deleteCustomId: ""
     property string deleteCustomName: ""
 
+    Component.onCompleted: RepositoryExportBackend.refreshBranches("krisCC")
+
     property var commands: [
         { id: "failed-units", title: qsTr("Unità di sistema fallite"), command: "systemctl --failed --no-pager --plain", note: qsTr("Servizi e unità systemd in errore.") },
         { id: "user-failed-units", title: qsTr("Unità utente fallite"), command: "systemctl --user --failed --no-pager --plain", note: qsTr("Servizi della sessione utente in errore.") },
@@ -111,6 +113,95 @@ Kirigami.ScrollablePage {
                             icon.name: "edit-clear"
                             enabled: commandFilter.text.length > 0
                             onClicked: commandFilter.clear()
+                        }
+                    }
+                }
+
+                Kirigami.AbstractCard {
+                    Layout.fillWidth: true
+                    contentItem: ColumnLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        Kirigami.Heading { level: 3; font.bold: true; text: qsTr("Esporta repository") }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            opacity: UiMetrics.secondaryOpacity
+                            text: qsTr("Scarica un branch pubblico di krisCC o KrisOS e crea nella Home un unico file di testo con tutti i file testuali del repository. Binari e symlink vengono rappresentati con marcatori.")
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Controls.ComboBox {
+                                id: exportRepository
+                                Layout.preferredWidth: Kirigami.Units.gridUnit * 9
+                                model: ["krisCC", "KrisOS"]
+                                enabled: !RepositoryExportBackend.busy
+                                onActivated: RepositoryExportBackend.refreshBranches(currentText)
+                            }
+                            Controls.ComboBox {
+                                id: exportBranch
+                                Layout.fillWidth: true
+                                model: RepositoryExportBackend.branches
+                                enabled: !RepositoryExportBackend.busy && count > 0
+                            }
+                            Controls.Button {
+                                text: qsTr("Aggiorna branch")
+                                icon.name: "view-refresh"
+                                enabled: !RepositoryExportBackend.busy
+                                onClicked: RepositoryExportBackend.refreshBranches(exportRepository.currentText)
+                            }
+                            Controls.Button {
+                                text: qsTr("Esporta in Home")
+                                icon.name: "document-export"
+                                enabled: !RepositoryExportBackend.busy && exportBranch.currentText.length > 0
+                                onClicked: RepositoryExportBackend.exportBranch(exportRepository.currentText, exportBranch.currentText)
+                            }
+                            Controls.Button {
+                                visible: RepositoryExportBackend.busy
+                                text: qsTr("Annulla")
+                                icon.name: "process-stop"
+                                onClicked: RepositoryExportBackend.cancel()
+                            }
+                        }
+                        Controls.BusyIndicator {
+                            visible: RepositoryExportBackend.busy
+                            running: visible
+                            Layout.alignment: Qt.AlignHCenter
+                        }
+                        Kirigami.InlineMessage {
+                            Layout.fillWidth: true
+                            visible: RepositoryExportBackend.errorText.length > 0
+                            type: Kirigami.MessageType.Error
+                            text: RepositoryExportBackend.errorText
+                        }
+                        Kirigami.InlineMessage {
+                            Layout.fillWidth: true
+                            visible: RepositoryExportBackend.errorText.length === 0
+                                     && RepositoryExportBackend.statusText.length > 0
+                            type: RepositoryExportBackend.outputPath.length > 0
+                                  ? Kirigami.MessageType.Positive : Kirigami.MessageType.Information
+                            text: RepositoryExportBackend.statusText
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            visible: RepositoryExportBackend.outputPath.length > 0
+                            Controls.Label {
+                                Layout.fillWidth: true
+                                text: RepositoryExportBackend.outputPath
+                                elide: Text.ElideMiddle
+                                font.family: Kirigami.Theme.fixedWidthFont.family
+                            }
+                            Controls.Button {
+                                text: qsTr("Copia percorso")
+                                icon.name: "edit-copy"
+                                onClicked: SystemBackend.copyToClipboard(RepositoryExportBackend.outputPath)
+                            }
+                        }
+                    }
+                    Connections {
+                        target: RepositoryExportBackend
+                        function onBranchesChanged() {
+                            if (exportBranch.count > 0)
+                                exportBranch.currentIndex = 0
                         }
                     }
                 }

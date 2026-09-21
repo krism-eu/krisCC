@@ -16,6 +16,7 @@
 #include "PackageSearch.h"
 #include "PolkitHelper.h"
 #include "RkBackend.h"
+#include "RepositoryExportBackend.h"
 #include "MaintenanceBackend.h"
 #include "SoftwareBackend.h"
 #include "SystemBackend.h"
@@ -77,6 +78,7 @@ int main(int argc, char *argv[])
     SoftwareBackend softwareBackend(&polkitHelper);
     SystemBackend systemBackend(&polkitHelper);
     CustomActionsBackend customActionsBackend;
+    RepositoryExportBackend repositoryExportBackend;
 
     QObject::connect(&rkBackend, &RkBackend::operationFinished, &bootcBackend,
                      [&bootcBackend](bool, const QString &) {
@@ -98,6 +100,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("SoftwareBackend"), &softwareBackend);
     engine.rootContext()->setContextProperty(QStringLiteral("SystemBackend"), &systemBackend);
     engine.rootContext()->setContextProperty(QStringLiteral("CustomActionsBackend"), &customActionsBackend);
+    engine.rootContext()->setContextProperty(QStringLiteral("RepositoryExportBackend"), &repositoryExportBackend);
     engine.rootContext()->setContextProperty(QStringLiteral("KrisccStartHidden"), startHidden);
     const bool smokeTest = qEnvironmentVariableIsSet("KRISCC_SMOKE_TEST");
     engine.rootContext()->setContextProperty(QStringLiteral("KrisccSmokeTest"), smokeTest);
