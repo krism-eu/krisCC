@@ -21,8 +21,8 @@ Kirigami.ApplicationWindow {
         { section: 2, label: qsTr("Flatpak"), icon: "applications-all" },
         { section: 3, label: qsTr("Container"), icon: "package" },
         { section: 4, label: qsTr("Sistema"), icon: "computer" },
-        { section: 6, label: qsTr("Backup e Recovery"), icon: "document-save-all" },
-        { section: 5, label: qsTr("Comandi"), icon: "utilities-terminal" }
+        { section: 5, label: qsTr("Backup e Recovery"), icon: "document-save-all" },
+        { section: 6, label: qsTr("Comandi"), icon: "utilities-terminal" }
     ]
 
     pageStack.globalToolBar.style: Kirigami.ApplicationHeaderStyle.None
@@ -53,8 +53,8 @@ Kirigami.ApplicationWindow {
         else if (pageId === "flatpak") showIndex(2)
         else if (pageId === "podman") showIndex(3)
         else if (pageId === "system" || pageId === "bootc" || pageId === "tools") showIndex(4)
-        else if (pageId === "commands") showIndex(5)
-        else if (pageId === "recovery") showIndex(6)
+        else if (pageId === "recovery") showIndex(5)
+        else if (pageId === "commands") showIndex(6)
         else showIndex(0)
     }
 
@@ -306,7 +306,7 @@ Kirigami.ApplicationWindow {
                         property bool visited: false
                         active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 5)
                         onLoaded: Qt.callLater(function() { visited = true })
-                        sourceComponent: Component { CommandsModule { Layout.fillWidth: true; Layout.fillHeight: true } }
+                        sourceComponent: Component { RecoveryModule { Layout.fillWidth: true; Layout.fillHeight: true } }
                     }
                     Loader {
                         Layout.fillWidth: true
@@ -314,7 +314,7 @@ Kirigami.ApplicationWindow {
                         property bool visited: false
                         active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 6)
                         onLoaded: Qt.callLater(function() { visited = true })
-                        sourceComponent: Component { RecoveryModule { Layout.fillWidth: true; Layout.fillHeight: true } }
+                        sourceComponent: Component { CommandsModule { Layout.fillWidth: true; Layout.fillHeight: true } }
                     }
                 }
             }

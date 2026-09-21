@@ -19,10 +19,6 @@ Kirigami.Page {
     property bool refreshInstalledAfterAction: false
     property bool systemScopeChecked: false
 
-    function expectedOperationId() {
-        return "flatpak." + root.mode
-    }
-
     function refreshSystemScope() {
         if (!SystemBackend.programAvailable("flatpak") || systemScopeBackend.busy)
             return

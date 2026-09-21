@@ -14,6 +14,7 @@ Kirigami.ScrollablePage {
     property string pendingService: ""
     property string pendingServiceTitle: ""
     property var historyEntries: []
+    property bool rebootAfterDownloadedApply: false
     property var services: [
         { id: "NetworkManager.service", title: qsTr("NetworkManager") },
         { id: "cups.service", title: qsTr("Stampa (CUPS)") },
@@ -65,6 +66,11 @@ Kirigami.ScrollablePage {
         target: BootcBackend
         function onOperationFinished(success, output) {
             root.historyEntries = SystemBackend.operationHistoryEntries()
+            if (root.rebootAfterDownloadedApply) {
+                root.rebootAfterDownloadedApply = false
+                if (success)
+                    SystemBackend.requestReboot()
+            }
         }
     }
 
@@ -712,10 +718,13 @@ Kirigami.ScrollablePage {
                   : qsTr("L'aggiornamento è già predisposto per il prossimo avvio; il sistema verrà riavviato ora. Il riavvio è autorizzato secondo la policy della sessione.")
         }
         onAccepted: {
-            if (downloadOnly)
-                BootcBackend.applyDownloaded()
-            else
+            if (downloadOnly) {
+                root.rebootAfterDownloadedApply = true
+                if (!BootcBackend.applyDownloaded())
+                    root.rebootAfterDownloadedApply = false
+            } else {
                 SystemBackend.requestReboot()
+            }
         }
     }
 

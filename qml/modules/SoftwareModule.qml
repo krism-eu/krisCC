@@ -560,8 +560,8 @@ Kirigami.Page {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
-        width: Math.min(root.width - 48, 800)
-        height: Math.min(root.height - 48, 650)
+        width: Math.min(parent ? parent.width - Kirigami.Units.largeSpacing * 2 : 800, 800)
+        height: Math.min(parent ? parent.height - Kirigami.Units.largeSpacing * 2 : 650, 650)
         title: root.detailPackage ? root.detailPackage.name : qsTr("Dettagli pacchetto")
         standardButtons: Controls.Dialog.Close
 
