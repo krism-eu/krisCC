@@ -33,6 +33,8 @@
 #include <QUrl>
 #include <QVariantMap>
 
+#include <algorithm>
+#include <sys/stat.h>
 #include <sys/sysinfo.h>
 
 namespace {
@@ -53,7 +55,8 @@ const QSet<QString> &allowedServices()
     static const QSet<QString> services = {
         QStringLiteral("NetworkManager.service"),
         QStringLiteral("cups.service"),
-        QStringLiteral("bluetooth.service")
+        QStringLiteral("bluetooth.service"),
+        QStringLiteral("firewalld.service")
     };
     return services;
 }
@@ -75,6 +78,7 @@ const QStringList &backupHomeExcludes()
 {
     static const QStringList entries = {
         QStringLiteral(".cache"),
+        QStringLiteral(".var/app/*/cache"),
         QStringLiteral(".local/share/Trash"),
         QStringLiteral(".local/share/flatpak"),
         QStringLiteral(".local/share/containers"),
@@ -184,8 +188,12 @@ void SystemBackend::refreshUefiEntries()
                 continue;
             QVariantMap entry;
             const QString code = match.captured(1).toUpper();
+            QString label = match.captured(2).trimmed();
+            const qsizetype devicePath = label.indexOf(QLatin1Char('\t'));
+            if (devicePath >= 0)
+                label = label.left(devicePath).trimmed();
             entry.insert(QStringLiteral("code"), code);
-            entry.insert(QStringLiteral("label"), code + QStringLiteral(" · ") + match.captured(2).trimmed());
+            entry.insert(QStringLiteral("label"), code + QStringLiteral(" · ") + label);
             entries.append(entry);
         }
         m_uefiEntries = entries;
@@ -1018,6 +1026,10 @@ bool SystemBackend::createSnapshot(const QString &kind)
     m_backupPartialPath = partial;
     m_backupCancelled = false;
     process->setProcessChannelMode(QProcess::MergedChannels);
+    process->setStandardInputFile(QProcess::nullDevice());
+    process->setChildProcessModifier([] {
+        (void)::umask(0077);
+    });
     setBackupBusy(true);
     setBackupResult(tr("Creazione snapshot in corso…"), output, QStringLiteral("running"));
 
@@ -1044,6 +1056,7 @@ bool SystemBackend::createSnapshot(const QString &kind)
         const bool archiveProduced = QFileInfo(partial).exists() && QFileInfo(partial).size() > 0;
         const bool completed = status == QProcess::NormalExit && (exitCode == 0 || exitCode == 1) && archiveProduced;
         if (completed) {
+            QFile::setPermissions(partial, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
             QFile::remove(output);
             if (!QFile::rename(partial, output)) {
                 m_backupPartialPath = partial;
@@ -1108,6 +1121,32 @@ bool SystemBackend::cancelSnapshot()
         if (guarded && guarded->state() != QProcess::NotRunning)
             guarded->kill();
     });
+    return true;
+}
+
+bool SystemBackend::removeSnapshot(const QString &path)
+{
+    if (m_backupBusy)
+        return false;
+
+    QString canonical;
+    if (!validateBackupPath(path, &canonical)) {
+        setBackupResult(tr("Archivio di backup non valido o fuori dalla cartella krisCC Backups."),
+                        QString(), QStringLiteral("error"));
+        return false;
+    }
+
+    const QString name = QFileInfo(canonical).fileName();
+    if (!QFile::remove(canonical)) {
+        setBackupResult(tr("Impossibile eliminare il backup."), canonical, QStringLiteral("error"));
+        OperationLog::append(QStringLiteral("Backup"), QStringLiteral("delete"),
+                             QStringLiteral("error"), name);
+        return false;
+    }
+
+    setBackupResult(tr("Backup eliminato."), QString(), QStringLiteral("success"));
+    OperationLog::append(QStringLiteral("Backup"), QStringLiteral("delete"),
+                         QStringLiteral("success"), name);
     return true;
 }
 
@@ -1248,15 +1287,67 @@ void SystemBackend::refreshResources()
         : -1;
     const double nextTemperature = readCpuTemperature();
 
+    struct ProcessMemoryRow {
+        QString name;
+        int pid = 0;
+        qint64 rssKiB = 0;
+    };
+    QList<ProcessMemoryRow> processRows;
+    const QDir procRoot(QStringLiteral("/proc"));
+    const QStringList procEntries = procRoot.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    for (const QString &entryName : procEntries) {
+        bool pidOk = false;
+        const int pid = entryName.toInt(&pidOk);
+        if (!pidOk || pid <= 0)
+            continue;
+
+        QFile statusFile(procRoot.filePath(entryName + QStringLiteral("/status")));
+        if (!statusFile.open(QIODevice::ReadOnly | QIODevice::Text))
+            continue;
+
+        QString name;
+        qint64 rssKiB = -1;
+        for (const QByteArray &rawLine : statusFile.readAll().split('\n')) {
+            if (rawLine.startsWith("Name:"))
+                name = QString::fromUtf8(rawLine.mid(5)).trimmed();
+            else if (rawLine.startsWith("VmRSS:")) {
+                const QList<QByteArray> fields = rawLine.simplified().split(' ');
+                if (fields.size() >= 2)
+                    rssKiB = fields.at(1).toLongLong();
+            }
+        }
+        if (name.isEmpty() || rssKiB <= 0)
+            continue;
+        processRows.append({name, pid, rssKiB});
+    }
+
+    std::sort(processRows.begin(), processRows.end(),
+              [](const ProcessMemoryRow &left, const ProcessMemoryRow &right) {
+        return left.rssKiB > right.rssKiB;
+    });
+
+    QVariantList nextTopProcesses;
+    const int processCount = qMin(6, processRows.size());
+    for (int i = 0; i < processCount; ++i) {
+        const ProcessMemoryRow &row = processRows.at(i);
+        QVariantMap item;
+        item.insert(QStringLiteral("name"), row.name);
+        item.insert(QStringLiteral("pid"), row.pid);
+        item.insert(QStringLiteral("memoryMiB"), qMax<qint64>(1, row.rssKiB / 1024));
+        nextTopProcesses.append(item);
+    }
+
     const bool changed = nextCpuUsage != m_cpuUsagePercent
         || nextUsedMiB != m_memoryUsedMiB
         || nextTotalMiB != m_memoryTotalMiB
-        || !qFuzzyCompare(nextTemperature + 1.0, m_cpuTemperatureC + 1.0);
+        || !qFuzzyCompare(nextTemperature + 1.0, m_cpuTemperatureC + 1.0)
+        || nextTopProcesses != m_topMemoryProcesses;
 
     m_cpuUsagePercent = nextCpuUsage;
     m_memoryUsedMiB = nextUsedMiB;
     m_memoryTotalMiB = nextTotalMiB;
     m_cpuTemperatureC = nextTemperature;
+    m_topMemoryProcesses = nextTopProcesses;
     if (changed)
         emit resourcesChanged();
 }
