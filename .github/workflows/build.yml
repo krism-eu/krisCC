@@ -28,6 +28,9 @@ jobs:
       - name: Build
         run: cmake --build build
 
+      - name: Unit tests
+        run: ctest --test-dir build --output-on-failure
+
       - name: QML runtime smoke test
         env:
           QT_QPA_PLATFORM: offscreen
