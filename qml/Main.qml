@@ -71,7 +71,7 @@ Kirigami.ApplicationWindow {
 
             Rectangle {
                 id: sidebar
-                Layout.preferredWidth: root.width < 1080 ? 205 : 228
+                Layout.preferredWidth: root.width < Kirigami.Units.gridUnit * 60 ? Kirigami.Units.gridUnit * 11 : Kirigami.Units.gridUnit * 12
                 Layout.fillHeight: true
                 color: Kirigami.Theme.alternateBackgroundColor
 
@@ -86,8 +86,8 @@ Kirigami.ApplicationWindow {
                         spacing: Kirigami.Units.smallSpacing
 
                         Kirigami.Icon {
-                            Layout.preferredWidth: 46
-                            Layout.preferredHeight: 46
+                            Layout.preferredWidth: Kirigami.Units.iconSizes.large
+                            Layout.preferredHeight: Layout.preferredWidth
                             source: "krisCC"
                             fallback: "security-high"
                         }
@@ -114,7 +114,9 @@ Kirigami.ApplicationWindow {
                         delegate: Controls.ItemDelegate {
                             required property var modelData
                             Layout.fillWidth: true
-                            Layout.preferredHeight: 46
+                            Layout.preferredHeight: Kirigami.Units.gridUnit * 2.5
+                            Accessible.name: modelData.label
+                            Accessible.role: Accessible.Button
                             checkable: true
                             checked: root.currentSection === modelData.section
                             hoverEnabled: true
@@ -125,8 +127,8 @@ Kirigami.ApplicationWindow {
                             contentItem: RowLayout {
                                 spacing: Kirigami.Units.largeSpacing
                                 Kirigami.Icon {
-                                    Layout.preferredWidth: 22
-                                    Layout.preferredHeight: 22
+                                    Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                                    Layout.preferredHeight: Layout.preferredWidth
                                     source: modelData.icon
                                     color: parent.parent.checked
                                            ? Kirigami.Theme.highlightColor
@@ -171,7 +173,7 @@ Kirigami.ApplicationWindow {
 
                     Controls.ItemDelegate {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 42
+                        Layout.preferredHeight: Kirigami.Units.gridUnit * 2.3
                         text: qsTr("Impostazioni Plasma")
                         icon.name: "settings-configure"
                         onClicked: SystemBackend.launchTool("systemsettings")
@@ -179,7 +181,7 @@ Kirigami.ApplicationWindow {
 
                     Controls.ItemDelegate {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 42
+                        Layout.preferredHeight: Kirigami.Units.gridUnit * 2.3
                         text: qsTr("Informazioni")
                         icon.name: "help-about"
                         onClicked: aboutDialog.open()
@@ -202,7 +204,7 @@ Kirigami.ApplicationWindow {
 
                 Rectangle {
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 72
+                    Layout.preferredHeight: Kirigami.Units.gridUnit * 4
                     color: Kirigami.Theme.backgroundColor
 
                     RowLayout {
