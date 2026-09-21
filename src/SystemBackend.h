@@ -19,7 +19,7 @@ class SystemBackend : public QObject
     Q_PROPERTY(QString architecture READ architecture CONSTANT)
     Q_PROPERTY(QString hostName READ hostName CONSTANT)
     Q_PROPERTY(QString memorySummary READ memorySummary CONSTANT)
-    Q_PROPERTY(QString storageSummary READ storageSummary CONSTANT)
+    Q_PROPERTY(QString storageSummary READ storageSummary NOTIFY resourcesChanged)
     Q_PROPERTY(QString desktopSession READ desktopSession CONSTANT)
     Q_PROPERTY(QString selinuxState READ selinuxState CONSTANT)
     Q_PROPERTY(bool bootSelectionRunning READ bootSelectionRunning NOTIFY bootSelectionStateChanged)
@@ -36,6 +36,7 @@ class SystemBackend : public QObject
     Q_PROPERTY(qint64 memoryUsedMiB READ memoryUsedMiB NOTIFY resourcesChanged)
     Q_PROPERTY(qint64 memoryTotalMiB READ memoryTotalMiB NOTIFY resourcesChanged)
     Q_PROPERTY(double cpuTemperatureC READ cpuTemperatureC NOTIFY resourcesChanged)
+    Q_PROPERTY(QVariantList topMemoryProcesses READ topMemoryProcesses NOTIFY resourcesChanged)
     Q_PROPERTY(QVariantMap serviceStates READ serviceStates NOTIFY serviceStatesChanged)
     Q_PROPERTY(bool backupBusy READ backupBusy NOTIFY backupBusyChanged)
     Q_PROPERTY(QString backupStatus READ backupStatus NOTIFY backupStatusChanged)
@@ -68,6 +69,7 @@ public:
     qint64 memoryUsedMiB() const { return m_memoryUsedMiB; }
     qint64 memoryTotalMiB() const { return m_memoryTotalMiB; }
     double cpuTemperatureC() const { return m_cpuTemperatureC; }
+    const QVariantList &topMemoryProcesses() const { return m_topMemoryProcesses; }
     const QVariantMap &serviceStates() const { return m_serviceStates; }
 
     bool backupBusy() const { return m_backupBusy; }
@@ -96,6 +98,7 @@ public:
     Q_INVOKABLE QVariantList backups() const;
     Q_INVOKABLE bool verifySnapshot(const QString &path);
     Q_INVOKABLE bool restoreSnapshot(const QString &path);
+    Q_INVOKABLE bool removeSnapshot(const QString &path);
     Q_INVOKABLE bool openBackupFolder() const;
     Q_INVOKABLE QVariantList backupPreview(const QString &kind) const;
 
@@ -142,6 +145,7 @@ private:
     qint64 m_memoryUsedMiB = -1;
     qint64 m_memoryTotalMiB = -1;
     double m_cpuTemperatureC = -1.0;
+    QVariantList m_topMemoryProcesses;
     QVariantMap m_serviceStates;
     quint64 m_serviceRefreshGeneration = 0;
     QPointer<QProcess> m_backupProcess;
