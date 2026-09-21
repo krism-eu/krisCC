@@ -16,9 +16,12 @@ def require(condition: bool, message: str) -> None:
 
 version_cfg = read("cmake/KrisCCVersion.cmake")
 m_v = re.search(r'KRISCC_VERSION\s+"([^"]+)"', version_cfg)
-m_r = re.search(r'KRISCC_RELEASE\s+"([^"]+)"', version_cfg)
-require(m_v and m_r, "missing canonical krisCC version")
-VERSION, RELEASE = m_v.group(1), m_r.group(1)
+require(m_v, "missing canonical krisCC version")
+VERSION = m_v.group(1)
+require(re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", VERSION) is not None,
+        "public krisCC version must be X.Y.Z only")
+require("KRISCC_RELEASE" not in version_cfg,
+        "RPM release must not be part of the public version source")
 
 cmake = read("CMakeLists.txt")
 spec = read("packaging/krisCC.spec")
@@ -36,11 +39,14 @@ flatpak_qml = read("qml/modules/FlatpakModule.qml")
 system_qml = read("qml/modules/SystemModule.qml")
 
 require(f'Version:        {VERSION}' in spec, "RPM Version differs from canonical version")
-require(f'Release:        {RELEASE}%{{?dist}}' in spec, "RPM Release differs from canonical release")
-require('KRISCC_VERSION="${PROJECT_VERSION}-${KRISCC_RELEASE}"' in cmake,
-        "UI version is not derived from canonical build version")
-require(f'krisCC-{VERSION}-{RELEASE}.fc44.x86_64.rpm' in workflow,
+require('Release:        1%{?dist}' in spec,
+        "RPM Release must stay fixed at 1; bump X.Y.Z instead")
+require('KRISCC_VERSION="${PROJECT_VERSION}"' in cmake,
+        "UI version must be exactly canonical X.Y.Z")
+require(f'krisCC-{VERSION}-1.fc44.x86_64.rpm' in workflow,
         "CI artifact identity differs from canonical version")
+require(f'"krisCC {VERSION}"' in workflow,
+        "CI does not verify the public X.Y.Z application version")
 require(f'<release version="{VERSION}"' in read("data/org.kriscc.KrisCC.metainfo.xml"),
         "AppStream release is stale")
 
@@ -175,4 +181,4 @@ require("release 0.5.1" not in read("i18n/README.md"), "i18n docs are stale")
 require("auth_admin_keep" not in read("data/org.kriscc.controlcenter.policy"),
         "Polkit retention is forbidden")
 
-print(f"release audit OK: krisCC {VERSION}-{RELEASE}")
+print(f"release audit OK: krisCC {VERSION}")

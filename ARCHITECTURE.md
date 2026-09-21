@@ -220,7 +220,9 @@ Queste regole hanno precedenza sulla comodità di implementare rapidamente una n
 
 ## 13. Ciclo di release
 
-`main` è l'unica linea di sviluppo supportata. I rami `stable/X.Y` sono fotografie congelate di una linea precedente, non rami di manutenzione continua.
+La versione pubblica segue esclusivamente `X.Y.Z`. Ogni nuova candidata cambia `Z`; il campo RPM `Release` resta `1` e non fa parte della versione mostrata, del tag o del nome della linea. I tag sono `vX.Y.Z`.
+
+Il ramo di integrazione corrente usa il nome breve `trial/X.Y` (per esempio `trial/0.7`). `main` resta la linea ufficiale dopo acceptance. I rami `stable/X.Y` sono fotografie congelate di una linea precedente, non rami di manutenzione continua.
 
 Una release segue questo percorso:
 

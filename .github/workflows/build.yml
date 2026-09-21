@@ -124,7 +124,7 @@ jobs:
         run: |
           rpmspec -P packaging/krisCC.spec >/dev/null
           test "$(rpmspec -q --qf '%{NAME}\n' packaging/krisCC.spec | head -n1)" = "krisCC"
-          test "$(rpmspec -q --qf '%{VERSION}-%{RELEASE}\n' packaging/krisCC.spec | head -n1)" = "0.7.1-5.fc44"
+          test "$(rpmspec -q --qf '%{VERSION}-%{RELEASE}\n' packaging/krisCC.spec | head -n1)" = "0.7.2-1.fc44"
           ! rpmspec -P packaging/krisCC.spec | grep -Eq '^Provides:[[:space:]]+(kcc|k-controlc)([[:space:]=]|$)'
           ! rpmspec -P packaging/krisCC.spec | grep -Eq '^Obsoletes:[[:space:]]+(kcc|k-controlc)([[:space:]<=>]|$)'
           rpmspec -P packaging/krisCC.spec | grep -Eq '^Requires:[[:space:]]+dnf5-plugins([[:space:]]|$)'
@@ -141,7 +141,7 @@ jobs:
           test -f stage/usr/share/icons/hicolor/scalable/apps/krisCC.svg
           test -f stage/usr/share/polkit-1/actions/org.kriscc.controlcenter.policy
           test -f stage/usr/share/metainfo/org.kriscc.KrisCC.metainfo.xml
-          test "$(QT_QPA_PLATFORM=offscreen stage/usr/bin/krisCC --version)" = "krisCC 0.7.1-5"
+          test "$(QT_QPA_PLATFORM=offscreen stage/usr/bin/krisCC --version)" = "krisCC 0.7.2"
           tar -C stage -czf krisCC-stage.tar.gz .
 
       - name: Build RPM
@@ -158,8 +158,8 @@ jobs:
               --exclude='./stage' \
               --exclude='./artifacts' \
               --exclude='./krisCC-stage.tar.gz' \
-              --transform='s,^\./,krisCC-0.7.1/,' \
-              -czf "$HOME/rpmbuild/SOURCES/krisCC-0.7.1.tar.gz" .
+              --transform='s,^\./,krisCC-0.7.2/,' \
+              -czf "$HOME/rpmbuild/SOURCES/krisCC-0.7.2.tar.gz" .
             cp "$GITHUB_WORKSPACE/packaging/krisCC.spec" "$HOME/rpmbuild/SPECS/krisCC.spec"
             rpmbuild -ba "$HOME/rpmbuild/SPECS/krisCC.spec"
             mkdir -p "$GITHUB_WORKSPACE/artifacts/rpm" "$GITHUB_WORKSPACE/artifacts/srpm" "$GITHUB_WORKSPACE/artifacts/stage"
@@ -168,17 +168,17 @@ jobs:
             cp "$GITHUB_WORKSPACE/krisCC-stage.tar.gz" "$GITHUB_WORKSPACE/artifacts/stage/"
             cd "$GITHUB_WORKSPACE/artifacts/rpm"
             sha256sum krisCC-*.rpm > SHA256SUMS
-            awk '$2 == "krisCC-0.7.1-5.fc44.x86_64.rpm" { found++ } END { exit(found == 1 ? 0 : 1) }' SHA256SUMS
+            awk '$2 == "krisCC-0.7.2-1.fc44.x86_64.rpm" { found++ } END { exit(found == 1 ? 0 : 1) }' SHA256SUMS
           ) 2>&1 | tee "$GITHUB_WORKSPACE/artifacts/logs/rpmbuild.log"
 
       - name: Inspect built RPM artifact
         shell: bash
         run: |
           set -euxo pipefail
-          rpm_file='artifacts/rpm/krisCC-0.7.1-5.fc44.x86_64.rpm'
+          rpm_file='artifacts/rpm/krisCC-0.7.2-1.fc44.x86_64.rpm'
           test -f "$rpm_file"
           test "$(rpm -qp --qf '%{NAME}\n' "$rpm_file")" = "krisCC"
-          test "$(rpm -qp --qf '%{VERSION}-%{RELEASE}\n' "$rpm_file")" = "0.7.1-5.fc44"
+          test "$(rpm -qp --qf '%{VERSION}-%{RELEASE}\n' "$rpm_file")" = "0.7.2-1.fc44"
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/bin/krisCC'
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/admin'
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/bootc-status'
@@ -275,13 +275,13 @@ jobs:
           QT_FORCE_STDERR_LOGGING: "1"
         run: |
           set -euxo pipefail
-          rpm_file="$GITHUB_WORKSPACE/artifacts/rpm/krisCC-0.7.1-5.fc44.x86_64.rpm"
+          rpm_file="$GITHUB_WORKSPACE/artifacts/rpm/krisCC-0.7.2-1.fc44.x86_64.rpm"
           test -f "$rpm_file"
           (cd "$GITHUB_WORKSPACE/artifacts/rpm" && sha256sum -c SHA256SUMS)
           dnf -y install "$rpm_file"
-          test "$(rpm -q --qf '%{VERSION}-%{RELEASE}\n' krisCC)" = "0.7.1-5.fc44"
+          test "$(rpm -q --qf '%{VERSION}-%{RELEASE}\n' krisCC)" = "0.7.2-1.fc44"
           rpm -V krisCC
-          test "$(QT_QPA_PLATFORM=offscreen /usr/bin/krisCC --version)" = "krisCC 0.7.1-5"
+          test "$(QT_QPA_PLATFORM=offscreen /usr/bin/krisCC --version)" = "krisCC 0.7.2"
           test -x /usr/libexec/kriscc/admin
           test -x /usr/libexec/kriscc/bootc-status
           test -x /usr/libexec/kriscc/maintenance
@@ -328,7 +328,8 @@ jobs:
             echo "Unexpected RPM filename: $base" >&2
             exit 1
           fi
-          tag="v${BASH_REMATCH[1]}-${BASH_REMATCH[2]}"
+          test "${BASH_REMATCH[2]}" = "1"
+          tag="v${BASH_REMATCH[1]}"
           checksum="$(awk -v f="$base" '$2 == f || $2 == "./" f {print $1}' SHA256SUMS)"
           [[ "$checksum" =~ ^[0-9a-f]{64}$ ]]
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
@@ -363,7 +364,8 @@ jobs:
               sha256sum -c SHA256SUMS
               test "$(awk 'END {print NR}' SHA256SUMS)" -eq 1
               test "$(rpm -qp --qf '%{NAME}' "$RPM")" = 'krisCC'
-              test "$(rpm -qp --qf '%{VERSION}-%{RELEASE}' "$RPM")" = "${TAG#v}.fc44"
+              test "$(rpm -qp --qf '%{VERSION}' "$RPM")" = "${TAG#v}"
+              test "$(rpm -qp --qf '%{RELEASE}' "$RPM")" = "1.fc44"
             )
             echo "Verified existing $TAG runtime RPM; release status remains unchanged."
             exit 0
