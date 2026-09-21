@@ -55,6 +55,8 @@ Settings.
 
 %changelog
 * Mon Sep 21 2026 krism-eu - 0.8.0-1
+- Keep the application version strictly X.Y.Z while RPM Release stays packaging-only
+- Attach the exact generating source tree as a single text artifact beside each candidate RPM
 - Start the 0.8 development line with user-facing semantic versions only
 - Carry forward structural hardening, live network health and repository export
 - Keep RPM Release as internal Fedora packaging metadata

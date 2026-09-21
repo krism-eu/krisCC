@@ -65,7 +65,7 @@ cmake --build build
 
 ## RPM e integrazione nell'immagine
 
-Lo spec RPM è `packaging/krisCC.spec` e produce **`krisCC-0.8.0-*.rpm`**. La CI Fedora 44 costruisce l'RPM, lo installa in un ambiente pulito, riesegue lo smoke test e produce `SHA256SUMS` dell'artefatto RPM.
+Lo spec RPM è `packaging/krisCC.spec` e produce **`krisCC-0.8.0-1.fc44.x86_64.rpm`**. La versione mostrata dall'app resta semplicemente **`0.8.0`**: il Release RPM `-1.fc44` è solo metadata di packaging. La CI Fedora 44 costruisce e installa l'RPM, riesegue lo smoke test, produce `SHA256SUMS` e salva in `artifacts/source/` un unico file di testo con l'esatto commit/branch e tutti i file testuali tracciati che hanno generato quell'RPM; i file binari vengono marcati con dimensione e SHA256.
 
 Il flusso previsto per KrisOS è:
 

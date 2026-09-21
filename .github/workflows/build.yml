@@ -22,6 +22,9 @@ jobs:
     container: fedora:44
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
 
       - name: Install build dependencies
         run: >-
@@ -141,8 +144,23 @@ jobs:
           test -f stage/usr/share/icons/hicolor/scalable/apps/krisCC.svg
           test -f stage/usr/share/polkit-1/actions/org.kriscc.controlcenter.policy
           test -f stage/usr/share/metainfo/org.kriscc.KrisCC.metainfo.xml
-          test "$(QT_QPA_PLATFORM=offscreen stage/usr/bin/krisCC --version)" = "krisCC 0.8.0-1"
+          test "$(QT_QPA_PLATFORM=offscreen stage/usr/bin/krisCC --version)" = "krisCC 0.8.0"
           tar -C stage -czf krisCC-stage.tar.gz .
+
+      - name: Export exact source tree
+        shell: bash
+        env:
+          SOURCE_REF: ${{ github.head_ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/source
+          python3 tools/export-source-tree.py \
+            --output artifacts/source/krisCC-0.8.0-source.txt \
+            --repository "$GITHUB_REPOSITORY" \
+            --ref "$SOURCE_REF"
+          grep -Fq "COMMIT: $(git rev-parse HEAD)" artifacts/source/krisCC-0.8.0-source.txt
+          grep -Fq "===== FILE: CMakeLists.txt =====" artifacts/source/krisCC-0.8.0-source.txt
+          test -s artifacts/source/krisCC-0.8.0-source.txt
 
       - name: Build RPM
         shell: bash
@@ -202,6 +220,9 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
 
       - name: Install strict audit tooling
         run: >-
@@ -281,7 +302,7 @@ jobs:
           dnf -y install "$rpm_file"
           test "$(rpm -q --qf '%{VERSION}-%{RELEASE}\n' krisCC)" = "0.8.0-1.fc44"
           rpm -V krisCC
-          test "$(QT_QPA_PLATFORM=offscreen /usr/bin/krisCC --version)" = "krisCC 0.8.0-1"
+          test "$(QT_QPA_PLATFORM=offscreen /usr/bin/krisCC --version)" = "krisCC 0.8.0"
           test -x /usr/libexec/kriscc/admin
           test -x /usr/libexec/kriscc/bootc-status
           test -x /usr/libexec/kriscc/maintenance
@@ -379,6 +400,8 @@ jobs:
             cd "$release_dir"
             sha256sum -c SHA256SUMS
           )
+          source_dump="artifacts/source/krisCC-0.8.0-source.txt"
+          test -s "$source_dump"
           gh release create "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
@@ -386,4 +409,5 @@ jobs:
             --prerelease \
             --notes "CI-tested krisCC candidate built from $GITHUB_SHA. Stable promotion requires the KrisOS host acceptance test." \
             "$release_dir/$RPM" \
-            "$release_dir/SHA256SUMS"
+            "$release_dir/SHA256SUMS" \
+            "$source_dump"
