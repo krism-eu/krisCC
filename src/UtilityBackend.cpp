@@ -156,7 +156,7 @@ void UtilityBackend::finish(const QString &message, const QString &state)
             parsed = ContractParsers::parseFlatpakTsv(message.toUtf8(), 6);
             expectsRows = true;
         } else if (completedOperation == QStringLiteral("flatpak.remotes")) {
-            parsed = ContractParsers::parseFlatpakRemotes(message.toUtf8());
+            parsed = ContractParsers::parseFlatpakTsv(message.toUtf8(), 2);
             expectsRows = true;
         } else if (completedOperation == QStringLiteral("flatpak.installed")
                    || completedOperation == QStringLiteral("flatpak.updates")
@@ -312,7 +312,7 @@ bool UtilityBackend::runFlatpak(const QString &mode, const QString &query, const
                      tr("Aggiornamento Flatpak: %1").arg(query.trimmed()), QStringLiteral("flatpak.update"), kInteractiveTimeoutMs);
     if (mode == QStringLiteral("remotes"))
         return start(QStringLiteral("/usr/bin/flatpak"),
-                     {QStringLiteral("remotes"), QStringLiteral("--user"), QStringLiteral("--columns=name,title,url,options")},
+                     {QStringLiteral("remotes"), QStringLiteral("--user"), QStringLiteral("--columns=name,url")},
                      tr("Remote Flatpak"), QStringLiteral("flatpak.remotes"), kRepositoryQueryTimeoutMs, true);
     if (mode == QStringLiteral("search") && query.trimmed().size() >= 2)
         return start(QStringLiteral("/usr/bin/flatpak"),

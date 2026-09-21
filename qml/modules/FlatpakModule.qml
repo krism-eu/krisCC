@@ -235,6 +235,8 @@ Kirigami.Page {
                             Layout.preferredHeight: Kirigami.Units.iconSizes.large
                             Layout.alignment: Qt.AlignTop
                             source: {
+                                if (root.mode === "remotes")
+                                    return "network-server"
                                 var appId = root.mode === "search" ? (modelData[2] || "") : (modelData[1] || "")
                                 var resolved = SystemBackend.flatpakIconPath(appId)
                                 return resolved.length > 0 ? resolved : "package-x-generic"

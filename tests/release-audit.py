@@ -146,9 +146,10 @@ require("topMemoryProcesses" in read("src/SystemBackend.h"),
 require("networkState" in read("src/SystemBackend.h")
         and '"network"' in read("qml/modules/DashboardModule.qml"),
         "Dashboard network card contract is missing")
-require("parseFlatpakRemotes" in read("src/UtilityBackend.cpp")
-        and "parseFlatpakRemotes" in read("src/ContractParsers.cpp"),
-        "Flatpak remote parser is not contract-specific")
+require('QStringLiteral("--columns=name,url")' in utility_cpp,
+        "Flatpak remotes must use the minimal name/url contract")
+require("parseFlatpakTsv(message.toUtf8(), 2)" in utility_cpp,
+        "Flatpak remote output is not parsed as the fixed two-column contract")
 require("anchors.right: parent.right" in read("qml/Main.qml")
         and "id: versionLabel" in read("qml/Main.qml"),
         "Version label is not anchored to the physical right edge")
