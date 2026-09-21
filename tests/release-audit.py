@@ -68,10 +68,11 @@ require('m_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin")' in rk_cp
         "krisCC rk mutations must pass through the supervised admin helper")
 require('m_polkit->execute(QStringLiteral("/usr/bin/rk")' not in rk_cpp,
         "krisCC must not launch privileged rk directly")
-require("setStandardInputFile(QProcess::nullDevice())" in custom_cpp,
-        "personal commands must not inherit interactive stdin")
-require("setStandardInputFile(QProcess::nullDevice())" in utility_cpp,
-        "utility commands must not inherit interactive stdin")
+process_runner = read("src/ProcessRunner.cpp")
+require("setStandardInputFile(QProcess::nullDevice())" in process_runner,
+        "shared user-level ProcessRunner must close stdin")
+require("ProcessRunner" in custom_cpp and "ProcessRunner" in utility_cpp,
+        "custom actions and utility commands must use the shared ProcessRunner")
 
 policy = ET.parse(ROOT / "data/org.kriscc.controlcenter.policy").getroot()
 actions = {node.attrib["id"]: node for node in policy.findall("action")}
