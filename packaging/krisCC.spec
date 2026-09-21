@@ -1,6 +1,6 @@
 Name:           krisCC
 Version:        0.7.1
-Release:        3%{?dist}
+Release:        4%{?dist}
 Summary:        krisCC personal control center for KrisOS and Fedora bootc
 License:        MIT
 URL:            https://github.com/krism-eu/krisCC
@@ -53,6 +53,10 @@ Settings.
 %{_datadir}/icons/hicolor/scalable/apps/krisCC.svg
 
 %changelog
+* Mon Sep 21 2026 krism-eu - 0.7.1-4
+- Keep Flatpak and Podman machine-readable stdout isolated from diagnostic stderr
+- Add regression coverage for structured stdout accompanied by stderr warnings
+
 * Mon Sep 21 2026 krism-eu - 0.7.1-3
 - Accept the real Flatpak remotes contract while keeping strict parsing elsewhere
 - Fill the Dashboard health grid with live interface/IP state and a colored connection indicator

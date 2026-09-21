@@ -85,6 +85,13 @@ require("setStandardInputFile(QProcess::nullDevice())" in process_runner,
 require("ProcessRunner" in custom_cpp and "ProcessRunner" in utility_cpp,
         "custom actions and utility commands must use the shared ProcessRunner")
 
+require("options.mergedChannels = !structuredOutput;" in utility_cpp,
+        "machine-readable utility output must be isolated from stderr")
+for operation in ("flatpak.installed", "flatpak.system-installed", "flatpak.updates",
+                  "flatpak.remotes", "flatpak.search", "podman.list", "podman.images"):
+    require(operation in utility_cpp and "structuredOutput" in utility_cpp,
+            f"{operation}: structured output protection missing")
+
 policy = ET.parse(ROOT / "data/org.kriscc.controlcenter.policy").getroot()
 actions = {node.attrib["id"]: node for node in policy.findall("action")}
 require("org.kriscc.controlcenter.admin" not in actions,

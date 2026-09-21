@@ -41,7 +41,8 @@ signals:
 
 private:
     bool start(const QString &program, const QStringList &args, const QString &title,
-               const QString &operationId, int timeoutMs = 0);
+               const QString &operationId, int timeoutMs = 0,
+               bool structuredOutput = false);
     bool validPackageName(const QString &name) const;
     bool validContainerName(const QString &name) const;
     void finish(const QString &message, const QString &state);
