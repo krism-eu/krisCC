@@ -1,7 +1,7 @@
 #include "PolkitHelper.h"
 
 #include "OperationLog.h"
-#include "Validators.h"
+#include "AdminPolicy.h"
 
 #include <QFileInfo>
 
@@ -101,37 +101,8 @@ void PolkitHelper::onProcessError(QProcess::ProcessError error)
 bool PolkitHelper::isPrivilegedInvocationAllowed(const QString &program,
                                                   const QStringList &args) const
 {
-    if (program != QStringLiteral("/usr/libexec/kriscc/admin") || args.isEmpty())
-        return false;
-
-    const QString &operation = args.at(0);
-    if (args.size() == 1) {
-        return operation == QStringLiteral("bootc-check")
-            || operation == QStringLiteral("bootc-download")
-            || operation == QStringLiteral("bootc-prepare")
-            || operation == QStringLiteral("bootc-apply-downloaded")
-            || operation == QStringLiteral("rk-sync");
-    }
-
-    if (args.size() != 2)
-        return false;
-
-    if ((operation == QStringLiteral("rk-add")
-         || operation == QStringLiteral("rk-rm")
-         || operation == QStringLiteral("rk-forget"))
-        && Validators::packageName(args.at(1)))
-        return true;
-    if ((operation == QStringLiteral("repo-enable")
-         || operation == QStringLiteral("repo-disable"))
-        && Validators::repositoryId(args.at(1)))
-        return true;
-    if (operation == QStringLiteral("repo-add") && Validators::repositoryUrl(args.at(1)))
-        return true;
-    if (operation == QStringLiteral("boot-next-uefi") && Validators::bootToken(args.at(1)))
-        return true;
-    if (operation == QStringLiteral("boot-next-grub") && Validators::grubEntry(args.at(1)))
-        return true;
-    return false;
+    return program == QStringLiteral("/usr/libexec/kriscc/admin")
+        && AdminPolicy::resolve(args).has_value();
 }
 
 QString PolkitHelper::operationLabel() const

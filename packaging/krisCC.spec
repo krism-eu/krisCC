@@ -1,6 +1,6 @@
 Name:           krisCC
-Version:        0.7.0
-Release:        6%{?dist}
+Version:        0.7.1
+Release:        1%{?dist}
 Summary:        krisCC personal control center for KrisOS and Fedora bootc
 License:        MIT
 URL:            https://github.com/krism-eu/krisCC
@@ -53,6 +53,12 @@ Settings.
 %{_datadir}/icons/hicolor/scalable/apps/krisCC.svg
 
 %changelog
+* Mon Sep 21 2026 krism-eu - 0.7.1-1
+- Harden privileged execution with root-owned timeouts and shared allowlists
+- Refresh the dashboard, virtualize RPM and Flatpak lists, and remove silent list truncation
+- Add firewall, top-memory process visibility, Flatpak launch, Podman container removal and backup deletion
+- Remove duplicate page headers and unreadable raw BootC status from the normal UI
+
 * Sun Sep 20 2026 krism-eu - 0.7.0-6
 - Fix resource sampling and load pages on demand
 - Unify native cards, output panels and responsive tools

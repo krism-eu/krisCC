@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      publish_candidate:
+        description: Publish the validated main artifact as an immutable prerelease candidate
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -27,6 +34,9 @@ jobs:
 
       - name: Build
         run: cmake --build build
+
+      - name: Unit tests
+        run: ctest --test-dir build --output-on-failure
 
       - name: QML runtime smoke test
         env:
@@ -62,7 +72,7 @@ jobs:
         run: |
           rpmspec -P packaging/krisCC.spec >/dev/null
           test "$(rpmspec -q --qf '%{NAME}\n' packaging/krisCC.spec | head -n1)" = "krisCC"
-          test "$(rpmspec -q --qf '%{VERSION}-%{RELEASE}\n' packaging/krisCC.spec | head -n1)" = "0.7.0-6.fc44"
+          test "$(rpmspec -q --qf '%{VERSION}-%{RELEASE}\n' packaging/krisCC.spec | head -n1)" = "0.7.1-1.fc44"
           ! rpmspec -P packaging/krisCC.spec | grep -Eq '^Provides:[[:space:]]+(kcc|k-controlc)([[:space:]=]|$)'
           ! rpmspec -P packaging/krisCC.spec | grep -Eq '^Obsoletes:[[:space:]]+(kcc|k-controlc)([[:space:]<=>]|$)'
           rpmspec -P packaging/krisCC.spec | grep -Eq '^Requires:[[:space:]]+dnf5-plugins([[:space:]]|$)'
@@ -94,8 +104,8 @@ jobs:
               --exclude='./stage' \
               --exclude='./artifacts' \
               --exclude='./krisCC-stage.tar.gz' \
-              --transform='s,^\./,krisCC-0.7.0/,' \
-              -czf "$HOME/rpmbuild/SOURCES/krisCC-0.7.0.tar.gz" .
+              --transform='s,^\./,krisCC-0.7.1/,' \
+              -czf "$HOME/rpmbuild/SOURCES/krisCC-0.7.1.tar.gz" .
             cp "$GITHUB_WORKSPACE/packaging/krisCC.spec" "$HOME/rpmbuild/SPECS/krisCC.spec"
             rpmbuild -ba "$HOME/rpmbuild/SPECS/krisCC.spec"
             mkdir -p "$GITHUB_WORKSPACE/artifacts/rpm" "$GITHUB_WORKSPACE/artifacts/srpm" "$GITHUB_WORKSPACE/artifacts/stage"
@@ -111,10 +121,10 @@ jobs:
         shell: bash
         run: |
           set -euxo pipefail
-          rpm_file='artifacts/rpm/krisCC-0.7.0-6.fc44.x86_64.rpm'
+          rpm_file='artifacts/rpm/krisCC-0.7.1-1.fc44.x86_64.rpm'
           test -f "$rpm_file"
           test "$(rpm -qp --qf '%{NAME}\n' "$rpm_file")" = "krisCC"
-          test "$(rpm -qp --qf '%{VERSION}-%{RELEASE}\n' "$rpm_file")" = "0.7.0-6.fc44"
+          test "$(rpm -qp --qf '%{VERSION}-%{RELEASE}\n' "$rpm_file")" = "0.7.1-1.fc44"
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/bin/krisCC'
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/admin'
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/bootc-status'
@@ -211,7 +221,7 @@ jobs:
           QT_FORCE_STDERR_LOGGING: "1"
         run: |
           set -euxo pipefail
-          rpm_file="$GITHUB_WORKSPACE/artifacts/rpm/krisCC-0.7.0-6.fc44.x86_64.rpm"
+          rpm_file="$GITHUB_WORKSPACE/artifacts/rpm/krisCC-0.7.1-1.fc44.x86_64.rpm"
           test -f "$rpm_file"
           (cd "$GITHUB_WORKSPACE/artifacts/rpm" && sha256sum -c SHA256SUMS)
           dnf -y install "$rpm_file"
@@ -226,7 +236,7 @@ jobs:
 
 
   release:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish_candidate
     needs: [build-fedora, rpm-smoke, release-audit]
     runs-on: ubuntu-24.04
     permissions:
