@@ -105,6 +105,7 @@ if(BUILD_TESTING)
     target_include_directories(kriscc-test-process-runner PRIVATE src)
     target_link_libraries(kriscc-test-process-runner PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME process-runner COMMAND kriscc-test-process-runner)
+    set_tests_properties(process-runner PROPERTIES TIMEOUT 15)
 
     add_executable(kriscc-test-parsers
         tests/test_contract_parsers.cpp

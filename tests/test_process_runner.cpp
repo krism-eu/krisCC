@@ -82,5 +82,5 @@ private slots:
     }
 };
 
-QTEST_APPLESS_MAIN(ProcessRunnerTest)
+QTEST_GUILESS_MAIN(ProcessRunnerTest)
 #include "test_process_runner.moc"
