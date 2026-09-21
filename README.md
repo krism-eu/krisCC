@@ -37,6 +37,8 @@ krisCC è parte della base immutabile di KrisOS: le release normali del control 
 
 ## Release e rami
 
+Le versioni visibili usano solo **X.Y.Z**. La linea corrente è **dev/0.8**; le correzioni avanzano il patch (`0.8.1`, `0.8.2`, …). Il campo RPM `Release: 1` resta solo metadata Fedora e non compare nella versione mostrata dall'app o nel tag GitHub.
+
 - `main` è la linea ufficiale corrente; dalla 0.7 contiene l'architettura strutturata di krisCC.
 - `stable/0.6` è una fotografia congelata della precedente linea 0.6 e punta a `v0.6.0-2`. Non riceve sviluppo ordinario né backport automatici.
 - ogni push e pull request verso `main` costruisce e verifica l'RPM in CI senza pubblicarlo automaticamente; un candidato prerelease viene pubblicato solo con dispatch esplicito sul `main` validato;
@@ -63,7 +65,7 @@ cmake --build build
 
 ## RPM e integrazione nell'immagine
 
-Lo spec RPM è `packaging/krisCC.spec` e produce **`krisCC-0.7.1-*.rpm`**. La CI Fedora 44 costruisce l'RPM, lo installa in un ambiente pulito, riesegue lo smoke test e produce `SHA256SUMS` dell'artefatto RPM.
+Lo spec RPM è `packaging/krisCC.spec` e produce **`krisCC-0.8.0-*.rpm`**. La CI Fedora 44 costruisce l'RPM, lo installa in un ambiente pulito, riesegue lo smoke test e produce `SHA256SUMS` dell'artefatto RPM.
 
 Il flusso previsto per KrisOS è:
 
@@ -77,8 +79,8 @@ Esempio manuale:
 
 ```bash
 mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-git archive --format=tar.gz --prefix=krisCC-0.7.1/ \
-  -o ~/rpmbuild/SOURCES/krisCC-0.7.1.tar.gz HEAD
+git archive --format=tar.gz --prefix=krisCC-0.8.0/ \
+  -o ~/rpmbuild/SOURCES/krisCC-0.8.0.tar.gz HEAD
 cp packaging/krisCC.spec ~/rpmbuild/SPECS/krisCC.spec
 rpmbuild -ba ~/rpmbuild/SPECS/krisCC.spec
 ```
