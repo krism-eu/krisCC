@@ -228,9 +228,33 @@ jobs:
           /usr/bin/krisCC
 
 
-  release:
+  release-gate:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [build-fedora, rpm-smoke, release-audit]
+    runs-on: ubuntu-24.04
+    outputs:
+      publish: ${{ steps.gate.outputs.publish }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 2
+      - name: Detect release identity change
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          before="${{ github.event.before }}"
+          if [[ "$before" =~ ^0+$ ]]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          elif git diff "$before" "$GITHUB_SHA" -- packaging/krisCC.spec \
+              | grep -Eq '^[+-](Version|Release):'; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  release:
+    if: needs.release-gate.outputs.publish == 'true'
+    needs: [build-fedora, rpm-smoke, release-audit, release-gate]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
