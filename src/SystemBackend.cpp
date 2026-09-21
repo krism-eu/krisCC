@@ -24,6 +24,7 @@
 #include <QHash>
 #include <QProcess>
 #include <QRegularExpression>
+#include <QSettings>
 #include <QSet>
 #include <QStandardPaths>
 #include <QStorageInfo>
@@ -95,6 +96,14 @@ SystemBackend::SystemBackend(PolkitHelper *polkit, QObject *parent)
     : QObject(parent)
     , m_polkit(polkit)
 {
+    const QString defaultBackupRoot = QDir::homePath() + QStringLiteral("/krisCC Backups");
+    const QString configuredBackupRoot = QSettings().value(
+        QStringLiteral("backup/root"), defaultBackupRoot).toString();
+    const QFileInfo configuredInfo(configuredBackupRoot);
+    m_backupRoot = configuredInfo.isAbsolute()
+        ? QDir::cleanPath(configuredInfo.absoluteFilePath())
+        : defaultBackupRoot;
+
     if (m_polkit) {
         connect(m_polkit, &PolkitHelper::runningChanged, this, &SystemBackend::bootSelectionStateChanged);
         connect(m_polkit, &PolkitHelper::finished, this,
@@ -729,7 +738,7 @@ void SystemBackend::notify(const QString &summary, const QString &body) const
 QVariantList SystemBackend::backups() const
 {
     QVariantList result;
-    const QDir backupDir(QDir::homePath() + QStringLiteral("/krisCC Backups"));
+    const QDir backupDir(m_backupRoot);
     if (!backupDir.exists())
         return result;
 
@@ -751,7 +760,7 @@ QVariantList SystemBackend::backups() const
 
 bool SystemBackend::validateBackupPath(const QString &path, QString *canonicalPath) const
 {
-    const QDir backupDir(QDir::homePath() + QStringLiteral("/krisCC Backups"));
+    const QDir backupDir(m_backupRoot);
     const QString backupRoot = QFileInfo(backupDir.absolutePath()).canonicalFilePath();
     const QFileInfo info(path);
     const QString canonical = info.canonicalFilePath();
@@ -777,7 +786,7 @@ bool SystemBackend::verifySnapshot(const QString &path)
 
     QString canonical;
     if (!validateBackupPath(path, &canonical)) {
-        setBackupResult(tr("Archivio di backup non valido o fuori dalla cartella krisCC Backups."),
+        setBackupResult(tr("Archivio di backup non valido o fuori dalla destinazione configurata."),
                         QString(), QStringLiteral("error"));
         return false;
     }
@@ -850,7 +859,7 @@ bool SystemBackend::restoreSnapshot(const QString &path)
 
     QString canonical;
     if (!validateBackupPath(path, &canonical)) {
-        setBackupResult(tr("Archivio di backup non valido o fuori dalla cartella krisCC Backups."),
+        setBackupResult(tr("Archivio di backup non valido o fuori dalla destinazione configurata."),
                         QString(), QStringLiteral("error"));
         return false;
     }
@@ -981,23 +990,17 @@ bool SystemBackend::createSnapshot(const QString &kind)
     }
 
     const QString home = QDir::homePath();
-    QDir backupDir(home + QStringLiteral("/krisCC Backups"));
+    QDir backupDir(m_backupRoot);
     if (!backupDir.exists() && !backupDir.mkpath(QStringLiteral("."))) {
-        setBackupResult(tr("Impossibile creare la cartella dei backup."), QString(), QStringLiteral("error"));
+        setBackupResult(tr("Impossibile creare la destinazione dei backup."), QString(), QStringLiteral("error"));
         return false;
     }
 
-    const QStorageInfo backupStorage(backupDir.absolutePath());
-    if (backupStorage.isValid() && backupStorage.isReady()) {
-        const qint64 oneGiB = 1024LL * 1024LL * 1024LL;
-        const qint64 minimumFree = kind == QStringLiteral("home") ? 5LL * oneGiB : oneGiB;
-        if (backupStorage.bytesAvailable() < minimumFree) {
-            setBackupResult(tr("Spazio libero insufficiente per lo snapshot: disponibili %1, richiesti almeno %2.")
-                                .arg(humanGiB(quint64(backupStorage.bytesAvailable())),
-                                     humanGiB(quint64(minimumFree))),
-                            QString(), QStringLiteral("error"));
-            return false;
-        }
+    const QFileInfo backupRootInfo(backupDir.absolutePath());
+    if (!backupRootInfo.isDir() || !backupRootInfo.isWritable()) {
+        setBackupResult(tr("La destinazione dei backup non è scrivibile."), backupDir.absolutePath(),
+                        QStringLiteral("error"));
+        return false;
     }
 
     if (kind != QStringLiteral("home") && kind != QStringLiteral("config")) {
@@ -1015,6 +1018,16 @@ bool SystemBackend::createSnapshot(const QString &kind)
     if (kind == QStringLiteral("home")) {
         for (const QString &excluded : backupHomeExcludes())
             args << QStringLiteral("--exclude=./") + excluded;
+
+        const QString canonicalHome = QFileInfo(home).canonicalFilePath();
+        const QString canonicalBackupRoot = QFileInfo(backupDir.absolutePath()).canonicalFilePath();
+        if (!canonicalHome.isEmpty() && !canonicalBackupRoot.isEmpty()
+            && canonicalBackupRoot.startsWith(canonicalHome + QLatin1Char('/'))) {
+            const QString relativeBackupRoot = QDir(canonicalHome).relativeFilePath(canonicalBackupRoot);
+            if (!relativeBackupRoot.isEmpty() && relativeBackupRoot != QStringLiteral("."))
+                args << QStringLiteral("--exclude=./") + relativeBackupRoot;
+        }
+
         args << QStringLiteral("-C") << home << QStringLiteral(".");
     } else {
         QStringList entries;
@@ -1141,7 +1154,7 @@ bool SystemBackend::removeSnapshot(const QString &path)
 
     QString canonical;
     if (!validateBackupPath(path, &canonical)) {
-        setBackupResult(tr("Archivio di backup non valido o fuori dalla cartella krisCC Backups."),
+        setBackupResult(tr("Archivio di backup non valido o fuori dalla destinazione configurata."),
                         QString(), QStringLiteral("error"));
         return false;
     }
@@ -1160,11 +1173,53 @@ bool SystemBackend::removeSnapshot(const QString &path)
     return true;
 }
 
-bool SystemBackend::openBackupFolder() const
+bool SystemBackend::setBackupRoot(const QUrl &folder)
 {
+    if (m_backupBusy || !folder.isLocalFile())
+        return false;
+
+    const QString path = QDir::cleanPath(folder.toLocalFile());
+    QFileInfo info(path);
+    if (!info.isAbsolute() || !info.isDir() || !info.isWritable()) {
+        setBackupResult(tr("La cartella scelta non è una destinazione backup valida e scrivibile."),
+                        path, QStringLiteral("error"));
+        return false;
+    }
+
+    const QString canonical = info.canonicalFilePath();
+    if (canonical.isEmpty())
+        return false;
+
+    if (m_backupRoot == canonical)
+        return true;
+
+    m_backupRoot = canonical;
+    QSettings().setValue(QStringLiteral("backup/root"), m_backupRoot);
+    emit backupRootChanged();
+    setBackupResult(tr("Destinazione backup aggiornata."), m_backupRoot, QStringLiteral("success"));
+    return true;
+}
+
+bool SystemBackend::resetBackupRoot()
+{
+    if (m_backupBusy)
+        return false;
     const QString path = QDir::homePath() + QStringLiteral("/krisCC Backups");
     QDir().mkpath(path);
-    return QDesktopServices::openUrl(QUrl::fromLocalFile(path));
+    const QString canonical = QFileInfo(path).canonicalFilePath();
+    if (canonical.isEmpty())
+        return false;
+    m_backupRoot = canonical;
+    QSettings().remove(QStringLiteral("backup/root"));
+    emit backupRootChanged();
+    setBackupResult(tr("Destinazione backup ripristinata."), m_backupRoot, QStringLiteral("success"));
+    return true;
+}
+
+bool SystemBackend::openBackupFolder() const
+{
+    QDir().mkpath(m_backupRoot);
+    return QDesktopServices::openUrl(QUrl::fromLocalFile(m_backupRoot));
 }
 
 QVariantList SystemBackend::backupPreview(const QString &kind) const
@@ -1398,44 +1453,3 @@ double SystemBackend::readCpuTemperature() const
 
             QString label;
             const QString labelName = inputName;
-            const QString prefix = labelName.left(labelName.indexOf(QLatin1Char('_')));
-            QFile labelFile(directory.filePath(prefix + QStringLiteral("_label")));
-            if (labelFile.open(QIODevice::ReadOnly | QIODevice::Text))
-                label = QString::fromUtf8(labelFile.readAll()).trimmed().toLower();
-
-            int score = baseScore;
-            if (label.contains(QStringLiteral("tctl"))
-                || label.contains(QStringLiteral("tdie"))
-                || label.contains(QStringLiteral("package"))
-                || label.contains(QStringLiteral("cpu")))
-                score = qMax(score, 80);
-            if (score < 0)
-                continue;
-
-            const double temperature = double(milli) / 1000.0;
-            if (score > bestScore) {
-                bestScore = score;
-                bestTemperature = temperature;
-            }
-        }
-    }
-    return bestTemperature;
-}
-
-QString SystemBackend::readOsName() const
-{
-    QFile file(QStringLiteral("/etc/os-release"));
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-        return QSysInfo::prettyProductName();
-
-    while (!file.atEnd()) {
-        QString line = QString::fromUtf8(file.readLine()).trimmed();
-        if (!line.startsWith(QStringLiteral("PRETTY_NAME=")))
-            continue;
-        QString value = line.mid(QStringLiteral("PRETTY_NAME=").size());
-        if (value.size() >= 2 && value.startsWith('"') && value.endsWith('"'))
-            value = value.mid(1, value.size() - 2);
-        return value;
-    }
-    return QSysInfo::prettyProductName();
-}
