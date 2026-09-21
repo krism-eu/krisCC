@@ -2,8 +2,9 @@
 
 #include <QObject>
 #include <QPointer>
-#include <QProcess>
 #include <QString>
+
+class ProcessRunner;
 
 class UtilityBackend : public QObject
 {
@@ -43,10 +44,8 @@ private:
     void finish(const QString &message, const QString &state);
     void setImmediateError(const QString &title, const QString &operationId, const QString &message);
 
-    QPointer<QProcess> m_process;
+    QPointer<ProcessRunner> m_runner;
     bool m_busy = false;
-    bool m_cancelRequested = false;
-    bool m_timedOut = false;
     QString m_title;
     QString m_output;
     QString m_operationId;

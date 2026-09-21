@@ -32,6 +32,7 @@ qt_add_executable(krisCC
     src/OperationLog.cpp src/OperationLog.h
     src/Validators.cpp src/Validators.h
     src/AdminPolicy.cpp src/AdminPolicy.h
+    src/ProcessRunner.cpp src/ProcessRunner.h
 )
 
 set_source_files_properties(qml/components/UiMetrics.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -95,6 +96,14 @@ if(BUILD_TESTING)
     target_include_directories(kriscc-test-admin-policy PRIVATE src)
     target_link_libraries(kriscc-test-admin-policy PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME admin-policy COMMAND kriscc-test-admin-policy)
+
+    add_executable(kriscc-test-process-runner
+        tests/test_process_runner.cpp
+        src/ProcessRunner.cpp src/ProcessRunner.h
+    )
+    target_include_directories(kriscc-test-process-runner PRIVATE src)
+    target_link_libraries(kriscc-test-process-runner PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME process-runner COMMAND kriscc-test-process-runner)
 endif()
 
 add_executable(kriscc-maintenance

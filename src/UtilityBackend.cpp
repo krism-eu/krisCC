@@ -1,13 +1,13 @@
 #include "UtilityBackend.h"
 
 #include "OperationLog.h"
+#include "ProcessRunner.h"
 #include "Validators.h"
 
 #include <QDebug>
 #include <QFileInfo>
 #include <QRegularExpression>
 #include <QStandardPaths>
-#include <QTimer>
 
 namespace {
 constexpr int kShortQueryTimeoutMs = 30 * 1000;
@@ -75,70 +75,67 @@ bool UtilityBackend::start(const QString &program, const QStringList &args, cons
     }
 
     m_busy = true;
-    m_cancelRequested = false;
-    m_timedOut = false;
     m_title = title;
     m_operationId = operationId;
     m_output.clear();
     m_resultState = QStringLiteral("running");
     emit stateChanged();
 
-    auto *process = new QProcess(this);
-    const QPointer<QProcess> guarded(process);
-    m_process = process;
-    process->setProcessChannelMode(QProcess::MergedChannels);
-    process->setStandardInputFile(QProcess::nullDevice());
-
-    connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-            [this, guarded](int exitCode, QProcess::ExitStatus status) {
-        if (!guarded || guarded != m_process)
+    auto *runner = new ProcessRunner(this);
+    m_runner = runner;
+    connect(runner, &ProcessRunner::finished, this,
+            [this, runner](ProcessRunner::Outcome outcome, int exitCode,
+                           const QByteArray &stdoutData, const QByteArray &stderrData,
+                           const QString &error) {
+        if (runner != m_runner)
             return;
-        const QString text = QString::fromUtf8(guarded->readAllStandardOutput()).trimmed();
-        if (m_cancelRequested) {
-            finish(text.isEmpty() ? tr("Operazione annullata.") : text, QStringLiteral("cancelled"));
-            return;
-        }
-        if (m_timedOut) {
+        const QString text = QString::fromUtf8(
+            stderrData.isEmpty() ? stdoutData : stdoutData + stderrData).trimmed();
+        switch (outcome) {
+        case ProcessRunner::Success:
+            finish(text, QStringLiteral("success"));
+            break;
+        case ProcessRunner::Cancelled:
+            finish(text.isEmpty() ? tr("Operazione annullata.") : text,
+                   QStringLiteral("cancelled"));
+            break;
+        case ProcessRunner::TimedOut:
             finish(text.isEmpty() ? tr("Tempo massimo superato; il comando è stato interrotto.") : text,
                    QStringLiteral("timeout"));
-            return;
+            break;
+        case ProcessRunner::FailedToStart:
+            finish(tr("Impossibile avviare il comando: %1").arg(error),
+                   QStringLiteral("error"));
+            break;
+        case ProcessRunner::ExitError:
+            finish(text.isEmpty() ? tr("Comando terminato con codice %1.").arg(exitCode) : text,
+                   QStringLiteral("error"));
+            break;
         }
-        const bool ok = status == QProcess::NormalExit && exitCode == 0;
-        finish(text.isEmpty() && !ok ? tr("Comando terminato con codice %1.").arg(exitCode) : text,
-               ok ? QStringLiteral("success") : QStringLiteral("error"));
     });
 
-    connect(process, &QProcess::errorOccurred, this,
-            [this, guarded](QProcess::ProcessError error) {
-        if (!guarded || guarded != m_process || error != QProcess::FailedToStart)
-            return;
-        finish(tr("Impossibile avviare il comando: %1").arg(guarded->errorString()),
-               QStringLiteral("error"));
-    });
-
-    if (timeoutMs > 0) {
-        QTimer::singleShot(timeoutMs, process, [this, guarded] {
-            if (!guarded || guarded != m_process || guarded->state() == QProcess::NotRunning)
-                return;
-            m_timedOut = true;
-            guarded->terminate();
-            QTimer::singleShot(2000, guarded, [guarded] {
-                if (guarded && guarded->state() != QProcess::NotRunning)
-                    guarded->kill();
-            });
-        });
+    ProcessRunner::Options options;
+    options.program = executable;
+    options.arguments = args;
+    options.timeoutMs = timeoutMs;
+    options.maxOutputBytes = 512 * 1024;
+    options.mergedChannels = true;
+    options.processGroup = true;
+    if (!runner->start(options)) {
+        m_runner = nullptr;
+        runner->deleteLater();
+        finish(tr("Impossibile inizializzare il comando."), QStringLiteral("error"));
+        return false;
     }
-
-    process->start(executable, args);
     return true;
 }
 
 void UtilityBackend::finish(const QString &message, const QString &state)
 {
     const QString completedOperation = m_operationId;
-    if (m_process) {
-        m_process->deleteLater();
-        m_process = nullptr;
+    if (m_runner) {
+        m_runner->deleteLater();
+        m_runner = nullptr;
     }
     m_busy = false;
     m_cancelRequested = false;
@@ -152,16 +149,7 @@ void UtilityBackend::finish(const QString &message, const QString &state)
 
 bool UtilityBackend::cancel()
 {
-    if (!m_process || !m_busy)
-        return false;
-    m_cancelRequested = true;
-    m_process->terminate();
-    const QPointer<QProcess> guarded = m_process;
-    QTimer::singleShot(2000, guarded, [guarded] {
-        if (guarded && guarded->state() != QProcess::NotRunning)
-            guarded->kill();
-    });
-    return true;
+    return m_runner && m_busy && m_runner->cancel();
 }
 
 void UtilityBackend::clearResult()

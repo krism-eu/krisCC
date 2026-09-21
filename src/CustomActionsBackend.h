@@ -2,9 +2,10 @@
 
 #include <QObject>
 #include <QPointer>
-#include <QProcess>
 #include <QString>
 #include <QVariantList>
+
+class ProcessRunner;
 
 class CustomActionsBackend : public QObject
 {
@@ -48,14 +49,11 @@ private:
     int indexForId(const QString &id) const;
     void appendOutput(const QByteArray &data);
     void finish(const QString &state, const QString &message = QString());
-    void signalProcess(bool force);
 
     QVariantList m_actions;
-    QPointer<QProcess> m_process;
+    QPointer<ProcessRunner> m_runner;
     bool m_storageValid = true;
     bool m_running = false;
-    bool m_cancelRequested = false;
-    bool m_timedOut = false;
     QString m_runningId;
     QString m_output;
     QString m_resultState = QStringLiteral("idle");
