@@ -11,38 +11,6 @@
     <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/bootc-status</annotate>
   </action>
 
-  <action id="org.kriscc.controlcenter.rk.sync">
-    <description>Synchronize persistent packages</description>
-    <message>Authentication is required to synchronize persistent packages</message>
-    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/rk</annotate>
-    <annotate key="org.freedesktop.policykit.exec.argv1">sync</annotate>
-  </action>
-
-  <action id="org.kriscc.controlcenter.rk.add">
-    <description>Add a persistent package</description>
-    <message>Authentication is required to add a persistent package</message>
-    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/rk</annotate>
-    <annotate key="org.freedesktop.policykit.exec.argv1">add</annotate>
-  </action>
-
-  <action id="org.kriscc.controlcenter.rk.rm">
-    <description>Remove a persistent package</description>
-    <message>Authentication is required to remove a persistent package</message>
-    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/rk</annotate>
-    <annotate key="org.freedesktop.policykit.exec.argv1">rm</annotate>
-  </action>
-
-  <action id="org.kriscc.controlcenter.rk.forget">
-    <description>Forget a persistent package request</description>
-    <message>Authentication is required to forget a persistent package request</message>
-    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/rk</annotate>
-    <annotate key="org.freedesktop.policykit.exec.argv1">forget</annotate>
-  </action>
-
   <action id="org.kriscc.controlcenter.admin">
     <description>Perform an allowlisted krisCC system operation</description>
     <message>Authentication is required to change this system setting</message>
