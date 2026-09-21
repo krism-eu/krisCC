@@ -69,6 +69,8 @@ target_compile_definitions(krisCC PRIVATE KRISCC_VERSION="${PROJECT_VERSION}-${K
 
 add_executable(kriscc-admin
     src/AdminHelper.cpp
+    src/AdminPolicy.cpp src/AdminPolicy.h
+    src/PrivilegedProcessRunner.cpp src/PrivilegedProcessRunner.h
     src/Validators.cpp src/Validators.h
 )
 set_target_properties(kriscc-admin PROPERTIES OUTPUT_NAME admin)
@@ -81,6 +83,15 @@ add_executable(kriscc-test-validators
 )
 target_link_libraries(kriscc-test-validators PRIVATE Qt6::Core Qt6::Test)
 add_test(NAME validators COMMAND kriscc-test-validators)
+
+add_executable(kriscc-test-admin-policy
+    tests/test_admin_policy.cpp
+    src/AdminPolicy.cpp src/AdminPolicy.h
+    src/PrivilegedProcessRunner.cpp src/PrivilegedProcessRunner.h
+    src/Validators.cpp src/Validators.h
+)
+target_link_libraries(kriscc-test-admin-policy PRIVATE Qt6::Core Qt6::Test)
+add_test(NAME admin-policy COMMAND kriscc-test-admin-policy)
 
 add_executable(kriscc-maintenance
     src/MaintenanceHelper.cpp
