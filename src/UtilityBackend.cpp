@@ -92,7 +92,7 @@ bool UtilityBackend::start(const QString &program, const QStringList &args, cons
         if (runner != m_runner)
             return;
         const QString text = QString::fromUtf8(
-            stderrData.isEmpty() ? stdoutData : stdoutData + stderrData).trimmed();
+            stderrData.isEmpty() ? stdoutData : stdoutData + stderrData);
         switch (outcome) {
         case ProcessRunner::Success:
             finish(text, QStringLiteral("success"));
@@ -140,7 +140,7 @@ void UtilityBackend::finish(const QString &message, const QString &state)
         m_runner = nullptr;
     }
     m_busy = false;
-    m_output = message;
+    m_output = message.trimmed();
     m_rows.clear();
     m_resultState = state;
 

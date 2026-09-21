@@ -421,21 +421,41 @@ Kirigami.Page {
                         delegate: Kirigami.AbstractCard {
                             required property var modelData
                             Layout.fillWidth: true
-                            contentItem: RowLayout {
+                            contentItem: GridLayout {
+                                columns: 3
+                                columnSpacing: Kirigami.Units.largeSpacing
+
                                 ColumnLayout {
                                     Layout.fillWidth: true
-                                    Controls.Label { font.bold: false; text: modelData.name }
-                                    Controls.Label { text: modelData.id; opacity: UiMetrics.secondaryOpacity }
+                                    Layout.minimumWidth: 0
+                                    Controls.Label {
+                                        Layout.fillWidth: true
+                                        font.bold: false
+                                        text: modelData.name
+                                        elide: Text.ElideRight
+                                    }
+                                    Controls.Label {
+                                        Layout.fillWidth: true
+                                        text: modelData.id
+                                        opacity: UiMetrics.secondaryOpacity
+                                        elide: Text.ElideRight
+                                    }
                                 }
+
                                 Controls.Label {
-                                    Layout.preferredWidth: 110
+                                    Layout.preferredWidth: Kirigami.Units.gridUnit * 7
+                                    Layout.minimumWidth: Layout.preferredWidth
+                                    Layout.maximumWidth: Layout.preferredWidth
                                     horizontalAlignment: Text.AlignHCenter
                                     text: modelData.enabled ? qsTr("attivo") : qsTr("inattivo")
                                     font.bold: false
                                     opacity: modelData.enabled ? 1.0 : 0.68
                                 }
+
                                 Controls.Button {
-                                    Layout.preferredWidth: 120
+                                    Layout.preferredWidth: Kirigami.Units.gridUnit * 8
+                                    Layout.minimumWidth: Layout.preferredWidth
+                                    Layout.maximumWidth: Layout.preferredWidth
                                     enabled: SoftwareBackend.canModifyRepositories
                                     text: modelData.enabled ? qsTr("Disattiva") : qsTr("Attiva")
                                     icon.name: modelData.enabled ? "media-playback-stop" : "media-playback-start"

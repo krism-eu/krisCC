@@ -207,35 +207,37 @@ Kirigami.ApplicationWindow {
                     Layout.preferredHeight: 72
                     color: Kirigami.Theme.backgroundColor
 
-                    RowLayout {
-                        anchors.fill: parent
+                    ColumnLayout {
+                        anchors.left: parent.left
                         anchors.leftMargin: UiMetrics.pageMargin
-                        anchors.rightMargin: UiMetrics.pageMargin
+                        anchors.right: versionLabel.left
+                        anchors.rightMargin: Kirigami.Units.largeSpacing
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 1
 
-                        ColumnLayout {
+                        Controls.Label {
                             Layout.fillWidth: true
-                            spacing: 1
-                            Controls.Label {
-                                text: root.sectionTitle(root.currentSection)
-                                font.bold: true
-                                font.pointSize: Kirigami.Theme.defaultFont.pointSize + 3
-                            }
-                            Controls.Label {
-                                text: qsTr("KrisOS Control Center")
-                                opacity: UiMetrics.secondaryOpacity
-                            }
+                            text: root.sectionTitle(root.currentSection)
+                            font.bold: true
+                            font.pointSize: Kirigami.Theme.defaultFont.pointSize + 3
+                            elide: Text.ElideRight
                         }
-
-                        ColumnLayout {
-                            spacing: 1
-                            Controls.Label {
-                                Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-                                horizontalAlignment: Text.AlignRight
-                                text: qsTr("v%1").arg(Qt.application.version)
-                                opacity: UiMetrics.secondaryOpacity
-                            }
-
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            text: qsTr("KrisOS Control Center")
+                            opacity: UiMetrics.secondaryOpacity
+                            elide: Text.ElideRight
                         }
+                    }
+
+                    Controls.Label {
+                        id: versionLabel
+                        anchors.right: parent.right
+                        anchors.rightMargin: UiMetrics.pageMargin
+                        anchors.verticalCenter: parent.verticalCenter
+                        horizontalAlignment: Text.AlignRight
+                        text: qsTr("v%1").arg(Qt.application.version)
+                        opacity: UiMetrics.secondaryOpacity
                     }
 
                     Rectangle {

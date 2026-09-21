@@ -142,16 +142,14 @@ Kirigami.ScrollablePage {
             }
         }
 
-        GridLayout {
+        RowLayout {
             Layout.fillWidth: true
-            columns: width > 900 ? 4 : width > 560 ? 2 : 1
-            uniformCellWidths: true
-            columnSpacing: Kirigami.Units.largeSpacing
-            rowSpacing: Kirigami.Units.largeSpacing
+            spacing: Kirigami.Units.largeSpacing
 
             Kirigami.AbstractCard {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                Layout.horizontalStretchFactor: 1
                 contentItem: ColumnLayout {
                     RowLayout {
                         Kirigami.Icon { source: "cpu"; Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium; Layout.preferredHeight: Layout.preferredWidth }
@@ -167,7 +165,7 @@ Kirigami.ScrollablePage {
             Kirigami.AbstractCard {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.columnSpan: parent.columns >= 4 ? 2 : 1
+                Layout.horizontalStretchFactor: 2
                 contentItem: ColumnLayout {
                     RowLayout {
                         Kirigami.Icon { source: "memory"; Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium; Layout.preferredHeight: Layout.preferredWidth }
@@ -181,23 +179,29 @@ Kirigami.ScrollablePage {
                         text: SystemBackend.memoryTotalMiB >= 0 ? qsTr("su %1 MiB · swap esclusa").arg(SystemBackend.memoryTotalMiB) : qsTr("swap esclusa")
                         opacity: UiMetrics.secondaryOpacity
                     }
-                    Kirigami.Separator {
-                        Layout.fillWidth: true
-                        visible: SystemBackend.topMemoryProcesses.length > 0
-                    }
-                    Controls.Label {
-                        visible: SystemBackend.topMemoryProcesses.length > 0
-                        text: qsTr("Processi con più RAM")
-                        font.bold: true
-                    }
+                    Kirigami.Separator { Layout.fillWidth: true }
+                    Controls.Label { text: qsTr("Processi con più RAM"); font.bold: true }
                     Repeater {
                         model: SystemBackend.topMemoryProcesses
                         delegate: RowLayout {
                             required property var modelData
                             Layout.fillWidth: true
-                            Controls.Label { Layout.fillWidth: true; text: modelData.name; elide: Text.ElideRight }
-                            Controls.Label { text: qsTr("%1 MiB").arg(modelData.memoryMiB); opacity: UiMetrics.secondaryOpacity }
+                            Controls.Label {
+                                Layout.fillWidth: true
+                                text: modelData.name
+                                elide: Text.ElideRight
+                            }
+                            Controls.Label {
+                                text: qsTr("%1 MiB").arg(modelData.memoryMiB)
+                                opacity: UiMetrics.secondaryOpacity
+                            }
                         }
+                    }
+                    Controls.Label {
+                        Layout.fillWidth: true
+                        visible: SystemBackend.topMemoryProcesses.length === 0
+                        text: qsTr("Dati processo non disponibili")
+                        opacity: UiMetrics.secondaryOpacity
                     }
                 }
             }
@@ -205,6 +209,7 @@ Kirigami.ScrollablePage {
             Kirigami.AbstractCard {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                Layout.horizontalStretchFactor: 1
                 contentItem: ColumnLayout {
                     RowLayout {
                         Kirigami.Icon { source: "temperature-normal"; Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium; Layout.preferredHeight: Layout.preferredWidth }

@@ -38,6 +38,7 @@
 #include <QVariantMap>
 
 #include <sys/sysinfo.h>
+#include <unistd.h>
 
 #include <algorithm>
 
@@ -421,22 +422,43 @@ void SystemBackend::refreshTopMemoryProcesses()
         if (!numeric || parsedPid <= 0)
             continue;
 
-        QFile status(proc.filePath(pid + QStringLiteral("/status")));
-        if (!status.open(QIODevice::ReadOnly | QIODevice::Text))
-            continue;
-
         QString name;
         qint64 rssKiB = 0;
-        while (!status.atEnd()) {
-            const QByteArray raw = status.readLine();
-            if (raw.startsWith("Name:"))
-                name = QString::fromUtf8(raw.mid(5)).trimmed();
-            else if (raw.startsWith("VmRSS:")) {
-                const QList<QByteArray> fields = raw.simplified().split(' ');
-                if (fields.size() >= 2)
-                    rssKiB = fields.at(1).toLongLong();
+
+        QFile status(proc.filePath(pid + QStringLiteral("/status")));
+        if (status.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            while (!status.atEnd()) {
+                const QByteArray raw = status.readLine();
+                if (raw.startsWith("Name:"))
+                    name = QString::fromUtf8(raw.mid(5)).trimmed();
+                else if (raw.startsWith("VmRSS:")) {
+                    const QList<QByteArray> fields = raw.simplified().split(' ');
+                    if (fields.size() >= 2)
+                        rssKiB = fields.at(1).toLongLong();
+                }
             }
         }
+
+        if (name.isEmpty()) {
+            QFile comm(proc.filePath(pid + QStringLiteral("/comm")));
+            if (comm.open(QIODevice::ReadOnly | QIODevice::Text))
+                name = QString::fromUtf8(comm.readAll()).trimmed();
+        }
+
+        if (rssKiB <= 0) {
+            QFile statm(proc.filePath(pid + QStringLiteral("/statm")));
+            if (statm.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                const QList<QByteArray> fields = statm.readLine().simplified().split(' ');
+                if (fields.size() >= 2) {
+                    bool ok = false;
+                    const qint64 residentPages = fields.at(1).toLongLong(&ok);
+                    const long pageSize = ::sysconf(_SC_PAGESIZE);
+                    if (ok && residentPages > 0 && pageSize > 0)
+                        rssKiB = residentPages * qint64(pageSize) / 1024;
+                }
+            }
+        }
+
         if (!name.isEmpty() && rssKiB > 0)
             entries.append({name, rssKiB});
     }

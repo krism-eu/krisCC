@@ -45,6 +45,13 @@ private slots:
         QVERIFY(flatpak.ok());
         QCOMPARE(flatpak.values.at(0).toStringList().at(1), QStringLiteral("com.vivaldi.Vivaldi"));
 
+        const auto remotes = ContractParsers::parseFlatpakTsv(
+            "flathub\tFlathub\thttps://dl.flathub.org/repo/\t\n", 4);
+        QVERIFY(remotes.ok());
+        QCOMPARE(remotes.values.size(), 1);
+        QCOMPARE(remotes.values.at(0).toStringList().size(), 4);
+        QCOMPARE(remotes.values.at(0).toStringList().at(3), QString());
+
         const auto podman = ContractParsers::parsePodmanJson("[{\"Names\":[\"demo\"],\"State\":\"running\",\"Size\":{\"rootFsSize\":2048,\"rwSize\":512}}]");
         QVERIFY(podman.ok());
         QCOMPARE(podman.values.size(), 1);

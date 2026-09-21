@@ -122,6 +122,13 @@ require('QStringLiteral("firewalld.service")' in system_cpp,
         "Dashboard firewall state is not sourced from firewalld")
 require("topMemoryProcesses" in read("src/SystemBackend.h"),
         "Dashboard top-memory model is missing")
+require("anchors.right: parent.right" in read("qml/Main.qml")
+        and "id: versionLabel" in read("qml/Main.qml"),
+        "Version label is not anchored to the physical right edge")
+require("Layout.horizontalStretchFactor: 2" in read("qml/modules/DashboardModule.qml"),
+        "RAM card is not explicitly wider than CPU/temperature cards")
+require("Layout.maximumWidth: Layout.preferredWidth" in read("qml/modules/SoftwareModule.qml"),
+        "Repository status/action columns are not fixed-width aligned")
 require("backupDirectory" in read("src/SystemBackend.h")
         and "setBackupDirectory" in system_cpp,
         "selectable backup destination is missing")
