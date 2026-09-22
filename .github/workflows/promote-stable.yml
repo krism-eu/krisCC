@@ -31,7 +31,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$HOST_ACCEPTANCE_CONFIRMED" = "true"
-          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+-[0-9]+$ ]]
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
 
       - name: Install RPM inspection tooling
         run: |
@@ -50,18 +50,28 @@ jobs:
           compare_status="$(gh api "repos/$GITHUB_REPOSITORY/compare/$release_sha...$main_sha" --jq '.status')"
           test "$compare_status" = "ahead" -o "$compare_status" = "identical"
 
+          version="${TAG#v}"
+          rpm_file="krisCC-${version}-1.fc44.x86_64.rpm"
+          source_zip="krisCC-${version}-1-source.zip"
+          source_txt="krisCC-${version}-1-source.txt"
+
           rm -rf /tmp/kriscc-promote
           mkdir -p /tmp/kriscc-promote
-          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p 'krisCC-*.x86_64.rpm' -p SHA256SUMS -D /tmp/kriscc-promote
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            -p "$rpm_file" -p "$source_zip" -p "$source_txt" -p SHA256SUMS \
+            -D /tmp/kriscc-promote
           cd /tmp/kriscc-promote
 
+          test "$(awk 'END {print NR}' SHA256SUMS)" -eq 3
           sha256sum -c SHA256SUMS
-          test "$(awk 'END {print NR}' SHA256SUMS)" -eq 1
-
-          rpm_file="krisCC-${TAG#v}-1.fc44.x86_64.rpm"
           test -f "$rpm_file"
+          test -f "$source_zip"
+          test -f "$source_txt"
+          grep -Fxq "# commit: $release_sha" "$source_txt"
+          grep -Fxq "# version-release: ${version}-1" "$source_txt"
+
           test "$(rpm -qp --qf '%{NAME}' "$rpm_file")" = "krisCC"
-          test "$(rpm -qp --qf '%{VERSION}' "$rpm_file")" = "${TAG#v}"
+          test "$(rpm -qp --qf '%{VERSION}' "$rpm_file")" = "$version"
           test "$(rpm -qp --qf '%{RELEASE}' "$rpm_file")" = "1.fc44"
 
       - name: Promote exact candidate to stable
