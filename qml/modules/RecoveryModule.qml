@@ -357,7 +357,7 @@ Kirigami.ScrollablePage {
                         id: forgetPackageField
                         Layout.fillWidth: true
                         placeholderText: qsTr("Nome richiesta non disponibile")
-                        validator: RegularExpressionValidator { regularExpression: /^[A-Za-z0-9][A-Za-z0-9._+:-]{0,127}$/ }
+                        validator: RegularExpressionValidator { regularExpression: /^[A-Za-z0-9][A-Za-z0-9._+-]{0,127}$/ }
                         enabled: RkBackend.canForget && !RkBackend.operationRunning
                         onAccepted: {
                             if (acceptableInput) {
