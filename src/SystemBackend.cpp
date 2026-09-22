@@ -412,12 +412,9 @@ void SystemBackend::refreshDashboardState()
 
 void SystemBackend::refreshTopMemoryProcesses()
 {
-    struct ProcessMemory {
-        QString name;
-        qint64 rssKiB = 0;
-    };
+    QHash<QString, qint64> aggregatedMemory;
+    QHash<QString, int> processCounts;
 
-    QList<ProcessMemory> entries;
     const QDir proc(QStringLiteral("/proc"));
     const QStringList pids = proc.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
     for (const QString &pid : pids) {
@@ -463,8 +460,26 @@ void SystemBackend::refreshTopMemoryProcesses()
             }
         }
 
-        if (!name.isEmpty() && rssKiB > 0)
-            entries.append({name, rssKiB});
+        if (!name.isEmpty() && rssKiB > 0) {
+            aggregatedMemory[name] += rssKiB;
+            processCounts[name] += 1;
+        }
+    }
+
+    struct ProcessMemory {
+        QString displayName;
+        qint64 rssKiB = 0;
+    };
+
+    QList<ProcessMemory> entries;
+    entries.reserve(aggregatedMemory.size());
+    for (auto it = aggregatedMemory.constBegin(); it != aggregatedMemory.constEnd(); ++it) {
+        const QString &procName = it.key();
+        const int count = processCounts.value(procName, 1);
+        const QString displayName = (count > 1)
+            ? QStringLiteral("%1 (%2 processi)").arg(procName).arg(count)
+            : procName;
+        entries.append({displayName, it.value()});
     }
 
     std::sort(entries.begin(), entries.end(), [](const ProcessMemory &a, const ProcessMemory &b) {
@@ -475,7 +490,7 @@ void SystemBackend::refreshTopMemoryProcesses()
     const qsizetype limit = std::min<qsizetype>(5, entries.size());
     for (qsizetype i = 0; i < limit; ++i) {
         QVariantMap row;
-        row.insert(QStringLiteral("name"), entries.at(i).name);
+        row.insert(QStringLiteral("name"), entries.at(i).displayName);
         row.insert(QStringLiteral("memoryMiB"), qRound64(double(entries.at(i).rssKiB) / 1024.0));
         result.append(row);
     }
