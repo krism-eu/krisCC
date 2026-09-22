@@ -1,6 +1,6 @@
 Name:           krisCC
 Version:        0.7.1
-Release:        5%{?dist}
+Release:        6%{?dist}
 Summary:        krisCC personal control center for KrisOS and Fedora bootc
 License:        MIT
 URL:            https://github.com/krism-eu/krisCC
@@ -54,6 +54,11 @@ Settings.
 %{_datadir}/icons/hicolor/scalable/apps/krisCC.svg
 
 %changelog
+* Tue Sep 22 2026 krism-eu - 0.7.1-6
+- Resolve panel repository exports to immutable commit SHAs before downloading source
+- Attach the exact source ZIP and combined source TXT to each candidate bundle
+- Cover RPM, source ZIP and source TXT with one release SHA256SUMS manifest
+
 * Mon Sep 21 2026 krism-eu - 0.7.1-5
 - Make downloaded BootC apply-and-reboot match the UI contract
 - Normalize sidebar page indices and fail closed on unexpected rk verbs
