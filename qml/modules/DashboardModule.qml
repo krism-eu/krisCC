@@ -191,7 +191,6 @@ Kirigami.ScrollablePage {
             Layout.fillWidth: true
             spacing: Kirigami.Units.largeSpacing
 
-            // Colonna Sinistra (1/3 di larghezza): CPU e Temperatura con indicatori grafici
             Kirigami.AbstractCard {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
@@ -218,20 +217,6 @@ Kirigami.ScrollablePage {
                         }
                     }
 
-                    Controls.ProgressBar {
-                        Layout.fillWidth: true
-                        from: 0
-                        to: 100
-                        value: SystemBackend.cpuUsagePercent >= 0 ? SystemBackend.cpuUsagePercent : 0
-                    }
-
-                    Controls.Label {
-                        text: SystemBackend.cpuUsagePercent < 40 ? qsTr("Carico normale")
-                              : SystemBackend.cpuUsagePercent < 75 ? qsTr("Carico medio")
-                              : qsTr("Carico elevato")
-                        opacity: UiMetrics.secondaryOpacity
-                    }
-
                     Kirigami.Separator { Layout.fillWidth: true }
 
                     RowLayout {
@@ -250,79 +235,32 @@ Kirigami.ScrollablePage {
                             text: SystemBackend.cpuTemperatureC >= 0 ? qsTr("%1 °C").arg(SystemBackend.cpuTemperatureC.toFixed(0)) : qsTr("Non disponibile")
                             font.bold: true
                             font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
-                            color: SystemBackend.cpuTemperatureC >= 85 ? "#e74c3c"
-                                   : SystemBackend.cpuTemperatureC >= 75 ? "#f39c12"
-                                   : Kirigami.Theme.textColor
                         }
-                    }
-
-                    Controls.ProgressBar {
-                        Layout.fillWidth: true
-                        from: 30
-                        to: 100
-                        value: SystemBackend.cpuTemperatureC >= 30 ? SystemBackend.cpuTemperatureC : 30
-                    }
-
-                    Controls.Label {
-                        text: SystemBackend.cpuTemperatureC < 65 ? qsTr("Temperatura ottimale")
-                              : SystemBackend.cpuTemperatureC < 80 ? qsTr("Nella norma sotto carico")
-                              : qsTr("Temperatura elevata")
-                        opacity: UiMetrics.secondaryOpacity
                     }
 
                     Item { Layout.fillHeight: true }
                 }
             }
 
-            // Colonna Destra (2/3 di larghezza): RAM in linea + Classifica 7 processi
             Kirigami.AbstractCard {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.horizontalStretchFactor: 2
                 contentItem: ColumnLayout {
-                    spacing: Kirigami.Units.smallSpacing
-
                     RowLayout {
-                        Kirigami.Icon {
-                            source: "memory"
-                            Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
-                            Layout.preferredHeight: Layout.preferredWidth
-                        }
-                        Kirigami.Heading {
-                            level: 3
-                            font.bold: true
-                            text: qsTr("RAM usata")
-                        }
+                        Kirigami.Icon { source: "memory"; Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium; Layout.preferredHeight: Layout.preferredWidth }
+                        Kirigami.Heading { level: 3; font.bold: true; text: qsTr("RAM usata") }
                     }
-
-                    RowLayout {
+                    Controls.Label {
+                        text: SystemBackend.memoryUsedMiB >= 0 ? qsTr("%1 MiB").arg(SystemBackend.memoryUsedMiB) : qsTr("Non disponibile")
+                    }
+                    Controls.Label {
                         Layout.fillWidth: true
-                        spacing: Kirigami.Units.smallSpacing
-                        Controls.Label {
-                            text: SystemBackend.memoryUsedMiB >= 0 ? qsTr("%1 MiB").arg(SystemBackend.memoryUsedMiB) : qsTr("Non disponibile")
-                            font.bold: true
-                            font.pointSize: Kirigami.Theme.defaultFont.pointSize + 2
-                        }
-                        Controls.Label {
-                            Layout.fillWidth: true
-                            text: SystemBackend.memoryTotalMiB >= 0 ? qsTr("su %1 MiB · swap esclusa").arg(SystemBackend.memoryTotalMiB) : qsTr("swap esclusa")
-                            opacity: UiMetrics.secondaryOpacity
-                            Layout.alignment: Qt.AlignBaseline
-                            elide: Text.ElideRight
-                        }
+                        text: SystemBackend.memoryTotalMiB >= 0 ? qsTr("su %1 MiB · swap esclusa").arg(SystemBackend.memoryTotalMiB) : qsTr("swap esclusa")
+                        opacity: UiMetrics.secondaryOpacity
                     }
-
-                    Controls.ProgressBar {
-                        Layout.fillWidth: true
-                        from: 0
-                        to: SystemBackend.memoryTotalMiB > 0 ? SystemBackend.memoryTotalMiB : 100
-                        value: SystemBackend.memoryUsedMiB > 0 ? SystemBackend.memoryUsedMiB : 0
-                    }
-
                     Kirigami.Separator { Layout.fillWidth: true }
-
                     Controls.Label { text: qsTr("Processi con più RAM"); font.bold: true }
-
                     Repeater {
                         model: SystemBackend.topMemoryProcesses
                         delegate: RowLayout {
@@ -339,7 +277,6 @@ Kirigami.ScrollablePage {
                             }
                         }
                     }
-
                     Controls.Label {
                         Layout.fillWidth: true
                         visible: SystemBackend.topMemoryProcesses.length === 0
