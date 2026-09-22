@@ -8,6 +8,12 @@ import subprocess
 import sys
 
 
+def ensure_safe_directory(root: pathlib.Path) -> None:
+    subprocess.check_call(
+        ["git", "config", "--global", "--add", "safe.directory", str(root)]
+    )
+
+
 def run_git(root: pathlib.Path, *args: str) -> bytes:
     return subprocess.check_output(["git", *args], cwd=root)
 
@@ -26,6 +32,7 @@ def main() -> int:
 
     root = pathlib.Path(args.root).resolve()
     output = pathlib.Path(args.output).resolve()
+    ensure_safe_directory(root)
     commit = run_git(root, "rev-parse", f"{args.ref}^{{commit}}").decode("ascii").strip()
     tree = run_git(root, "rev-parse", f"{commit}^{{tree}}").decode("ascii").strip()
     entries = run_git(root, "ls-tree", "-r", "-z", "--full-tree", commit).split(b"\0")
