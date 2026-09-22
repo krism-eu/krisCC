@@ -344,11 +344,10 @@ Kirigami.ScrollablePage {
         modal: true
         title: qsTr("Svuotare i cestini?")
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
-        contentItem: Item {
-            implicitHeight: quickTrashText.implicitHeight
+        contentItem: ColumnLayout {
+            width: quickTrashDialog.availableWidth
             Controls.Label {
-                id: quickTrashText
-                width: parent.width
+                Layout.fillWidth: true
                 text: qsTr("Elimina definitivamente gli elementi nei cestini del tuo utente, nella home e nelle partizioni montate supportate. L’operazione non può essere annullata.")
                 wrapMode: Text.WordWrap
             }
