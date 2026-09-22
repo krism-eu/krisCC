@@ -68,10 +68,14 @@ Kirigami.ScrollablePage {
             return RkBackend.statusValid && RkBackend.overlayState === "ready"
                    ? qsTr("Layer RPM operativo") : qsTr("Controlla Recovery")
         if (kind === "selinux") return qsTr("Protezione del sistema")
-        if (kind === "sync")
-            return RkBackend.statusValid
-                   ? qsTr("%1 richieste persistenti").arg(RkBackend.requests.length)
-                   : qsTr("Stato rk non disponibile")
+        if (kind === "sync") {
+            if (!RkBackend.statusValid)
+                return qsTr("Stato rk non disponibile")
+            var syncCount = RkBackend.requests.length
+            return syncCount === 1
+                   ? qsTr("1 richiesta persistente")
+                   : qsTr("%1 richieste persistenti").arg(syncCount)
+        }
         if (kind === "firewall") return qsTr("firewalld")
         if (kind === "network") {
             if (SystemBackend.networkInterface.length === 0)
@@ -94,8 +98,12 @@ Kirigami.ScrollablePage {
     }
 
     function moduleValue(id) {
-        if (id === "software")
-            return qsTr("%1 RPM persistenti").arg(BootcBackend.persistentPackageCount)
+        if (id === "software") {
+            var rpmCount = BootcBackend.persistentPackageCount
+            return rpmCount === 1
+                   ? qsTr("1 RPM persistente")
+                   : qsTr("%1 RPM persistenti").arg(rpmCount)
+        }
         if (id === "flatpak")
             return SystemBackend.programAvailable("flatpak") ? qsTr("Flatpak disponibile") : qsTr("Non disponibile")
         if (id === "podman")
@@ -127,7 +135,7 @@ Kirigami.ScrollablePage {
 
         GridLayout {
             Layout.fillWidth: true
-            columns: width > 1100 ? 5 : width > 620 ? 2 : 1
+            columns: width > 1200 ? 6 : width > 760 ? 3 : width > 520 ? 2 : 1
             uniformCellWidths: true
             columnSpacing: Kirigami.Units.largeSpacing
             rowSpacing: Kirigami.Units.largeSpacing
@@ -186,15 +194,50 @@ Kirigami.ScrollablePage {
             Kirigami.AbstractCard {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.horizontalStretchFactor: 1
+                Layout.horizontalStretchFactor: 2
                 contentItem: ColumnLayout {
+                    spacing: Kirigami.Units.smallSpacing
+
                     RowLayout {
-                        Kirigami.Icon { source: "cpu"; Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium; Layout.preferredHeight: Layout.preferredWidth }
-                        Kirigami.Heading { level: 3; font.bold: true; text: qsTr("CPU") }
+                        Kirigami.Icon {
+                            source: "cpu"
+                            Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                            Layout.preferredHeight: Layout.preferredWidth
+                        }
+                        Kirigami.Heading {
+                            level: 3
+                            font.bold: true
+                            text: qsTr("CPU")
+                        }
+                        Item { Layout.fillWidth: true }
+                        Controls.Label {
+                            text: SystemBackend.cpuUsagePercent >= 0 ? qsTr("%1%").arg(SystemBackend.cpuUsagePercent) : qsTr("Campionamento…")
+                            font.bold: true
+                            font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
+                        }
                     }
-                    Controls.Label {
-                        text: SystemBackend.cpuUsagePercent >= 0 ? qsTr("%1%").arg(SystemBackend.cpuUsagePercent) : qsTr("Campionamento…")
+
+                    Kirigami.Separator { Layout.fillWidth: true }
+
+                    RowLayout {
+                        Kirigami.Icon {
+                            source: "temperature-normal"
+                            Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                            Layout.preferredHeight: Layout.preferredWidth
+                        }
+                        Kirigami.Heading {
+                            level: 3
+                            font.bold: true
+                            text: qsTr("Temperatura CPU")
+                        }
+                        Item { Layout.fillWidth: true }
+                        Controls.Label {
+                            text: SystemBackend.cpuTemperatureC >= 0 ? qsTr("%1 °C").arg(SystemBackend.cpuTemperatureC.toFixed(0)) : qsTr("Non disponibile")
+                            font.bold: true
+                            font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
+                        }
                     }
+
                     Item { Layout.fillHeight: true }
                 }
             }
@@ -240,22 +283,6 @@ Kirigami.ScrollablePage {
                         text: qsTr("Dati processo non disponibili")
                         opacity: UiMetrics.secondaryOpacity
                     }
-                }
-            }
-
-            Kirigami.AbstractCard {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.horizontalStretchFactor: 1
-                contentItem: ColumnLayout {
-                    RowLayout {
-                        Kirigami.Icon { source: "temperature-normal"; Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium; Layout.preferredHeight: Layout.preferredWidth }
-                        Kirigami.Heading { level: 3; font.bold: true; text: qsTr("Temperatura CPU") }
-                    }
-                    Controls.Label {
-                        text: SystemBackend.cpuTemperatureC >= 0 ? qsTr("%1 °C").arg(SystemBackend.cpuTemperatureC.toFixed(0)) : qsTr("Non disponibile")
-                    }
-                    Item { Layout.fillHeight: true }
                 }
             }
         }
@@ -311,7 +338,6 @@ Kirigami.ScrollablePage {
 
     Controls.Dialog {
         id: quickTrashDialog
-        implicitHeight: Kirigami.Units.gridUnit * 14
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
         width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
