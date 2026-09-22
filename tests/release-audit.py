@@ -55,8 +55,8 @@ require('sha256sum "$RPM" "$SOURCE_ZIP" "$SOURCE_TXT" > SHA256SUMS' in workflow
 require('grep -Fxq "# commit: $GITHUB_SHA"' in workflow,
         "source transcript is not tied to the exact build commit")
 source_snapshot = read("tools/source_snapshot.py")
-require('git", "ls-tree", "-r", "-z", "--full-tree", commit' in source_snapshot
-        and 'git", "cat-file", "blob", object_sha' in source_snapshot
+require('run_git(root, "ls-tree", "-r", "-z", "--full-tree", commit)' in source_snapshot
+        and 'run_git(root, "cat-file", "blob", object_sha)' in source_snapshot
         and '# commit:' in source_snapshot
         and '# tree:' in source_snapshot,
         "source TXT generator does not snapshot the exact tracked Git tree")
