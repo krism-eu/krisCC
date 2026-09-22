@@ -146,9 +146,10 @@ require("Novità repository" not in software_qml,
         "removed repository-news tab returned")
 require('text: qsTr("Dettagli tecnici")' not in system_qml,
         "raw BootC JSON toggle returned")
-require("entries.size() >= 500" not in package_cpp,
+require(re.search(r'entries\.size\(\)\s*>=\s*500', package_cpp) is None,
         "installed RPM inventory is silently capped")
-require("entries.size() >= 100" in package_cpp and "m_truncated" in package_cpp,
+require(re.search(r'entries\.size\(\)\s*>=\s*100', package_cpp) is not None
+        and "m_truncated" in package_cpp,
         "RPM live-search result cap is not explicit")
 require("rpmdb.sqlite" not in package_cpp,
         "PackageSearch must not hardcode an RPM database path")

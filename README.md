@@ -8,7 +8,7 @@ Le regole di stabilità, compatibilità e integrazione sono definite in [ARCHITE
 
 ## Cosa gestisce
 
-- **Panoramica**: stato essenziale di sistema, aggiornamenti, storage, CPU, RAM usata senza swap, temperatura CPU e Quick System Info.
+- **Panoramica**: stato essenziale di sistema, rete/IP, firewall, aggiornamenti, storage, CPU, RAM usata senza swap, top processi RAM, temperatura CPU e Quick System Info.
 - **Software RPM**: ricerca, installati, aggiornabili, provenienza Base/Persistente/Layer non richiesti e piano della transazione tramite la stessa policy `rk` usata per installare.
 - **Flatpak**: ricerca strutturata, installati, aggiornamenti, update singolo o completo del profilo utente, remote e integrazione Flathub senza dipendere da Discover.
 - **Container / Podman**: elenco container e immagini locali, stato, nome/tag, dimensione, informazioni, log, start/stop/restart, rinomina, rimozione dei container e rimozione esplicita delle immagini senza force.
@@ -16,6 +16,8 @@ Le regole di stabilità, compatibilità e integrazione sono definite in [ARCHITE
 - **Comandi**: diagnostica read-only pronta per systemd, journal, rete, spazio, inode, mount e avvio, più **Miei comandi** per salvare comandi o script Bash multilinea personali in `~/.config/krisCC/custom-actions.json`. Il file è privato (`0600`), versionato e fail-closed; le azioni girano soltanto con i privilegi dell'utente corrente, con stdin chiuso, e Annulla/timeout termina l'intero gruppo di processi dello script.
 - **Backup e recovery**: creazione, anteprima precisa di inclusioni/esclusioni, elenco, verifica e ripristino degli snapshot `tar.gz`, più stato RK strutturato, sync e forget di recovery. Il backup home esclude runtime/app Flatpak e storage Podman ricostruibili, mantenendo i dati Flatpak in `~/.var/app`.
 - **Cronologia**: registro locale privato e limitato delle operazioni mutanti eseguite da krisCC. Non vengono salvati output completi né argomenti sensibili delle operazioni amministrative.
+
+L'esportazione dell'intero albero sorgente **non è una funzione del Control Center**. È prodotta esclusivamente dalla CI GitHub accanto all'RPM candidato, così non aggiunge rete, API GitHub o logica di repository al runtime desktop.
 
 ## Sicurezza
 
@@ -37,14 +39,14 @@ krisCC è parte della base immutabile di KrisOS: le release normali del control 
 
 ## Release e rami
 
-Le versioni visibili usano solo **X.Y.Z**. La linea corrente è **dev/0.8**; le correzioni avanzano il patch (`0.8.1`, `0.8.2`, …). Il campo RPM `Release: 1` resta solo metadata Fedora e non compare nella versione mostrata dall'app o nel tag GitHub.
+Le versioni visibili usano solo **X.Y.Z**. La linea corrente usa il ramo breve **`0.8`**; le correzioni avanzano il patch (`0.8.1`, `0.8.2`, …). Il campo RPM `Release: 1` resta solo metadata Fedora e non compare nella versione mostrata dall'app o nel tag GitHub.
 
-- `main` è la linea ufficiale corrente; dalla 0.7 contiene l'architettura strutturata di krisCC.
-- `stable/0.6` è una fotografia congelata della precedente linea 0.6 e punta a `v0.6.0-2`. Non riceve sviluppo ordinario né backport automatici.
-- ogni push e pull request verso `main` costruisce e verifica l'RPM in CI senza pubblicarlo automaticamente; un candidato prerelease viene pubblicato solo con dispatch esplicito sul `main` validato;
-- la promozione a stable avviene esplicitamente solo dopo l'acceptance test su un host KrisOS reale e riusa esattamente lo stesso RPM già verificato, senza rebuild.
-
-In questo modo la vecchia linea resta recuperabile senza obbligarci a mantenerla in parallelo, mentre `main` rimane l'unico ramo di sviluppo supportato.
+- `0.8` è il ramo di integrazione della linea corrente fino all'acceptance;
+- `main` resta la linea ufficiale e viene aggiornato solo dopo la validazione della candidata;
+- i vecchi rami di prova non fanno parte del contratto di release e possono essere rimossi quando il loro contenuto utile è confluito;
+- ogni push sul ramo `X.Y` e ogni pull request verso `main` costruisce e verifica l'RPM in CI;
+- il candidato prerelease pubblico viene pubblicato solo con dispatch esplicito sul `main` validato;
+- la promozione avviene solo dopo l'acceptance test su un host KrisOS reale e riusa esattamente lo stesso RPM già verificato, senza rebuild.
 
 ## Build locale
 
@@ -65,7 +67,7 @@ cmake --build build
 
 ## RPM e integrazione nell'immagine
 
-Lo spec RPM è `packaging/krisCC.spec` e produce **`krisCC-0.8.0-1.fc44.x86_64.rpm`**. La versione mostrata dall'app resta semplicemente **`0.8.0`**: il Release RPM `-1.fc44` è solo metadata di packaging. La CI Fedora 44 costruisce e installa l'RPM, riesegue lo smoke test, produce `SHA256SUMS` e salva in `artifacts/source/` un unico file di testo con l'esatto commit/branch e tutti i file testuali tracciati che hanno generato quell'RPM; i file binari vengono marcati con dimensione e SHA256.
+Lo spec RPM è `packaging/krisCC.spec` e produce **`krisCC-0.8.1-1.fc44.x86_64.rpm`**. La versione mostrata dall'app resta semplicemente **`0.8.1`**: il Release RPM `-1.fc44` è solo metadata di packaging. La CI Fedora 44 costruisce e installa l'RPM, riesegue lo smoke test, produce `SHA256SUMS` e salva in `artifacts/source/` un unico file di testo con l'esatto commit/branch e tutti i file testuali tracciati che hanno generato quell'RPM; i file binari vengono marcati con dimensione e SHA256.
 
 Il flusso previsto per KrisOS è:
 
@@ -79,8 +81,8 @@ Esempio manuale:
 
 ```bash
 mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-git archive --format=tar.gz --prefix=krisCC-0.8.0/ \
-  -o ~/rpmbuild/SOURCES/krisCC-0.8.0.tar.gz HEAD
+git archive --format=tar.gz --prefix=krisCC-0.8.1/ \
+  -o ~/rpmbuild/SOURCES/krisCC-0.8.1.tar.gz HEAD
 cp packaging/krisCC.spec ~/rpmbuild/SPECS/krisCC.spec
 rpmbuild -ba ~/rpmbuild/SPECS/krisCC.spec
 ```

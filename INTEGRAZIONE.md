@@ -1,10 +1,10 @@
 # Integrazione krisCC in KrisOS / Fedora bootc
 
-krisCC 0.8.0 è un'applicazione standalone Qt 6/Kirigami pensata per uso personale su Fedora bootc. Non duplica Plasma System Settings: integra solo le funzioni specifiche del sistema e gli strumenti di manutenzione che è utile avere in un unico posto.
+krisCC 0.8.1 è un'applicazione standalone Qt 6/Kirigami pensata per uso personale su Fedora bootc. Non duplica Plasma System Settings: integra solo le funzioni specifiche del sistema e gli strumenti di manutenzione che è utile avere in un unico posto.
 
 ## Runtime
 
-- Qt 6 Core/Gui/Qml/Quick/DBus
+- Qt 6 Core/Gui/Qml/Quick/DBus/Network
 - KF6 Kirigami
 - `bootc`, `rpm`, `dnf5`, `dnf5-plugins` (config-manager), `pkexec`, `tar`
 - `/usr/bin/rk` come helper del layer persistente KrisOS
@@ -25,7 +25,7 @@ krisCC usa come layout primario quello attuale di KrisOS:
 
 La base del sistema resta image-based e si aggiorna esclusivamente tramite BootC. KrisOS supporta un solo deployment operativo; krisCC non espone rollback o gestione di deployment alternativi.
 
-krisCC usa DNF5 per catalogo, inventario, aggiornamenti disponibili, pacchetti recenti e stato dei repository abilitati. La gestione esplicita dei repository usa soltanto `dnf5 config-manager`: add da URL HTTPS validato e enable/disable di un ID validato. L'installazione/rimozione del layer persistente passa sempre da `rk`. rk usa i repository DNF che l'amministratore ha lasciato abilitati, forza `pkg_gpgcheck` e verifica le firme della transazione prima di applicarla; la base immutabile e le architetture vietate restano protette.
+krisCC usa DNF5 per catalogo, inventario, aggiornamenti disponibili e stato dei repository abilitati. La gestione esplicita dei repository usa soltanto `dnf5 config-manager`: add da URL HTTPS validato e enable/disable di un ID validato. L'installazione/rimozione del layer persistente passa sempre da `rk`. rk usa i repository DNF che l'amministratore ha lasciato abilitati, forza `pkg_gpgcheck` e verifica le firme della transazione prima di applicarla; la base immutabile e le architetture vietate restano protette.
 
 L'anteprima deve usare `rk plan <pacchetto>` e non un comando DNF5 parallelo: il piano mostrato all'utente deve essere prodotto dallo stesso solver, dalle stesse esclusioni e dalla stessa policy che verranno applicati da `rk add`.
 
@@ -39,10 +39,12 @@ Non aggiungere wrapper shell generici. `rk sync/add/rm/forget` resta il gate pri
 
 ## Pipeline immagine
 
-Il repository produce esclusivamente l'RPM `krisCC`. Il flusso di release previsto è:
+Il repository produce esclusivamente l'RPM `krisCC`. L'esportazione dell'albero sorgente in un unico file di testo è una funzione della **CI GitHub**, non del Control Center installato. Il runtime krisCC non contiene backend GitHub, selettori di branch o funzioni di esportazione repository.
+
+Il flusso di release previsto è:
 
 ```text
-krisCC source -> CI/test -> RPM + SHA256 -> build KrisOS -> immagine BootC
+krisCC source -> CI/test -> RPM + SHA256 + source dump -> acceptance host -> build KrisOS -> immagine BootC
 ```
 
 KrisOS deve consumare l'artefatto RPM già testato e identificarlo con un digest/hash verificato. La build dell'OS non deve fare un `git fetch` di krisCC per ricostruire implicitamente un secondo artefatto a partire da un repository esterno.
@@ -59,9 +61,13 @@ KRISCC_SMOKE_TEST=1 /usr/bin/krisCC --background
 
 Non esistono identità RPM di compatibilità da mantenere: nome pacchetto ed eseguibile sono `krisCC` e non vengono pubblicati alias o `Provides/Obsoletes` per vecchi nomi sperimentali.
 
-## Identità tecnica
+## Identità tecnica e versioni
 
 Il NEVRA e l'eseguibile sono `krisCC`. Il modulo QML, gli action ID Polkit, il desktop ID e l'AppStream ID usano il namespace `org.kriscc`.
+
+La versione pubblica usa solo **X.Y.Z**. La linea corrente è sviluppata sul ramo breve **`0.8`** e avanza per patch (`0.8.1`, `0.8.2`, ...). Il campo RPM `Release: 1` è solo metadata Fedora e non compare nella versione mostrata dall'app.
+
+`main` viene aggiornato solo dopo l'acceptance della candidata della linea `X.Y` sull'host KrisOS reale.
 
 ## Verifica reale prima del tag
 
@@ -77,7 +83,6 @@ rpm -V krisCC
 Poi verificare manualmente `rk plan/add/rm/sync`, ricerca RPM, Flatpak, Podman, update BootC, backup create/verify/restore, cronologia locale e selezione one-shot UEFI/GRUB quando disponibile.
 
 Repository: https://github.com/krism-eu/krisCC
-
 
 ## Backup home K1.0
 

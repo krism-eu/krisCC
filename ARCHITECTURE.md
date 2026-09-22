@@ -169,6 +169,8 @@ La sezione **Miei comandi** è separata dal contratto amministrativo: conserva i
 
 Un'azione personale che diventa una funzione amministrativa stabile deve essere promossa a backend ufficiale con capability detection, allowlist e test; non va resa privilegiata dentro il meccanismo custom.
 
+L'esportazione dell'intero repository sorgente non appartiene al runtime del Control Center: è una responsabilità della CI GitHub e viene prodotta come artefatto associato alla candidata. krisCC non deve quindi contenere API GitHub, selettori di branch o backend dedicati all'export del repository.
+
 ## 10. Test come contratto di compatibilità
 
 La CI deve proteggere sia il comportamento sia i confini architetturali.
@@ -217,17 +219,18 @@ Una modifica strutturale è pronta solo quando:
 
 Queste regole hanno precedenza sulla comodità di implementare rapidamente una nuova funzione.
 
-
 ## 13. Ciclo di release
 
-`main` è l'unica linea di sviluppo supportata. I rami `stable/X.Y` sono fotografie congelate di una linea precedente, non rami di manutenzione continua.
+Le versioni pubbliche usano esclusivamente **X.Y.Z**. Il campo RPM `Release` è metadata Fedora e resta separato dalla versione mostrata all'utente.
 
-Una release segue questo percorso:
+Durante lo sviluppo della linea corrente esiste un solo ramo breve **`X.Y`** (per esempio `0.8`). I patch candidate avanzano sullo stesso ramo (`0.8.1`, `0.8.2`, ...). `main` resta la linea ufficiale e viene aggiornato soltanto quando una candidata ha superato CI completa e acceptance sull'host KrisOS reale.
+
+Una candidata segue questo percorso:
 
 ```text
-main -> CI completa -> RPM candidato immutabile -> acceptance host KrisOS -> promozione stable dello stesso artefatto
+ramo X.Y -> CI completa -> RPM candidato immutabile -> acceptance host KrisOS -> stesso commit/artifact in main -> integrazione KrisOS
 ```
 
-La promozione stable non deve ricompilare il pacchetto. Deve verificare checksum, identità EVR e appartenenza del commit a `main`, quindi cambiare soltanto lo stato della release già validata.
+La promozione non deve ricompilare il pacchetto. Deve riusare esattamente l'RPM già validato, verificandone checksum e identità. I vecchi rami di prova non sono parte del contratto di compatibilità e possono essere rimossi quando il loro contenuto utile è confluito nella linea corrente.
 
-Una vecchia stable resta disponibile tramite tag, release e ramo congelato. Non si introducono fallback nel codice corrente solo per mantenerla compatibile.
+Tag e release conservano la storia pubblica; non si introducono fallback nel codice corrente solo per mantenere in vita rami sperimentali precedenti.
