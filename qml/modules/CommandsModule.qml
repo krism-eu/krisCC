@@ -18,10 +18,6 @@ Kirigami.ScrollablePage {
     property string deleteCustomName: ""
 
     property var commands: [
-        { id: "pipewire-restart", title: qsTr("Riavvia Audio (PipeWire)"), command: "systemctl --user restart pipewire pipewire-pulse wireplumber", note: qsTr("Riavvia il motore audio senza permessi root quando l'audio sparisce.") },
-        { id: "journal-vacuum", title: qsTr("Pulisci Journal (max 150M)"), command: "journalctl --vacuum-size=150M", note: qsTr("Tronca i log persistenti a 150 MiB liberando spazio.") },
-        { id: "gpu-driver", title: qsTr("Driver GPU e OpenGL"), command: "glxinfo -B", note: qsTr("Verifica quale scheda video è attiva e quale driver grafico (Mesa/NVIDIA) è in uso.") },
-        { id: "vulkan-info", title: qsTr("Riepilogo Vulkan"), command: "vulkaninfo --summary", note: qsTr("Verifica supporto e runtime Vulkan installati per il gaming e 3D.") },
         { id: "failed-units", title: qsTr("Unità di sistema fallite"), command: "systemctl --failed --no-pager --plain", note: qsTr("Servizi e unità systemd in errore.") },
         { id: "user-failed-units", title: qsTr("Unità utente fallite"), command: "systemctl --user --failed --no-pager --plain", note: qsTr("Servizi della sessione utente in errore.") },
         { id: "journal-errors", title: qsTr("Errori ultimo avvio"), command: "journalctl -b -p warning --no-pager -n 200", note: qsTr("Warning ed errori recenti del sistema.") },
@@ -101,7 +97,7 @@ Kirigami.ScrollablePage {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
                         opacity: UiMetrics.secondaryOpacity
-                        text: qsTr("Comandi read-only e manutenzioni rapide utili nella diagnosi quotidiana. Le funzioni già coperte bene dalle pagine Flatpak, Container e dal Monitor di sistema non vengono duplicate qui.")
+                        text: qsTr("Comandi read-only difficili da ricordare ma utili nella diagnosi quotidiana. Le funzioni già coperte bene dalle pagine Flatpak, Container e dal Monitor di sistema non vengono duplicate qui.")
                     }
                     RowLayout {
                         Layout.fillWidth: true
@@ -397,6 +393,7 @@ Kirigami.ScrollablePage {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.minimumHeight: 260
+                // Breeze currently attaches a TextInput-only helper to multiline TextEdit.
                 Basic.TextArea {
                     id: actionScript
                     wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere
