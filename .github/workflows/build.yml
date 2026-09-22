@@ -154,13 +154,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          rpmspec -P packaging/krisCC.spec >/dev/null
+          expanded_spec="$(mktemp)"
+          trap 'rm -f "$expanded_spec"' EXIT
+          rpmspec -P packaging/krisCC.spec > "$expanded_spec"
           test "$(rpmspec -q --qf '%{NAME}\n' packaging/krisCC.spec | head -n1)" = "krisCC"
           test "$(rpmspec -q --qf '%{VERSION}-%{RELEASE}\n' packaging/krisCC.spec | head -n1)" = "${EXPECTED}.fc44"
-          ! rpmspec -P packaging/krisCC.spec | grep -Eq '^Provides:[[:space:]]+(kcc|k-controlc)([[:space:]=]|$)'
-          ! rpmspec -P packaging/krisCC.spec | grep -Eq '^Obsoletes:[[:space:]]+(kcc|k-controlc)([[:space:]<=>]|$)'
-          rpmspec -P packaging/krisCC.spec | grep -Eq '^Requires:[[:space:]]+dnf5-plugins([[:space:]]|$)'
-          rpmspec -P packaging/krisCC.spec | grep -Eq '^Requires:[[:space:]]+bash([[:space:]]|$)'
+          ! grep -Eq '^Provides:[[:space:]]+(kcc|k-controlc)([[:space:]=]|$)' "$expanded_spec"
+          ! grep -Eq '^Obsoletes:[[:space:]]+(kcc|k-controlc)([[:space:]<=>]|$)' "$expanded_spec"
+          grep -Eq '^Requires:[[:space:]]+dnf5-plugins([[:space:]]|$)' "$expanded_spec"
+          grep -Eq '^Requires:[[:space:]]+bash([[:space:]]|$)' "$expanded_spec"
 
       - name: Stage install
         env:
