@@ -487,7 +487,7 @@ void SystemBackend::refreshTopMemoryProcesses()
     });
 
     QVariantList result;
-    const qsizetype limit = std::min<qsizetype>(5, entries.size());
+    const qsizetype limit = std::min<qsizetype>(7, entries.size());
     for (qsizetype i = 0; i < limit; ++i) {
         QVariantMap row;
         row.insert(QStringLiteral("name"), entries.at(i).displayName);
