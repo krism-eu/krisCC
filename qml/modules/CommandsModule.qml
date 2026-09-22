@@ -286,18 +286,20 @@ Kirigami.ScrollablePage {
                                     Controls.Button {
                                         flat: true
                                         icon.name: "document-edit"
+                                        text: qsTr("Modifica")
                                         display: Controls.AbstractButton.IconOnly
-                                        ToolTip.visible: hovered
-                                        ToolTip.text: qsTr("Modifica")
+                                        Controls.ToolTip.visible: hovered
+                                        Controls.ToolTip.text: text
                                         enabled: !CustomActionsBackend.running
                                         onClicked: editActionDialog.openFor(modelData)
                                     }
                                     Controls.Button {
                                         flat: true
                                         icon.name: "edit-delete"
+                                        text: qsTr("Elimina")
                                         display: Controls.AbstractButton.IconOnly
-                                        ToolTip.visible: hovered
-                                        ToolTip.text: qsTr("Elimina")
+                                        Controls.ToolTip.visible: hovered
+                                        Controls.ToolTip.text: text
                                         enabled: !CustomActionsBackend.running
                                         onClicked: {
                                             root.deleteCustomId = modelData.id
