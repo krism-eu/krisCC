@@ -34,8 +34,6 @@ qt_add_executable(krisCC
     src/AdminPolicy.cpp src/AdminPolicy.h
     src/ProcessRunner.cpp src/ProcessRunner.h
     src/ContractParsers.cpp src/ContractParsers.h
-    src/RepositoryExportBackend.cpp src/RepositoryExportBackend.h
-    src/RepositoryExportCore.cpp src/RepositoryExportCore.h
 )
 
 set_source_files_properties(qml/components/UiMetrics.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -117,14 +115,6 @@ if(BUILD_TESTING)
     target_include_directories(kriscc-test-parsers PRIVATE src)
     target_link_libraries(kriscc-test-parsers PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME parsers COMMAND kriscc-test-parsers)
-
-    add_executable(kriscc-test-repository-export
-        tests/test_repository_export_core.cpp
-        src/RepositoryExportCore.cpp src/RepositoryExportCore.h
-    )
-    target_include_directories(kriscc-test-repository-export PRIVATE src)
-    target_link_libraries(kriscc-test-repository-export PRIVATE Qt6::Core Qt6::Test)
-    add_test(NAME repository-export COMMAND kriscc-test-repository-export)
 endif()
 
 add_executable(kriscc-maintenance

@@ -87,30 +87,13 @@ require("src/AdminPolicy.cpp src/AdminPolicy.h" in cmake, "shared admin policy n
 require("kriscc-test-validators" in cmake
         and "kriscc-test-admin-policy" in cmake
         and "kriscc-test-process-runner" in cmake
-        and "kriscc-test-parsers" in cmake
-        and "kriscc-test-repository-export" in cmake,
+        and "kriscc-test-parsers" in cmake,
         "semantic unit tests are not wired into CTest")
 require("src/ProcessRunner.cpp src/ProcessRunner.h" in cmake,
         "shared user-level ProcessRunner not linked")
 require("src/ContractParsers.cpp src/ContractParsers.h" in cmake,
         "shared contract parsers not linked")
-require("src/RepositoryExportBackend.cpp src/RepositoryExportBackend.h" in cmake
-        and "src/RepositoryExportCore.cpp src/RepositoryExportCore.h" in cmake,
-        "repository export backend/core not linked")
-repo_export_core = read("src/RepositoryExportCore.cpp")
-repo_export_backend = read("src/RepositoryExportBackend.cpp")
-require('QStringLiteral("krism-eu/krisCC")' in repo_export_core
-        and 'QStringLiteral("krism-eu/KrisOS")' in repo_export_core,
-        "repository export allowlist is incomplete")
-require("parseLatestGreenRun" in repo_export_core
-        and "actions/runs?status=success" in repo_export_backend,
-        "repository export does not resolve the latest successful build")
-require('QStringLiteral("repository.zip")' in repo_export_backend
-        and 'QStringLiteral("-m"), QStringLiteral("zipfile"), QStringLiteral("-e")' in repo_export_backend,
-        "repository export must download and extract a ZIP")
-require("exportBranch" not in repo_export_backend
-        and "refreshBranches" not in repo_export_backend,
-        "arbitrary branch export must not remain")
+
 require("AdminPolicy::resolve" in admin_cpp and "AdminPolicy::resolve" in polkit_cpp,
         "client/root privileged allowlist does not share AdminPolicy")
 require('QStringLiteral("/usr/bin/rk")' in admin_policy
@@ -217,8 +200,6 @@ require('"$@"' not in wrapper, "BootC wrapper accepts arbitrary arguments")
 for ignored in ("stage/", "artifacts/", "audit-build/", "*.rpm"):
     require(ignored in read(".gitignore"), f".gitignore missing {ignored}")
 
-require("RepositoryExportBackend" in read("qml/modules/CommandsModule.qml"),
-        "Commands page does not expose repository export")
 require("0.6 è" not in read("INTEGRAZIONE.md"), "integration docs are stale")
 require("release 0.5.1" not in read("i18n/README.md"), "i18n docs are stale")
 require("auth_admin_keep" not in read("data/org.kriscc.controlcenter.policy"),
