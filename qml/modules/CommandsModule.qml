@@ -18,6 +18,10 @@ Kirigami.ScrollablePage {
     property string deleteCustomName: ""
 
     property var commands: [
+        { id: "pipewire-restart", title: qsTr("Riavvia Audio (PipeWire)"), command: "systemctl --user restart pipewire pipewire-pulse wireplumber", note: qsTr("Riavvia il motore audio senza permessi root quando l'audio sparisce.") },
+        { id: "journal-vacuum", title: qsTr("Pulisci Journal (max 150M)"), command: "journalctl --vacuum-size=150M", note: qsTr("Tronca i log persistenti a 150 MiB liberando spazio su disco.") },
+        { id: "gpu-driver", title: qsTr("Driver GPU e OpenGL"), command: "glxinfo -B", note: qsTr("Verifica quale scheda video è attiva e quale driver grafico (Mesa/NVIDIA) è in uso.") },
+        { id: "vulkan-info", title: qsTr("Riepilogo Vulkan"), command: "vulkaninfo --summary", note: qsTr("Verifica supporto e runtime Vulkan installati per 3D e gaming.") },
         { id: "failed-units", title: qsTr("Unità di sistema fallite"), command: "systemctl --failed --no-pager --plain", note: qsTr("Servizi e unità systemd in errore.") },
         { id: "user-failed-units", title: qsTr("Unità utente fallite"), command: "systemctl --user --failed --no-pager --plain", note: qsTr("Servizi della sessione utente in errore.") },
         { id: "journal-errors", title: qsTr("Errori ultimo avvio"), command: "journalctl -b -p warning --no-pager -n 200", note: qsTr("Warning ed errori recenti del sistema.") },
@@ -97,7 +101,7 @@ Kirigami.ScrollablePage {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
                         opacity: UiMetrics.secondaryOpacity
-                        text: qsTr("Comandi read-only difficili da ricordare ma utili nella diagnosi quotidiana. Le funzioni già coperte bene dalle pagine Flatpak, Container e dal Monitor di sistema non vengono duplicate qui.")
+                        text: qsTr("Comandi read-only e manutenzioni rapide utili nella diagnosi quotidiana. Le funzioni già coperte bene dalle pagine Flatpak, Container e dal Monitor di sistema non vengono duplicate qui.")
                     }
                     RowLayout {
                         Layout.fillWidth: true
@@ -241,68 +245,88 @@ Kirigami.ScrollablePage {
                     text: qsTr("Nessun comando personale. Salva qui ciò che normalmente devi cercare o ricordare a memoria.")
                 }
 
-                Repeater {
-                    model: CustomActionsBackend.actions
-                    delegate: Kirigami.AbstractCard {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        contentItem: ColumnLayout {
-                            spacing: Kirigami.Units.smallSpacing
-                            RowLayout {
-                                Layout.fillWidth: true
-                                ColumnLayout {
+                GridLayout {
+                    Layout.fillWidth: true
+                    columns: width > 820 ? 2 : 1
+                    columnSpacing: Kirigami.Units.largeSpacing
+                    rowSpacing: Kirigami.Units.smallSpacing
+
+                    Repeater {
+                        model: CustomActionsBackend.actions
+                        delegate: Kirigami.AbstractCard {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: root.width > 820
+                                                   ? (root.width - Kirigami.Units.largeSpacing) / 2
+                                                   : root.width
+                            contentItem: ColumnLayout {
+                                spacing: Kirigami.Units.smallSpacing
+                                RowLayout {
                                     Layout.fillWidth: true
-                                    Controls.Label {
+                                    ColumnLayout {
                                         Layout.fillWidth: true
-                                        font.bold: false
-                                        font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
-                                        text: modelData.name
+                                        spacing: 0
+                                        Controls.Label {
+                                            Layout.fillWidth: true
+                                            font.bold: false
+                                            font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
+                                            text: modelData.name
+                                            elide: Text.ElideRight
+                                        }
+                                        Controls.Label {
+                                            Layout.fillWidth: true
+                                            visible: modelData.description.length > 0
+                                            wrapMode: Text.WordWrap
+                                            maximumLineCount: 2
+                                            elide: Text.ElideRight
+                                            opacity: UiMetrics.secondaryOpacity
+                                            text: modelData.description
+                                        }
                                     }
-                                    Controls.Label {
-                                        Layout.fillWidth: true
-                                        visible: modelData.description.length > 0
-                                        wrapMode: Text.WordWrap
-                                        opacity: UiMetrics.secondaryOpacity
-                                        text: modelData.description
+                                    Controls.Button {
+                                        flat: true
+                                        icon.name: "document-edit"
+                                        display: Controls.AbstractButton.IconOnly
+                                        ToolTip.visible: hovered
+                                        ToolTip.text: qsTr("Modifica")
+                                        enabled: !CustomActionsBackend.running
+                                        onClicked: editActionDialog.openFor(modelData)
+                                    }
+                                    Controls.Button {
+                                        flat: true
+                                        icon.name: "edit-delete"
+                                        display: Controls.AbstractButton.IconOnly
+                                        ToolTip.visible: hovered
+                                        ToolTip.text: qsTr("Elimina")
+                                        enabled: !CustomActionsBackend.running
+                                        onClicked: {
+                                            root.deleteCustomId = modelData.id
+                                            root.deleteCustomName = modelData.name
+                                            deleteCustomDialog.open()
+                                        }
+                                    }
+                                    Controls.Button {
+                                        text: CustomActionsBackend.runningId === modelData.id
+                                              ? qsTr("…") : qsTr("Esegui")
+                                        icon.name: "media-playback-start"
+                                        enabled: !CustomActionsBackend.running
+                                        onClicked: root.runCustom(modelData)
                                     }
                                 }
-                                Controls.Button {
-                                    text: qsTr("Modifica")
-                                    icon.name: "document-edit"
-                                    enabled: !CustomActionsBackend.running
-                                    onClicked: editActionDialog.openFor(modelData)
+                                Controls.Label {
+                                    Layout.fillWidth: true
+                                    font.family: Kirigami.Theme.fixedWidthFont.family
+                                    wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+                                    maximumLineCount: 3
+                                    elide: Text.ElideRight
+                                    opacity: UiMetrics.secondaryOpacity
+                                    text: modelData.script
                                 }
-                                Controls.Button {
-                                    text: qsTr("Elimina")
-                                    icon.name: "edit-delete"
-                                    enabled: !CustomActionsBackend.running
-                                    onClicked: {
-                                        root.deleteCustomId = modelData.id
-                                        root.deleteCustomName = modelData.name
-                                        deleteCustomDialog.open()
-                                    }
+                                Controls.Label {
+                                    visible: modelData.confirm
+                                    opacity: UiMetrics.secondaryOpacity
+                                    text: qsTr("Richiede conferma prima dell'esecuzione")
                                 }
-                                Controls.Button {
-                                    text: CustomActionsBackend.runningId === modelData.id
-                                          ? qsTr("In esecuzione…") : qsTr("Esegui")
-                                    icon.name: "media-playback-start"
-                                    enabled: !CustomActionsBackend.running
-                                    onClicked: root.runCustom(modelData)
-                                }
-                            }
-                            Controls.Label {
-                                Layout.fillWidth: true
-                                font.family: Kirigami.Theme.fixedWidthFont.family
-                                wrapMode: Text.WrapAtWordBoundaryOrAnywhere
-                                maximumLineCount: 4
-                                elide: Text.ElideRight
-                                opacity: UiMetrics.secondaryOpacity
-                                text: modelData.script
-                            }
-                            Controls.Label {
-                                visible: modelData.confirm
-                                opacity: UiMetrics.secondaryOpacity
-                                text: qsTr("Richiede conferma prima dell'esecuzione")
                             }
                         }
                     }
@@ -393,7 +417,6 @@ Kirigami.ScrollablePage {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.minimumHeight: 260
-                // Breeze currently attaches a TextInput-only helper to multiline TextEdit.
                 Basic.TextArea {
                     id: actionScript
                     wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere
