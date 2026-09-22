@@ -39,8 +39,27 @@ require(f'Version:        {VERSION}' in spec, "RPM Version differs from canonica
 require(f'Release:        {RELEASE}%{{?dist}}' in spec, "RPM Release differs from canonical release")
 require('KRISCC_VERSION="${PROJECT_VERSION}-${KRISCC_RELEASE}"' in cmake,
         "UI version is not derived from canonical build version")
-require(f'krisCC-{VERSION}-{RELEASE}.fc44.x86_64.rpm' in workflow,
-        "CI artifact identity differs from canonical version")
+require('vr="${version}-${release}"' in workflow
+        and 'echo "rpm=krisCC-${vr}.fc44.x86_64.rpm"' in workflow,
+        "CI RPM identity is not derived from canonical version+release")
+require('echo "source_zip=krisCC-${vr}-source.zip"' in workflow
+        and 'echo "source_txt=krisCC-${vr}-source.txt"' in workflow,
+        "CI source bundle identity is not derived from canonical version+release")
+require('python3 tools/source_snapshot.py' in workflow
+        and 'git archive' in workflow
+        and '--format=zip' in workflow,
+        "CI does not generate both exact source TXT and ZIP from the build commit")
+require('sha256sum "$RPM" "$SOURCE_ZIP" "$SOURCE_TXT" > SHA256SUMS' in workflow
+        and 'test "$(wc -l < SHA256SUMS)" -eq 3' in workflow,
+        "RPM/source ZIP/source TXT are not covered by one three-entry SHA256SUMS")
+require('grep -Fxq "# commit: $GITHUB_SHA"' in workflow,
+        "source transcript is not tied to the exact build commit")
+source_snapshot = read("tools/source_snapshot.py")
+require('git", "ls-tree", "-r", "-z", "--full-tree", commit' in source_snapshot
+        and 'git", "cat-file", "blob", object_sha' in source_snapshot
+        and '# commit:' in source_snapshot
+        and '# tree:' in source_snapshot,
+        "source TXT generator does not snapshot the exact tracked Git tree")
 require(f'<release version="{VERSION}"' in read("data/org.kriscc.KrisCC.metainfo.xml"),
         "AppStream release is stale")
 
@@ -60,9 +79,15 @@ require("src/RepositoryExportBackend.cpp src/RepositoryExportBackend.h" in cmake
         and "src/RepositoryExportCore.cpp src/RepositoryExportCore.h" in cmake,
         "repository export backend/core not linked")
 repo_export_core = read("src/RepositoryExportCore.cpp")
+repo_export_backend = read("src/RepositoryExportBackend.cpp")
 require('QStringLiteral("krism-eu/krisCC")' in repo_export_core
         and 'QStringLiteral("krism-eu/KrisOS")' in repo_export_core,
         "repository export allowlist is incomplete")
+require("parseCommitSha" in repo_export_core
+        and '/commits/' in repo_export_backend
+        and '/tarball/' in repo_export_backend
+        and 'commitSha' in repo_export_backend,
+        "panel repository export is not resolved to an immutable commit before download")
 require("AdminPolicy::resolve" in admin_cpp and "AdminPolicy::resolve" in polkit_cpp,
         "client/root privileged allowlist does not share AdminPolicy")
 require('QStringLiteral("/usr/bin/rk")' in admin_policy
