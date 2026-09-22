@@ -52,6 +52,7 @@ Kirigami.ScrollablePage {
         root.historyEntries = SystemBackend.operationHistoryEntries()
         BootcBackend.refreshStatus()
         BootcBackend.refreshPackages()
+        RkBackend.refreshStatus()
         if (SystemBackend.uefiBootAvailable)
             SystemBackend.refreshUefiEntries()
         if (SystemBackend.grubEntriesAvailable)
