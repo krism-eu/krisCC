@@ -30,6 +30,18 @@ private slots:
                  QStringLiteral("trial_ui"));
     }
 
+    void commitFixture()
+    {
+        QString error;
+        const QString expected = QStringLiteral("0123456789abcdef0123456789abcdef01234567");
+        QCOMPARE(RepositoryExportCore::parseCommitSha(
+                     QByteArray("{\"sha\":\"") + expected.toUtf8() + QByteArray("\"}"), &error),
+                 expected);
+        QVERIFY2(error.isEmpty(), qPrintable(error));
+        QVERIFY(RepositoryExportCore::parseCommitSha("{\"sha\":\"short\"}", &error).isEmpty());
+        QVERIFY(!error.isEmpty());
+    }
+
     void combinedExport()
     {
         QTemporaryDir temp;
@@ -53,11 +65,12 @@ private slots:
         binary.close();
 
         const QString destination = QDir(temp.path()).filePath(QStringLiteral("export.txt"));
+        const QString commit = QStringLiteral("0123456789abcdef0123456789abcdef01234567");
         int textFiles = 0;
         int binaryFiles = 0;
         QString error;
         QVERIFY2(RepositoryExportCore::writeCombinedRepository(
-                     source, QStringLiteral("krisCC"), QStringLiteral("main"),
+                     source, QStringLiteral("krisCC"), QStringLiteral("main"), commit,
                      destination, &textFiles, &binaryFiles, &error),
                  qPrintable(error));
         QCOMPARE(textFiles, 2);
@@ -66,6 +79,8 @@ private slots:
         QFile output(destination);
         QVERIFY(output.open(QIODevice::ReadOnly));
         const QByteArray data = output.readAll();
+        QVERIFY(data.contains("# branch: main"));
+        QVERIFY(data.contains("# commit: 0123456789abcdef0123456789abcdef01234567"));
         QVERIFY(data.contains("===== FILE: script.sh ====="));
         QVERIFY(data.contains("#!/bin/sh\necho ok"));
         QVERIFY(data.contains("===== FILE: .github/workflows/test.yml ====="));

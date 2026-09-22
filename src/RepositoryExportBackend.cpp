@@ -54,6 +54,7 @@ void RepositoryExportBackend::fail(const QString &message)
     cleanupTransient();
     m_errorText = message;
     m_statusText.clear();
+    m_commitSha.clear();
     setBusy(false);
     emit stateChanged();
 }
@@ -75,6 +76,7 @@ bool RepositoryExportBackend::refreshBranches(const QString &repository)
     m_branches.clear();
     m_errorText.clear();
     m_outputPath.clear();
+    m_commitSha.clear();
     m_statusText = tr("Caricamento branch…");
     emit branchesChanged();
     setBusy(true);
@@ -137,26 +139,78 @@ bool RepositoryExportBackend::exportBranch(const QString &repository, const QStr
     cleanupTransient();
     m_errorText.clear();
     m_outputPath.clear();
-    m_statusText = tr("Download di %1 · %2…").arg(repository, selectedBranch);
+    m_commitSha.clear();
+    m_statusText = tr("Risoluzione del commit esatto di %1 · %2…").arg(repository, selectedBranch);
     setBusy(true);
     emit stateChanged();
+
+    const QByteArray encodedUrl = QByteArray("https://api.github.com/repos/")
+        + slug.toUtf8() + QByteArray("/commits/") + QUrl::toPercentEncoding(selectedBranch);
+    QNetworkRequest request(QUrl::fromEncoded(encodedUrl));
+    request.setRawHeader("Accept", "application/vnd.github+json");
+    request.setRawHeader("X-GitHub-Api-Version", "2022-11-28");
+    request.setHeader(QNetworkRequest::UserAgentHeader,
+                      QStringLiteral("krisCC/%1").arg(KRISCC_VERSION));
+
+    QNetworkReply *reply = m_network.get(request);
+    m_reply = reply;
+    connect(reply, &QNetworkReply::finished, this,
+            [this, reply, generation, repository, selectedBranch, slug] {
+        if (generation != m_generation || reply != m_reply) return;
+        const QByteArray payload = reply->readAll();
+        const auto networkError = reply->error();
+        const int httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        m_reply = nullptr;
+        reply->deleteLater();
+
+        if (networkError != QNetworkReply::NoError || httpStatus < 200 || httpStatus >= 300) {
+            fail(tr("Impossibile risolvere il commit del branch (HTTP %1).").arg(httpStatus));
+            return;
+        }
+
+        QString parseError;
+        const QString commit = RepositoryExportCore::parseCommitSha(payload, &parseError);
+        if (!parseError.isEmpty() || commit.isEmpty()) {
+            fail(parseError.isEmpty() ? tr("Commit GitHub non valido.") : parseError);
+            return;
+        }
+
+        m_commitSha = commit;
+        m_statusText = tr("Commit risolto: %1. Download del repository…").arg(commit.left(12));
+        emit stateChanged();
+        beginArchiveDownload(generation, repository, selectedBranch, commit);
+    });
+    return true;
+}
+
+void RepositoryExportBackend::beginArchiveDownload(quint64 generation,
+                                                   const QString &repository,
+                                                   const QString &branch,
+                                                   const QString &commitSha)
+{
+    if (generation != m_generation) return;
+    const QString slug = RepositoryExportCore::repositorySlug(repository);
+    if (slug.isEmpty()) {
+        fail(tr("Repository non consentito."));
+        return;
+    }
 
     m_tempDir = std::make_unique<QTemporaryDir>(
         QDir(QDir::tempPath()).filePath(QStringLiteral("kriscc-repository-export-XXXXXX")));
     if (!m_tempDir->isValid()) {
         fail(tr("Impossibile creare la directory temporanea."));
-        return false;
+        return;
     }
 
     const QString archivePath = QDir(m_tempDir->path()).filePath(QStringLiteral("repository.tar.gz"));
     m_archiveFile = std::make_unique<QSaveFile>(archivePath);
     if (!m_archiveFile->open(QIODevice::WriteOnly)) {
         fail(tr("Impossibile creare l'archivio temporaneo."));
-        return false;
+        return;
     }
 
     const QByteArray encodedUrl = QByteArray("https://api.github.com/repos/")
-        + slug.toUtf8() + QByteArray("/tarball/") + QUrl::toPercentEncoding(selectedBranch);
+        + slug.toUtf8() + QByteArray("/tarball/") + commitSha.toUtf8();
     QNetworkRequest request(QUrl::fromEncoded(encodedUrl));
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
                          QNetworkRequest::NoLessSafeRedirectPolicy);
@@ -174,7 +228,7 @@ bool RepositoryExportBackend::exportBranch(const QString &repository, const QStr
         }
     });
     connect(reply, &QNetworkReply::finished, this,
-            [this, reply, generation, repository, selectedBranch, archivePath] {
+            [this, reply, generation, repository, branch, commitSha, archivePath] {
         if (generation != m_generation || reply != m_reply) return;
         if (m_archiveFile) {
             const QByteArray remaining = reply->readAll();
@@ -200,14 +254,14 @@ bool RepositoryExportBackend::exportBranch(const QString &repository, const QStr
             return;
         }
         m_archiveFile.reset();
-        beginExtraction(generation, repository, selectedBranch, archivePath);
+        beginExtraction(generation, repository, branch, commitSha, archivePath);
     });
-    return true;
 }
 
 void RepositoryExportBackend::beginExtraction(quint64 generation,
                                               const QString &repository,
                                               const QString &branch,
+                                              const QString &commitSha,
                                               const QString &archivePath)
 {
     if (generation != m_generation || !m_tempDir) return;
@@ -217,13 +271,13 @@ void RepositoryExportBackend::beginExtraction(quint64 generation,
         return;
     }
 
-    m_statusText = tr("Estrazione del branch…");
+    m_statusText = tr("Estrazione del commit %1…").arg(commitSha.left(12));
     emit stateChanged();
 
     auto *runner = new ProcessRunner(this);
     m_runner = runner;
     connect(runner, &ProcessRunner::finished, this,
-            [this, runner, generation, repository, branch, extractPath]
+            [this, runner, generation, repository, branch, commitSha, extractPath]
             (ProcessRunner::Outcome outcome, int,
              const QByteArray &, const QByteArray &, const QString &error) {
         if (generation != m_generation || runner != m_runner) return;
@@ -233,7 +287,7 @@ void RepositoryExportBackend::beginExtraction(quint64 generation,
             fail(error.isEmpty() ? tr("Impossibile estrarre il repository.") : error);
             return;
         }
-        finishExport(generation, repository, branch, extractPath);
+        finishExport(generation, repository, branch, commitSha, extractPath);
     });
 
     ProcessRunner::Options options;
@@ -255,6 +309,7 @@ void RepositoryExportBackend::beginExtraction(quint64 generation,
 void RepositoryExportBackend::finishExport(quint64 generation,
                                            const QString &repository,
                                            const QString &branch,
+                                           const QString &commitSha,
                                            const QString &extractPath)
 {
     if (generation != m_generation || !m_tempDir) return;
@@ -267,28 +322,29 @@ void RepositoryExportBackend::finishExport(quint64 generation,
     const QString filename = QStringLiteral("%1-%2-%3.txt")
         .arg(repository,
              RepositoryExportCore::safeFileComponent(branch),
-             QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss")));
+             commitSha.left(12));
     const QString destination = QDir(QDir::homePath()).filePath(filename);
 
     int textFiles = 0;
     int binaryFiles = 0;
     QString error;
     if (!RepositoryExportCore::writeCombinedRepository(
-            repositoryRoot, repository, branch, destination,
+            repositoryRoot, repository, branch, commitSha, destination,
             &textFiles, &binaryFiles, &error)) {
         fail(error);
         return;
     }
 
     cleanupTransient();
+    m_commitSha = commitSha;
     m_outputPath = destination;
     m_errorText.clear();
-    m_statusText = tr("Esportazione completata: %1 file testuali, %2 file binari/symlink annotati.")
-        .arg(textFiles).arg(binaryFiles);
+    m_statusText = tr("Esportazione %1 completata: %2 file testuali, %3 file binari/symlink annotati.")
+        .arg(commitSha.left(12)).arg(textFiles).arg(binaryFiles);
     setBusy(false);
     OperationLog::append(QStringLiteral("Repository"), QStringLiteral("export"),
                          QStringLiteral("success"),
-                         repository + QLatin1Char('@') + branch);
+                         repository + QLatin1Char('@') + branch + QLatin1Char('#') + commitSha.left(12));
     emit stateChanged();
 }
 
@@ -300,6 +356,7 @@ void RepositoryExportBackend::cancel()
     if (m_runner) m_runner->cancel();
     cleanupTransient();
     m_errorText.clear();
+    m_commitSha.clear();
     m_statusText = tr("Operazione annullata.");
     setBusy(false);
     emit stateChanged();

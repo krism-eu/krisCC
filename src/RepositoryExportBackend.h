@@ -21,6 +21,7 @@ class RepositoryExportBackend final : public QObject
     Q_PROPERTY(QString statusText READ statusText NOTIFY stateChanged)
     Q_PROPERTY(QString errorText READ errorText NOTIFY stateChanged)
     Q_PROPERTY(QString outputPath READ outputPath NOTIFY stateChanged)
+    Q_PROPERTY(QString commitSha READ commitSha NOTIFY stateChanged)
 
 public:
     explicit RepositoryExportBackend(QObject *parent = nullptr);
@@ -32,6 +33,7 @@ public:
     const QString &statusText() const { return m_statusText; }
     const QString &errorText() const { return m_errorText; }
     const QString &outputPath() const { return m_outputPath; }
+    const QString &commitSha() const { return m_commitSha; }
 
     Q_INVOKABLE bool refreshBranches(const QString &repository);
     Q_INVOKABLE bool exportBranch(const QString &repository, const QString &branch);
@@ -45,10 +47,14 @@ private:
     void setBusy(bool busy);
     void fail(const QString &message);
     void cleanupTransient();
+    void beginArchiveDownload(quint64 generation, const QString &repository,
+                              const QString &branch, const QString &commitSha);
     void beginExtraction(quint64 generation, const QString &repository,
-                         const QString &branch, const QString &archivePath);
+                         const QString &branch, const QString &commitSha,
+                         const QString &archivePath);
     void finishExport(quint64 generation, const QString &repository,
-                      const QString &branch, const QString &extractPath);
+                      const QString &branch, const QString &commitSha,
+                      const QString &extractPath);
 
     QNetworkAccessManager m_network;
     QPointer<QNetworkReply> m_reply;
@@ -61,6 +67,7 @@ private:
     QString m_statusText;
     QString m_errorText;
     QString m_outputPath;
+    QString m_commitSha;
     QString m_streamError;
     quint64 m_generation = 0;
 };

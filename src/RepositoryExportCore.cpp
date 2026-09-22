@@ -27,6 +27,12 @@ bool containsControlCharacters(const QString &value)
     return false;
 }
 
+bool validCommitSha(const QString &value)
+{
+    static const QRegularExpression pattern(QStringLiteral("^[0-9a-fA-F]{40}$"));
+    return pattern.match(value).hasMatch();
+}
+
 bool writeBounded(QSaveFile &file, const QByteArray &data, qint64 *written)
 {
     if (!written || *written + data.size() > kMaximumExportBytes)
@@ -99,9 +105,30 @@ QStringList RepositoryExportCore::parseBranchList(const QByteArray &json, QStrin
     return branches;
 }
 
+QString RepositoryExportCore::parseCommitSha(const QByteArray &json, QString *error)
+{
+    if (error)
+        error->clear();
+    QJsonParseError parseError;
+    const QJsonDocument document = QJsonDocument::fromJson(json, &parseError);
+    if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
+        if (error)
+            *error = QStringLiteral("Risposta commit GitHub non valida.");
+        return {};
+    }
+    const QJsonValue shaValue = document.object().value(QStringLiteral("sha"));
+    if (!shaValue.isString() || !validCommitSha(shaValue.toString())) {
+        if (error)
+            *error = QStringLiteral("Contratto commit GitHub non riconosciuto.");
+        return {};
+    }
+    return shaValue.toString().toLower();
+}
+
 bool RepositoryExportCore::writeCombinedRepository(const QString &rootPath,
                                                    const QString &repository,
                                                    const QString &branch,
+                                                   const QString &commitSha,
                                                    const QString &destination,
                                                    int *textFiles,
                                                    int *binaryFiles,
@@ -110,6 +137,11 @@ bool RepositoryExportCore::writeCombinedRepository(const QString &rootPath,
     if (textFiles) *textFiles = 0;
     if (binaryFiles) *binaryFiles = 0;
     if (error) error->clear();
+
+    if (!validCommitSha(commitSha)) {
+        if (error) *error = QStringLiteral("Commit GitHub non valido.");
+        return false;
+    }
 
     const QFileInfo rootInfo(rootPath);
     const QString canonicalRoot = rootInfo.canonicalFilePath();
@@ -137,9 +169,11 @@ bool RepositoryExportCore::writeCombinedRepository(const QString &rootPath,
     const QByteArray header =
         QByteArray("# krisCC repository export\n# repository: ") + repository.toUtf8()
         + QByteArray("\n# branch: ") + branch.toUtf8()
+        + QByteArray("\n# commit: ") + commitSha.toUtf8()
         + QByteArray("\n# generated: ")
         + QDateTime::currentDateTime().toString(Qt::ISODate).toUtf8()
-        + QByteArray("\n# text files embedded verbatim; binary files represented by markers.\n\n");
+        + QByteArray("\n# source: exact GitHub tarball resolved from the immutable commit above\n")
+        + QByteArray("# text files embedded verbatim; binary files represented by markers.\n\n");
     if (!writeBounded(output, header, &written)) {
         output.cancelWriting();
         if (error) *error = QStringLiteral("Esportazione troppo grande.");
