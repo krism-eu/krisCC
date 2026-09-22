@@ -43,10 +43,42 @@ require('Release:        1%{?dist}' in spec,
         "RPM Release must stay fixed at 1; bump X.Y.Z instead")
 require('KRISCC_VERSION="${PROJECT_VERSION}"' in cmake,
         "UI version must be exactly canonical X.Y.Z")
-require(f'krisCC-{VERSION}-1.fc44.x86_64.rpm' in workflow,
-        "CI artifact identity differs from canonical version")
-require(f'"krisCC {VERSION}"' in workflow,
+require('KrisCCVersion.cmake' in workflow
+        and 'release="1"' in workflow
+        and 'vr="${version}-${release}"' in workflow
+        and 'echo "rpm=krisCC-${vr}.fc44.x86_64.rpm"' in workflow,
+        "CI RPM identity is not derived from canonical X.Y.Z with fixed Release 1")
+require('echo "source_zip=krisCC-${vr}-source.zip"' in workflow
+        and 'echo "source_txt=krisCC-${vr}-source.txt"' in workflow,
+        "CI source bundle identity is not derived from canonical version+release")
+require('VERSION: ${{ steps.identity.outputs.version }}' in workflow
+        and '"krisCC ${VERSION}"' in workflow,
         "CI does not verify the public X.Y.Z application version")
+checkout_dependency = workflow.find('- name: Install checkout dependency')
+first_checkout = workflow.find('- uses: actions/checkout@')
+require(checkout_dependency >= 0 and first_checkout >= 0 and checkout_dependency < first_checkout,
+        "build job must install Git before checkout so exact source snapshots have repository metadata")
+require('fetch-depth: 1' in workflow,
+        "build checkout must preserve the exact Git commit for source bundling")
+require('python3 tools/source_snapshot.py' in workflow
+        and 'git archive' in workflow
+        and '--format=zip' in workflow,
+        "CI does not generate both exact source TXT and ZIP from the build commit")
+require('sha256sum "$RPM" "$SOURCE_ZIP" "$SOURCE_TXT" > SHA256SUMS' in workflow
+        and 'test "$(wc -l < SHA256SUMS)" -eq 3' in workflow,
+        "RPM/source ZIP/source TXT are not covered by one three-entry SHA256SUMS")
+require('grep -Fxq "# commit: $GITHUB_SHA"' in workflow,
+        "source transcript is not tied to the exact build commit")
+require('tag="v${BASH_REMATCH[1]}"' in workflow
+        and 'test "${BASH_REMATCH[2]}" = "1"' in workflow,
+        "release tag must remain public X.Y.Z while RPM Release stays fixed at 1")
+source_snapshot = read("tools/source_snapshot.py")
+require('run_git(root, "ls-tree", "-r", "-z", "--full-tree", commit)' in source_snapshot
+        and 'run_git(root, "cat-file", "blob", object_sha)' in source_snapshot
+        and '# commit:' in source_snapshot
+        and '# tree:' in source_snapshot
+        and 'hashlib.sha256' in source_snapshot,
+        "source TXT generator does not snapshot and fingerprint the exact tracked Git tree")
 require(f'<release version="{VERSION}"' in read("data/org.kriscc.KrisCC.metainfo.xml"),
         "AppStream release is stale")
 
