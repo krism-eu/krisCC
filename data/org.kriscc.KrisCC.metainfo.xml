@@ -13,6 +13,15 @@
   <provides><binary>krisCC</binary></provides>
   <categories><category>Settings</category><category>System</category></categories>
   <releases>
+    <release version="0.7.3" date="2026-09-22">
+      <description><p>Latest-green ZIP repository export and simplified Flatpak remote contract.</p></description>
+    </release>
+    <release version="0.7.2" date="2026-09-22">
+      <description><p>Same validated 0.7 trial behavior with simplified X.Y.Z-only public versioning.</p></description>
+    </release>
+    <release version="0.7.1" date="2026-09-21">
+      <description><p>Structural hardening, bounded privileged execution, virtualized software lists, refreshed dashboard health state and consolidated control-center UX.</p></description>
+    </release>
     <release version="0.7.0" date="2026-09-20">
       <description><p>Structured KrisOS state backends, tightly scoped privileged maintenance, live CPU/RAM/temperature status, persistent personal command scripts, daily diagnostics, and a documented long-term compatibility architecture.</p></description>
     </release>

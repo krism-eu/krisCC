@@ -75,8 +75,6 @@ Kirigami.ScrollablePage {
     ColumnLayout {
         width: parent.width
         spacing: Kirigami.Units.largeSpacing
-        PageIntro { title: root.title; subtitle: qsTr("Diagnostica e comandi personali eseguiti con i privilegi del tuo utente.") }
-
         Controls.TabBar {
             id: commandTabs
             Layout.fillWidth: true
@@ -95,7 +93,12 @@ Kirigami.ScrollablePage {
                 ColumnLayout {
                     Layout.fillWidth: true
                     spacing: Kirigami.Units.smallSpacing
-                    PageIntro { title: root.title; subtitle: qsTr("Comandi read-only difficili da ricordare ma utili nella diagnosi quotidiana. Le funzioni già coperte bene dalle pagine Flatpak, Container e dal Monitor di sistema non vengono duplicate qui.") }
+                    Controls.Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        opacity: UiMetrics.secondaryOpacity
+                        text: qsTr("Comandi read-only difficili da ricordare ma utili nella diagnosi quotidiana. Le funzioni già coperte bene dalle pagine Flatpak, Container e dal Monitor di sistema non vengono duplicate qui.")
+                    }
                     RowLayout {
                         Layout.fillWidth: true
                         Controls.TextField {
@@ -108,6 +111,76 @@ Kirigami.ScrollablePage {
                             icon.name: "edit-clear"
                             enabled: commandFilter.text.length > 0
                             onClicked: commandFilter.clear()
+                        }
+                    }
+                }
+
+                Kirigami.AbstractCard {
+                    Layout.fillWidth: true
+                    contentItem: ColumnLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        Kirigami.Heading { level: 3; font.bold: true; text: qsTr("Esporta ultima build verde") }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            opacity: UiMetrics.secondaryOpacity
+                            text: qsTr("Individua l'ultima Build GitHub conclusa con successo, scarica lo ZIP dell'esatto commit e crea nella Home un unico TXT con tutti i file testuali. Il file registra branch e SHA sorgente.")
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Controls.Button {
+                                text: qsTr("Esporta krisCC")
+                                icon.name: "document-export"
+                                enabled: !RepositoryExportBackend.busy
+                                onClicked: RepositoryExportBackend.exportLatestGreen("krisCC")
+                            }
+                            Controls.Button {
+                                text: qsTr("Esporta KrisOS")
+                                icon.name: "document-export"
+                                enabled: !RepositoryExportBackend.busy
+                                onClicked: RepositoryExportBackend.exportLatestGreen("KrisOS")
+                            }
+                            Item { Layout.fillWidth: true }
+                            Controls.Button {
+                                visible: RepositoryExportBackend.busy
+                                text: qsTr("Annulla")
+                                icon.name: "process-stop"
+                                onClicked: RepositoryExportBackend.cancel()
+                            }
+                        }
+                        Controls.BusyIndicator {
+                            visible: RepositoryExportBackend.busy
+                            running: visible
+                            Layout.alignment: Qt.AlignHCenter
+                        }
+                        Kirigami.InlineMessage {
+                            Layout.fillWidth: true
+                            visible: RepositoryExportBackend.errorText.length > 0
+                            type: Kirigami.MessageType.Error
+                            text: RepositoryExportBackend.errorText
+                        }
+                        Kirigami.InlineMessage {
+                            Layout.fillWidth: true
+                            visible: RepositoryExportBackend.errorText.length === 0
+                                     && RepositoryExportBackend.statusText.length > 0
+                            type: RepositoryExportBackend.outputPath.length > 0
+                                  ? Kirigami.MessageType.Positive : Kirigami.MessageType.Information
+                            text: RepositoryExportBackend.statusText
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            visible: RepositoryExportBackend.outputPath.length > 0
+                            Controls.Label {
+                                Layout.fillWidth: true
+                                text: RepositoryExportBackend.outputPath
+                                elide: Text.ElideMiddle
+                                font.family: Kirigami.Theme.fixedWidthFont.family
+                            }
+                            Controls.Button {
+                                text: qsTr("Copia percorso")
+                                icon.name: "edit-copy"
+                                onClicked: SystemBackend.copyToClipboard(RepositoryExportBackend.outputPath)
+                            }
                         }
                     }
                 }
@@ -346,8 +419,8 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
-        width: Math.min(root.width - 48, 760)
-        height: Math.min(root.height - 48, 650)
+        width: Math.min(parent ? parent.width - Kirigami.Units.largeSpacing * 2 : 760, 760)
+        height: Math.min(parent ? parent.height - Kirigami.Units.largeSpacing * 2 : 650, 650)
         title: actionId.length > 0 ? qsTr("Modifica comando personale") : qsTr("Nuovo comando personale")
         standardButtons: Controls.Dialog.Cancel
 

@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      publish_candidate:
+        description: Publish the validated main artifact as an immutable prerelease candidate
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -13,12 +20,40 @@ jobs:
   build-fedora:
     runs-on: ubuntu-24.04
     container: fedora:44
+    outputs:
+      version: ${{ steps.identity.outputs.version }}
+      release: ${{ steps.identity.outputs.release }}
+      version_release: ${{ steps.identity.outputs.version_release }}
+      rpm: ${{ steps.identity.outputs.rpm }}
+      source_zip: ${{ steps.identity.outputs.source_zip }}
+      source_txt: ${{ steps.identity.outputs.source_txt }}
     steps:
+      - name: Install checkout dependency
+        run: dnf -y install git
+
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          fetch-depth: 1
+
+      - name: Resolve candidate identity
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^set(KRISCC_VERSION "\([^"]*\)")$/\1/p' cmake/KrisCCVersion.cmake)"
+          release="1"
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          vr="${version}-${release}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "version_release=$vr" >> "$GITHUB_OUTPUT"
+          echo "rpm=krisCC-${vr}.fc44.x86_64.rpm" >> "$GITHUB_OUTPUT"
+          echo "source_zip=krisCC-${vr}-source.zip" >> "$GITHUB_OUTPUT"
+          echo "source_txt=krisCC-${vr}-source.txt" >> "$GITHUB_OUTPUT"
 
       - name: Install build dependencies
         run: >-
-          dnf -y install gcc-c++ cmake ninja-build git gzip python3
+          dnf -y install gcc-c++ cmake ninja-build gzip python3
           qt6-qtbase-devel qt6-qtdeclarative-devel kf6-kirigami-devel
           bootc dnf5 dnf5-plugins rpm rpm-build tar qqc2-breeze-style
 
@@ -27,6 +62,9 @@ jobs:
 
       - name: Build
         run: cmake --build build
+
+      - name: Unit tests
+        run: ctest --test-dir build --output-on-failure
 
       - name: QML runtime smoke test
         env:
@@ -41,8 +79,8 @@ jobs:
           mkdir -p artifacts/logs
           smoke_failed=0
           for style in Basic org.kde.breeze; do
-            QT_QUICK_CONTROLS_STYLE="$style" ./build/krisCC 2>&1 | tee artifacts/logs/kriscc-qml-smoke-$style.log || smoke_failed=1
-            if grep -Ei 'Binding loop detected|Unable to assign|ReferenceError:|TypeError:|Created graphical object was not placed in the graphics scene|QQmlApplicationEngine failed|Type .* unavailable' artifacts/logs/kriscc-qml-smoke-$style.log; then
+            QT_QUICK_CONTROLS_STYLE="$style" ./build/krisCC 2>&1 | tee "artifacts/logs/kriscc-qml-smoke-$style.log" || smoke_failed=1
+            if grep -Ei 'Binding loop detected|Unable to assign|ReferenceError:|TypeError:|Created graphical object was not placed in the graphics scene|QQmlApplicationEngine failed|Type .* unavailable' "artifacts/logs/kriscc-qml-smoke-$style.log"; then
               echo "ERROR: QML runtime smoke failed for $style" >&2
               smoke_failed=1
             fi
@@ -58,17 +96,80 @@ jobs:
       - name: Cross-layer release audit
         run: python3 ./tests/release-audit.py
 
-      - name: Validate RPM spec
+      - name: GNU tar restore traversal contract
+        shell: bash
         run: |
-          rpmspec -P packaging/krisCC.spec >/dev/null
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp" /kriscc-absolute-escape-test' EXIT
+          mkdir -p "$tmp/out-parent" "$tmp/out-absolute" "$tmp/out-symlink"
+          python3 - "$tmp" <<'PY'
+          import io
+          import pathlib
+          import sys
+          import tarfile
+
+          root = pathlib.Path(sys.argv[1])
+          payload = b"blocked\n"
+
+          with tarfile.open(root / "parent.tar.gz", "w:gz") as tar:
+              info = tarfile.TarInfo("../escape.txt")
+              info.size = len(payload)
+              tar.addfile(info, io.BytesIO(payload))
+
+          with tarfile.open(root / "absolute.tar.gz", "w:gz") as tar:
+              info = tarfile.TarInfo("/kriscc-absolute-escape-test")
+              info.size = len(payload)
+              tar.addfile(info, io.BytesIO(payload))
+
+          with tarfile.open(root / "symlink.tar.gz", "w:gz") as tar:
+              link = tarfile.TarInfo("link")
+              link.type = tarfile.SYMTYPE
+              link.linkname = "../../kriscc-symlink-escape"
+              tar.addfile(link)
+              info = tarfile.TarInfo("link/pwn.txt")
+              info.size = len(payload)
+              tar.addfile(info, io.BytesIO(payload))
+          PY
+
+          if tar -xzf "$tmp/parent.tar.gz" --no-same-owner --no-same-permissions -C "$tmp/out-parent"; then
+            echo "ERROR: GNU tar accepted a ../ member" >&2
+            exit 1
+          fi
+          test ! -e "$tmp/escape.txt"
+
+          tar -xzf "$tmp/absolute.tar.gz" --no-same-owner --no-same-permissions -C "$tmp/out-absolute" || true
+          test ! -e /kriscc-absolute-escape-test
+          test -f "$tmp/out-absolute/kriscc-absolute-escape-test"
+
+          if tar -xzf "$tmp/symlink.tar.gz" --no-same-owner --no-same-permissions -C "$tmp/out-symlink"; then
+            echo "ERROR: GNU tar followed an escaping symlink member" >&2
+            exit 1
+          fi
+          test ! -e "$tmp/kriscc-symlink-escape"
+
+      - name: Validate RPM spec
+        env:
+          EXPECTED: ${{ steps.identity.outputs.version_release }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          expanded_spec="$(mktemp)"
+          trap 'rm -f "$expanded_spec"' EXIT
+          rpmspec -P packaging/krisCC.spec > "$expanded_spec"
           test "$(rpmspec -q --qf '%{NAME}\n' packaging/krisCC.spec | head -n1)" = "krisCC"
-          test "$(rpmspec -q --qf '%{VERSION}-%{RELEASE}\n' packaging/krisCC.spec | head -n1)" = "0.7.0-6.fc44"
-          ! rpmspec -P packaging/krisCC.spec | grep -Eq '^Provides:[[:space:]]+(kcc|k-controlc)([[:space:]=]|$)'
-          ! rpmspec -P packaging/krisCC.spec | grep -Eq '^Obsoletes:[[:space:]]+(kcc|k-controlc)([[:space:]<=>]|$)'
-          rpmspec -P packaging/krisCC.spec | grep -Eq '^Requires:[[:space:]]+dnf5-plugins([[:space:]]|$)'
+          test "$(rpmspec -q --qf '%{VERSION}-%{RELEASE}\n' packaging/krisCC.spec | head -n1)" = "${EXPECTED}.fc44"
+          ! grep -Eq '^Provides:[[:space:]]+(kcc|k-controlc)([[:space:]=]|$)' "$expanded_spec"
+          ! grep -Eq '^Obsoletes:[[:space:]]+(kcc|k-controlc)([[:space:]<=>]|$)' "$expanded_spec"
+          grep -Eq '^Requires:[[:space:]]+dnf5-plugins([[:space:]]|$)' "$expanded_spec"
+          grep -Eq '^Requires:[[:space:]]+bash([[:space:]]|$)' "$expanded_spec"
 
       - name: Stage install
+        env:
+          VERSION: ${{ steps.identity.outputs.version }}
+        shell: bash
         run: |
+          set -euo pipefail
           DESTDIR="$PWD/stage" cmake --install build --prefix /usr
           test -x stage/usr/bin/krisCC
           test -x stage/usr/libexec/kriscc/admin
@@ -78,15 +179,18 @@ jobs:
           test -f stage/usr/share/icons/hicolor/scalable/apps/krisCC.svg
           test -f stage/usr/share/polkit-1/actions/org.kriscc.controlcenter.policy
           test -f stage/usr/share/metainfo/org.kriscc.KrisCC.metainfo.xml
+          test "$(QT_QPA_PLATFORM=offscreen stage/usr/bin/krisCC --version)" = "krisCC ${VERSION}"
           tar -C stage -czf krisCC-stage.tar.gz .
 
       - name: Build RPM
+        env:
+          VERSION: ${{ steps.identity.outputs.version }}
+          RPM: ${{ steps.identity.outputs.rpm }}
         shell: bash
         run: |
           mkdir -p "$GITHUB_WORKSPACE/artifacts/logs"
           (
             set -euxo pipefail
-            test -f "$GITHUB_WORKSPACE/CMakeLists.txt"
             mkdir -p "$HOME/rpmbuild"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
             tar -C "$GITHUB_WORKSPACE" \
               --exclude='./.git' \
@@ -94,8 +198,8 @@ jobs:
               --exclude='./stage' \
               --exclude='./artifacts' \
               --exclude='./krisCC-stage.tar.gz' \
-              --transform='s,^\./,krisCC-0.7.0/,' \
-              -czf "$HOME/rpmbuild/SOURCES/krisCC-0.7.0.tar.gz" .
+              --transform="s,^\\./,krisCC-${VERSION}/," \
+              -czf "$HOME/rpmbuild/SOURCES/krisCC-${VERSION}.tar.gz" .
             cp "$GITHUB_WORKSPACE/packaging/krisCC.spec" "$HOME/rpmbuild/SPECS/krisCC.spec"
             rpmbuild -ba "$HOME/rpmbuild/SPECS/krisCC.spec"
             mkdir -p "$GITHUB_WORKSPACE/artifacts/rpm" "$GITHUB_WORKSPACE/artifacts/srpm" "$GITHUB_WORKSPACE/artifacts/stage"
@@ -104,17 +208,55 @@ jobs:
             cp "$GITHUB_WORKSPACE/krisCC-stage.tar.gz" "$GITHUB_WORKSPACE/artifacts/stage/"
             cd "$GITHUB_WORKSPACE/artifacts/rpm"
             sha256sum krisCC-*.rpm > SHA256SUMS
-            grep -Eq '^[0-9a-f]{64}[[:space:]]+krisCC-0[.]7[.]0-6.*[.]rpm' SHA256SUMS
+            awk -v f="$RPM" '$2 == f { found++ } END { exit(found == 1 ? 0 : 1) }' SHA256SUMS
           ) 2>&1 | tee "$GITHUB_WORKSPACE/artifacts/logs/rpmbuild.log"
 
-      - name: Inspect built RPM artifact
+      - name: Build exact source bundle
+        env:
+          VERSION_RELEASE: ${{ steps.identity.outputs.version_release }}
+          RPM: ${{ steps.identity.outputs.rpm }}
+          SOURCE_ZIP: ${{ steps.identity.outputs.source_zip }}
+          SOURCE_TXT: ${{ steps.identity.outputs.source_txt }}
         shell: bash
         run: |
           set -euxo pipefail
-          rpm_file='artifacts/rpm/krisCC-0.7.0-6.fc44.x86_64.rpm'
+          mkdir -p artifacts/source artifacts/release
+          display_ref="${GITHUB_HEAD_REF:-${GITHUB_REF_NAME}}"
+          python3 tools/source_snapshot.py \
+            --repository krism-eu/krisCC \
+            --ref "$GITHUB_SHA" \
+            --display-ref "$display_ref" \
+            --version "$VERSION_RELEASE" \
+            --output "artifacts/source/$SOURCE_TXT"
+          git archive \
+            --format=zip \
+            --prefix="krisCC-${VERSION_RELEASE}/" \
+            --output="artifacts/source/$SOURCE_ZIP" \
+            "$GITHUB_SHA"
+          grep -Fxq "# commit: $GITHUB_SHA" "artifacts/source/$SOURCE_TXT"
+          grep -Fxq "# version-release: $VERSION_RELEASE" "artifacts/source/$SOURCE_TXT"
+          python3 -m zipfile -t "artifacts/source/$SOURCE_ZIP"
+          cp "artifacts/rpm/$RPM" "artifacts/release/$RPM"
+          cp "artifacts/source/$SOURCE_ZIP" "artifacts/release/$SOURCE_ZIP"
+          cp "artifacts/source/$SOURCE_TXT" "artifacts/release/$SOURCE_TXT"
+          (
+            cd artifacts/release
+            sha256sum "$RPM" "$SOURCE_ZIP" "$SOURCE_TXT" > SHA256SUMS
+            test "$(wc -l < SHA256SUMS)" -eq 3
+            sha256sum -c SHA256SUMS
+          )
+
+      - name: Inspect built RPM artifact
+        env:
+          RPM: ${{ steps.identity.outputs.rpm }}
+          EXPECTED: ${{ steps.identity.outputs.version_release }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          rpm_file="artifacts/rpm/$RPM"
           test -f "$rpm_file"
           test "$(rpm -qp --qf '%{NAME}\n' "$rpm_file")" = "krisCC"
-          test "$(rpm -qp --qf '%{VERSION}-%{RELEASE}\n' "$rpm_file")" = "0.7.0-6.fc44"
+          test "$(rpm -qp --qf '%{VERSION}-%{RELEASE}\n' "$rpm_file")" = "${EXPECTED}.fc44"
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/bin/krisCC'
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/admin'
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/bootc-status'
@@ -167,14 +309,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cmake -S . -B audit-build -G Ninja             -DCMAKE_BUILD_TYPE=Release             -DCMAKE_CXX_FLAGS='-Wall -Wextra -Wpedantic -Werror'
+          cmake -S . -B audit-build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_FLAGS='-Wall -Wextra -Wpedantic -Werror'
           cmake --build audit-build
 
       - name: QML lint
-        shell: bash
-        run: |
-          set -euo pipefail
-          cmake --build audit-build --target krisCC_qmllint
+        run: cmake --build audit-build --target krisCC_qmllint
 
       - name: C++ static analysis
         shell: bash
@@ -202,31 +343,31 @@ jobs:
           path: artifacts
 
       - name: Install and smoke-test built RPM
-        shell: bash
         env:
-          QT_QPA_PLATFORM: offscreen
-          QT_QUICK_BACKEND: software
-          QT_QUICK_CONTROLS_STYLE: Basic
-          KRISCC_SMOKE_TEST: "1"
-          QT_FORCE_STDERR_LOGGING: "1"
+          RPM: ${{ needs.build-fedora.outputs.rpm }}
+          EXPECTED: ${{ needs.build-fedora.outputs.version_release }}
+          VERSION: ${{ needs.build-fedora.outputs.version }}
+          SOURCE_TXT: ${{ needs.build-fedora.outputs.source_txt }}
+        shell: bash
         run: |
           set -euxo pipefail
-          rpm_file="$GITHUB_WORKSPACE/artifacts/rpm/krisCC-0.7.0-6.fc44.x86_64.rpm"
+          rpm_file="$GITHUB_WORKSPACE/artifacts/release/$RPM"
           test -f "$rpm_file"
-          (cd "$GITHUB_WORKSPACE/artifacts/rpm" && sha256sum -c SHA256SUMS)
+          (cd "$GITHUB_WORKSPACE/artifacts/release" && sha256sum -c SHA256SUMS)
+          grep -Fxq "# commit: $GITHUB_SHA" "$GITHUB_WORKSPACE/artifacts/release/$SOURCE_TXT"
           dnf -y install "$rpm_file"
-          rpm -q krisCC
+          test "$(rpm -q --qf '%{VERSION}-%{RELEASE}\n' krisCC)" = "${EXPECTED}.fc44"
           rpm -V krisCC
+          test "$(QT_QPA_PLATFORM=offscreen /usr/bin/krisCC --version)" = "krisCC ${VERSION}"
           test -x /usr/libexec/kriscc/admin
           test -x /usr/libexec/kriscc/bootc-status
           test -x /usr/libexec/kriscc/maintenance
           ! /usr/libexec/kriscc/admin invalid-operation
           ! /usr/libexec/kriscc/maintenance trash-home
-          /usr/bin/krisCC
-
+          QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software QT_QUICK_CONTROLS_STYLE=Basic KRISCC_SMOKE_TEST=1 QT_FORCE_STDERR_LOGGING=1 /usr/bin/krisCC --background
 
   release:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish_candidate
     needs: [build-fedora, rpm-smoke, release-audit]
     runs-on: ubuntu-24.04
     permissions:
@@ -240,84 +381,71 @@ jobs:
 
       - name: Resolve immutable component release
         id: component
+        env:
+          RPM: ${{ needs.build-fedora.outputs.rpm }}
+          SOURCE_ZIP: ${{ needs.build-fedora.outputs.source_zip }}
+          SOURCE_TXT: ${{ needs.build-fedora.outputs.source_txt }}
         shell: bash
         run: |
           set -euo pipefail
-          cd artifacts/rpm
+          cd artifacts/release
           sha256sum -c SHA256SUMS
-
-          rpm_file=''
-          while IFS= read -r candidate; do
-            if [[ "$(rpm -qp --qf '%{NAME}' "$candidate")" == 'krisCC' ]]; then
-              if [[ -n "$rpm_file" ]]; then
-                echo 'More than one runtime krisCC RPM found.' >&2
-                exit 1
-              fi
-              rpm_file="$candidate"
-            fi
-          done < <(find . -maxdepth 1 -type f -name 'krisCC-*.x86_64.rpm' -print | sort)
-
-          test -n "$rpm_file"
-          base="$(basename "$rpm_file")"
+          test "$(wc -l < SHA256SUMS)" -eq 3
+          test -f "$RPM"
+          test -f "$SOURCE_ZIP"
+          test -f "$SOURCE_TXT"
+          base="$RPM"
           if [[ ! "$base" =~ ^krisCC-([0-9]+\.[0-9]+\.[0-9]+)-([0-9]+)\.fc44\.x86_64\.rpm$ ]]; then
             echo "Unexpected RPM filename: $base" >&2
             exit 1
           fi
-          tag="v${BASH_REMATCH[1]}-${BASH_REMATCH[2]}"
-          checksum="$(awk -v f="$base" '$2 == f || $2 == "./" f {print $1}' SHA256SUMS)"
-          [[ "$checksum" =~ ^[0-9a-f]{64}$ ]]
+          test "${BASH_REMATCH[2]}" = "1"
+          tag="v${BASH_REMATCH[1]}"
+          grep -Fxq "# commit: $GITHUB_SHA" "$SOURCE_TXT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "rpm=$base" >> "$GITHUB_OUTPUT"
-          echo "sha256=$checksum" >> "$GITHUB_OUTPUT"
+          echo "rpm=$RPM" >> "$GITHUB_OUTPUT"
+          echo "source_zip=$SOURCE_ZIP" >> "$GITHUB_OUTPUT"
+          echo "source_txt=$SOURCE_TXT" >> "$GITHUB_OUTPUT"
 
       - name: Publish or verify component release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.component.outputs.tag }}
           RPM: ${{ steps.component.outputs.rpm }}
-          SHA256: ${{ steps.component.outputs.sha256 }}
+          SOURCE_ZIP: ${{ steps.component.outputs.source_zip }}
+          SOURCE_TXT: ${{ steps.component.outputs.source_txt }}
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/kriscc-existing
+          release_dir="$GITHUB_WORKSPACE/artifacts/release"
+          cd "$release_dir"
+          sha256sum -c SHA256SUMS
           if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            tmp="$(mktemp -d)"
+            trap 'rm -rf "$tmp"' EXIT
             release_target="$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json targetCommitish --jq '.targetCommitish')"
             release_target_sha="$(gh api "repos/$GITHUB_REPOSITORY/commits/$release_target" --jq '.sha')"
             release_tree="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$release_target_sha" --jq '.tree.sha')"
             main_tree="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$GITHUB_SHA" --jq '.tree.sha')"
-            if [[ "$release_tree" != "$main_tree" ]]; then
-              echo "Release $TAG was validated from a different source tree; refusing promotion." >&2
-              echo "release tree: $release_tree" >&2
-              echo "main tree:    $main_tree" >&2
-              exit 1
-            fi
-
-            gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p "$RPM" -p SHA256SUMS -D /tmp/kriscc-existing
+            test "$release_tree" = "$main_tree"
+            gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+              -p "$RPM" -p "$SOURCE_ZIP" -p "$SOURCE_TXT" -p SHA256SUMS -D "$tmp"
             (
-              cd /tmp/kriscc-existing
+              cd "$tmp"
+              test "$(wc -l < SHA256SUMS)" -eq 3
               sha256sum -c SHA256SUMS
-              test "$(awk 'END {print NR}' SHA256SUMS)" -eq 1
+              grep -Fxq "# commit: $release_target_sha" "$SOURCE_TXT"
               test "$(rpm -qp --qf '%{NAME}' "$RPM")" = 'krisCC'
-              test "$(rpm -qp --qf '%{VERSION}-%{RELEASE}' "$RPM")" = "${TAG#v}.fc44"
+              test "$(rpm -qp --qf '%{VERSION}' "$RPM")" = "${TAG#v}"
+              test "$(rpm -qp --qf '%{RELEASE}' "$RPM")" = "1.fc44"
             )
-            echo "Verified existing $TAG runtime RPM; release status remains unchanged."
+            echo "Verified existing $TAG bundle; refusing divergent overwrite."
             exit 0
           fi
-
-          release_dir=/tmp/kriscc-stable
-          rm -rf "$release_dir"
-          mkdir -p "$release_dir"
-          cp "artifacts/rpm/$RPM" "$release_dir/$RPM"
-          printf '%s  %s\n' "$SHA256" "$RPM" > "$release_dir/SHA256SUMS"
-          (
-            cd "$release_dir"
-            sha256sum -c SHA256SUMS
-          )
           gh release create "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
             --target "$GITHUB_SHA" \
             --title "krisCC $TAG" \
             --prerelease \
-            --notes "CI-tested krisCC candidate built from $GITHUB_SHA. Stable promotion requires the KrisOS host acceptance test." \
-            "$release_dir/$RPM" \
-            "$release_dir/SHA256SUMS"
+            --notes "CI-tested krisCC candidate built from $GITHUB_SHA. RPM, source ZIP and combined source TXT are checksummed together. Stable promotion requires KrisOS host acceptance." \
+            "$RPM" "$SOURCE_ZIP" "$SOURCE_TXT" SHA256SUMS

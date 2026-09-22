@@ -12,41 +12,97 @@
   </action>
 
   <action id="org.kriscc.controlcenter.rk.sync">
-    <description>Synchronize persistent packages</description>
-    <message>Authentication is required to synchronize persistent packages</message>
-    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/rk</annotate>
-    <annotate key="org.freedesktop.policykit.exec.argv1">sync</annotate>
-  </action>
-
-  <action id="org.kriscc.controlcenter.rk.add">
-    <description>Add a persistent package</description>
-    <message>Authentication is required to add a persistent package</message>
-    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/rk</annotate>
-    <annotate key="org.freedesktop.policykit.exec.argv1">add</annotate>
-  </action>
-
-  <action id="org.kriscc.controlcenter.rk.rm">
-    <description>Remove a persistent package</description>
-    <message>Authentication is required to remove a persistent package</message>
-    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/rk</annotate>
-    <annotate key="org.freedesktop.policykit.exec.argv1">rm</annotate>
-  </action>
-
-  <action id="org.kriscc.controlcenter.rk.forget">
-    <description>Forget a persistent package request</description>
-    <message>Authentication is required to forget a persistent package request</message>
-    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/rk</annotate>
-    <annotate key="org.freedesktop.policykit.exec.argv1">forget</annotate>
-  </action>
-
-  <action id="org.kriscc.controlcenter.admin">
-    <description>Perform an allowlisted krisCC system operation</description>
-    <message>Authentication is required to change this system setting</message>
+    <description>Synchronize persistent RPM requests</description>
+    <message>Authentication is required to synchronize persistent RPM requests</message>
     <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/admin</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">rk-sync</annotate>
+  </action>
+  <action id="org.kriscc.controlcenter.rk.add">
+    <description>Add a persistent RPM request</description>
+    <message>Authentication is required to add a persistent RPM request</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/admin</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">rk-add</annotate>
+  </action>
+  <action id="org.kriscc.controlcenter.rk.rm">
+    <description>Remove a persistent RPM request</description>
+    <message>Authentication is required to remove a persistent RPM request</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/admin</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">rk-rm</annotate>
+  </action>
+  <action id="org.kriscc.controlcenter.rk.forget">
+    <description>Forget an unavailable persistent RPM request</description>
+    <message>Authentication is required to forget this persistent RPM request</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/admin</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">rk-forget</annotate>
+  </action>
+
+  <action id="org.kriscc.controlcenter.bootc.check">
+    <description>Check the KrisOS image for updates</description>
+    <message>Authentication is required to check the KrisOS image update state</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/admin</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">bootc-check</annotate>
+  </action>
+  <action id="org.kriscc.controlcenter.bootc.download">
+    <description>Download the KrisOS image update</description>
+    <message>Authentication is required to download the KrisOS image update</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/admin</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">bootc-download</annotate>
+  </action>
+  <action id="org.kriscc.controlcenter.bootc.prepare">
+    <description>Prepare the KrisOS image update</description>
+    <message>Authentication is required to prepare the KrisOS image update</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/admin</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">bootc-prepare</annotate>
+  </action>
+  <action id="org.kriscc.controlcenter.bootc.apply">
+    <description>Apply the downloaded KrisOS image update</description>
+    <message>Authentication is required to apply the downloaded KrisOS image update</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/admin</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">bootc-apply-downloaded</annotate>
+  </action>
+
+  <action id="org.kriscc.controlcenter.repo.enable">
+    <description>Enable a DNF repository</description>
+    <message>Authentication is required to enable this DNF repository</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/admin</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">repo-enable</annotate>
+  </action>
+  <action id="org.kriscc.controlcenter.repo.disable">
+    <description>Disable a DNF repository</description>
+    <message>Authentication is required to disable this DNF repository</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/admin</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">repo-disable</annotate>
+  </action>
+  <action id="org.kriscc.controlcenter.repo.add">
+    <description>Add a DNF repository file</description>
+    <message>Authentication is required to add this DNF repository</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/admin</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">repo-add</annotate>
+  </action>
+
+  <action id="org.kriscc.controlcenter.bootnext.uefi">
+    <description>Select the next UEFI boot entry</description>
+    <message>Authentication is required to select the next UEFI boot entry</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/admin</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">boot-next-uefi</annotate>
+  </action>
+  <action id="org.kriscc.controlcenter.bootnext.grub">
+    <description>Select the next GRUB boot entry</description>
+    <message>Authentication is required to select the next GRUB boot entry</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/admin</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">boot-next-grub</annotate>
   </action>
 </policyconfig>

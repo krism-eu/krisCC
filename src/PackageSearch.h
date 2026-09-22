@@ -12,6 +12,7 @@ class PackageSearch : public QAbstractListModel
     Q_OBJECT
     Q_PROPERTY(bool searching READ searching NOTIFY searchingChanged)
     Q_PROPERTY(int count READ count NOTIFY countChanged)
+    Q_PROPERTY(bool truncated READ truncated NOTIFY truncatedChanged)
 
 public:
     enum Roles {
@@ -37,12 +38,15 @@ public:
     Q_INVOKABLE void loadInstalled(const QString &filter = QString());
     Q_INVOKABLE void loadUpgrades();
     Q_INVOKABLE void loadRecent();
+    Q_INVOKABLE void setLocalFilter(const QString &text);
     bool searching() const { return m_searching; }
     int count() const { return m_results.size(); }
+    bool truncated() const { return m_truncated; }
 
 signals:
     void searchingChanged();
     void countChanged();
+    void truncatedChanged();
     void searchFinished();
     void searchError(const QString &message);
 
@@ -67,19 +71,18 @@ private:
     void startListQuery(const QString &filter, bool installedEntries);
     void stopActiveProcess();
     void refreshPersistentSet();
-    bool installedCacheCurrent() const;
-    QString rpmDatabasePath() const;
+    void applyLocalFilter();
     static QString sanitizeTerm(const QString &term);
 
     QList<Entry> m_results;
+    QList<Entry> m_sourceResults;
     QSet<QString> m_owned;
     QSet<QString> m_installed;
     QSet<QString> m_persistent;
     QPointer<QProcess> m_process;
-    QDateTime m_installedCacheMtime;
-    QString m_installedCacheDbPath;
-    bool m_installedCacheValid = false;
     QString m_installedFilter = QStringLiteral("all");
+    QString m_localFilter;
     bool m_searching = false;
+    bool m_truncated = false;
     quint64 m_generation = 0;
 };

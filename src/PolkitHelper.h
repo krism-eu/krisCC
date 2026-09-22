@@ -2,7 +2,6 @@
 
 #include <QObject>
 #include <QProcess>
-#include <QStringList>
 
 class PolkitHelper : public QObject
 {
@@ -27,19 +26,11 @@ private slots:
 
 private:
     bool isPrivilegedInvocationAllowed(const QString &program, const QStringList &args) const;
-    bool isValidPackageName(const QString &package) const;
-    bool isSafeBootToken(const QString &token) const;
-    bool isSafeGrubEntry(const QString &entry) const;
-    bool isSafeRepositoryId(const QString &repoId) const;
-    bool isSafeRepositoryUrl(const QString &url) const;
-    int timeoutFor(const QString &program, const QStringList &args) const;
     QString operationLabel() const;
     void consumeOutput(const QByteArray &data, bool flushPartial = false);
-    void terminateProcessGroup(bool force);
     void finishWithError(const QString &message);
 
     bool m_running = false;
-    bool m_timedOut = false;
     QProcess *m_process = nullptr;
     QString m_allOutput;
     QByteArray m_lineBuffer;

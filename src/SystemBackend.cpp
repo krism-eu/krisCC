@@ -2,8 +2,11 @@
 
 #include "OperationLog.h"
 #include "PolkitHelper.h"
+#include "Validators.h"
+#include "ContractParsers.h"
 
 #include <QClipboard>
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDBusInterface>
 #include <QDBusObjectPath>
@@ -19,12 +22,16 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
+#include <QHostAddress>
 #include <QLocale>
+#include <QNetworkAddressEntry>
+#include <QNetworkInterface>
 #include <QHash>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QSet>
 #include <QStandardPaths>
+#include <QSettings>
 #include <QStorageInfo>
 #include <QSysInfo>
 #include <QTextStream>
@@ -34,6 +41,9 @@
 #include <QVariantMap>
 
 #include <sys/sysinfo.h>
+#include <unistd.h>
+
+#include <algorithm>
 
 namespace {
 QString humanGiB(quint64 bytes)
@@ -53,7 +63,8 @@ const QSet<QString> &allowedServices()
     static const QSet<QString> services = {
         QStringLiteral("NetworkManager.service"),
         QStringLiteral("cups.service"),
-        QStringLiteral("bluetooth.service")
+        QStringLiteral("bluetooth.service"),
+        QStringLiteral("firewalld.service")
     };
     return services;
 }
@@ -78,6 +89,7 @@ const QStringList &backupHomeExcludes()
         QStringLiteral(".local/share/Trash"),
         QStringLiteral(".local/share/flatpak"),
         QStringLiteral(".local/share/containers"),
+        QStringLiteral(".var/app/*/cache"),
         QStringLiteral("krisCC Backups"),
         QStringLiteral("KCC Backups"),
         QStringLiteral("K-ControlC Backups")
@@ -109,6 +121,15 @@ SystemBackend::SystemBackend(PolkitHelper *polkit, QObject *parent)
                 refreshGrubEntries();
         });
     }
+
+    QSettings settings;
+    const QString configuredBackupDirectory =
+        settings.value(QStringLiteral("backup/directory"), defaultBackupDirectory()).toString();
+    QString canonicalBackupDirectory;
+    if (validateBackupDirectory(configuredBackupDirectory, &canonicalBackupDirectory))
+        m_backupDirectory = canonicalBackupDirectory;
+    else
+        m_backupDirectory = defaultBackupDirectory();
 
     m_resourceTimer = new QTimer(this);
     m_resourceTimer->setInterval(2000);
@@ -175,20 +196,8 @@ void SystemBackend::refreshUefiEntries()
             return;
         }
 
-        QVariantList entries;
-        static const QRegularExpression pattern(
-            QStringLiteral("^Boot([0-9A-Fa-f]{4})\\*?\\s+(.+)$"));
-        for (const QString &line : output.split(QLatin1Char('\n'))) {
-            const QRegularExpressionMatch match = pattern.match(line.trimmed());
-            if (!match.hasMatch())
-                continue;
-            QVariantMap entry;
-            const QString code = match.captured(1).toUpper();
-            entry.insert(QStringLiteral("code"), code);
-            entry.insert(QStringLiteral("label"), code + QStringLiteral(" · ") + match.captured(2).trimmed());
-            entries.append(entry);
-        }
-        m_uefiEntries = entries;
+        const auto parsed = ContractParsers::parseUefiEntries(output.toUtf8());
+        m_uefiEntries = parsed.values;
         m_bootEntriesError.clear();
         emit bootEntriesChanged();
     });
@@ -258,33 +267,8 @@ void SystemBackend::refreshGrubEntries()
             return;
         }
 
-        QVariantList entries;
-        QString id;
-        QString title;
-        const auto commitEntry = [&entries, &id, &title]() {
-            if (id.isEmpty())
-                return;
-            QVariantMap entry;
-            entry.insert(QStringLiteral("id"), id);
-            entry.insert(QStringLiteral("label"), title.isEmpty() ? id : title);
-            entries.append(entry);
-            id.clear();
-            title.clear();
-        };
-
-        for (const QString &raw : output.split(QLatin1Char('\n'))) {
-            const QString line = raw.trimmed();
-            if (line.startsWith(QStringLiteral("index="))) {
-                commitEntry();
-            } else if (line.startsWith(QStringLiteral("title="))) {
-                title = line.mid(6).remove(QLatin1Char('"'));
-            } else if (line.startsWith(QStringLiteral("id="))) {
-                id = line.mid(3).remove(QLatin1Char('"'));
-            }
-        }
-        commitEntry();
-
-        m_grubEntries = entries;
+        const auto parsed = ContractParsers::parseGrubbyEntries(output.toUtf8());
+        m_grubEntries = parsed.values;
         m_bootEntriesError.clear();
         emit bootEntriesChanged();
     });
@@ -319,8 +303,7 @@ bool SystemBackend::selectNextUefi(const QString &value)
     if (!canSelectNextBoot())
         return false;
     const QString token = value.trimmed();
-    static const QRegularExpression pattern(QStringLiteral("^[0-9A-Fa-f]{4}$"));
-    if (!pattern.match(token).hasMatch())
+    if (!Validators::bootToken(token))
         return false;
 
     m_bootSelectionOwned = true;
@@ -338,12 +321,8 @@ bool SystemBackend::selectNextGrub(const QString &value)
     if (!canSelectNextBoot())
         return false;
     const QString entry = value.trimmed();
-    if (entry.isEmpty() || entry.size() > 256 || entry.startsWith(QLatin1Char('-')))
+    if (!Validators::grubEntry(entry))
         return false;
-    for (const QChar ch : entry) {
-        if (ch.isNull() || ch.unicode() < 0x20 || ch.unicode() == 0x7f)
-            return false;
-    }
 
     m_bootSelectionOwned = true;
     m_bootSelectionRunning = true;
@@ -423,6 +402,148 @@ QString SystemBackend::storageSummary() const
     return tr("%1 liberi su %2").arg(humanGiB(storage.bytesAvailable()), humanGiB(storage.bytesTotal()));
 }
 
+void SystemBackend::refreshDashboardState()
+{
+    emit storageSummaryChanged();
+    refreshServiceStates();
+    refreshTopMemoryProcesses();
+    refreshNetworkState();
+}
+
+void SystemBackend::refreshTopMemoryProcesses()
+{
+    struct ProcessMemory {
+        QString name;
+        qint64 rssKiB = 0;
+    };
+
+    QList<ProcessMemory> entries;
+    const QDir proc(QStringLiteral("/proc"));
+    const QStringList pids = proc.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    for (const QString &pid : pids) {
+        bool numeric = false;
+        const qlonglong parsedPid = pid.toLongLong(&numeric);
+        if (!numeric || parsedPid <= 0)
+            continue;
+
+        QString name;
+        qint64 rssKiB = 0;
+
+        QFile status(proc.filePath(pid + QStringLiteral("/status")));
+        if (status.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            while (!status.atEnd()) {
+                const QByteArray raw = status.readLine();
+                if (raw.startsWith("Name:"))
+                    name = QString::fromUtf8(raw.mid(5)).trimmed();
+                else if (raw.startsWith("VmRSS:")) {
+                    const QList<QByteArray> fields = raw.simplified().split(' ');
+                    if (fields.size() >= 2)
+                        rssKiB = fields.at(1).toLongLong();
+                }
+            }
+        }
+
+        if (name.isEmpty()) {
+            QFile comm(proc.filePath(pid + QStringLiteral("/comm")));
+            if (comm.open(QIODevice::ReadOnly | QIODevice::Text))
+                name = QString::fromUtf8(comm.readAll()).trimmed();
+        }
+
+        if (rssKiB <= 0) {
+            QFile statm(proc.filePath(pid + QStringLiteral("/statm")));
+            if (statm.open(QIODevice::ReadOnly | QIODevice::Text)) {
+                const QList<QByteArray> fields = statm.readLine().simplified().split(' ');
+                if (fields.size() >= 2) {
+                    bool ok = false;
+                    const qint64 residentPages = fields.at(1).toLongLong(&ok);
+                    const long pageSize = ::sysconf(_SC_PAGESIZE);
+                    if (ok && residentPages > 0 && pageSize > 0)
+                        rssKiB = residentPages * qint64(pageSize) / 1024;
+                }
+            }
+        }
+
+        if (!name.isEmpty() && rssKiB > 0)
+            entries.append({name, rssKiB});
+    }
+
+    std::sort(entries.begin(), entries.end(), [](const ProcessMemory &a, const ProcessMemory &b) {
+        return a.rssKiB > b.rssKiB;
+    });
+
+    QVariantList result;
+    const qsizetype limit = std::min<qsizetype>(5, entries.size());
+    for (qsizetype i = 0; i < limit; ++i) {
+        QVariantMap row;
+        row.insert(QStringLiteral("name"), entries.at(i).name);
+        row.insert(QStringLiteral("memoryMiB"), qRound64(double(entries.at(i).rssKiB) / 1024.0));
+        result.append(row);
+    }
+    m_topMemoryProcesses = result;
+    emit topMemoryProcessesChanged();
+}
+
+void SystemBackend::refreshNetworkState()
+{
+    QString selectedInterface;
+    QString selectedAddress;
+    QString selectedState = QStringLiteral("down");
+    QString selectedKind = QStringLiteral("ethernet");
+    int bestScore = -1;
+
+    const QList<QNetworkInterface> interfaces = QNetworkInterface::allInterfaces();
+    for (const QNetworkInterface &iface : interfaces) {
+        const auto flags = iface.flags();
+        if (!flags.testFlag(QNetworkInterface::IsUp)
+            || !flags.testFlag(QNetworkInterface::IsRunning)
+            || flags.testFlag(QNetworkInterface::IsLoopBack)
+            || iface.type() == QNetworkInterface::Virtual)
+            continue;
+
+        QString ipv4;
+        QString ipv6;
+        for (const QNetworkAddressEntry &entry : iface.addressEntries()) {
+            const QHostAddress address = entry.ip();
+            if (address.isNull() || address.isLoopback() || address.isLinkLocal())
+                continue;
+            if (address.protocol() == QAbstractSocket::IPv4Protocol && ipv4.isEmpty())
+                ipv4 = address.toString();
+            else if (address.protocol() == QAbstractSocket::IPv6Protocol && ipv6.isEmpty())
+                ipv6 = address.toString();
+        }
+
+        int score = !ipv4.isEmpty() ? 100 : (!ipv6.isEmpty() ? 80 : 20);
+        if (iface.type() == QNetworkInterface::Ethernet)
+            score += 20;
+        else if (iface.type() == QNetworkInterface::Wifi)
+            score += 10;
+
+        if (score <= bestScore)
+            continue;
+        bestScore = score;
+        selectedInterface = iface.humanReadableName().isEmpty()
+            ? iface.name() : iface.humanReadableName();
+        selectedAddress = !ipv4.isEmpty() ? ipv4 : ipv6;
+        selectedState = !ipv4.isEmpty() ? QStringLiteral("ipv4")
+                      : !ipv6.isEmpty() ? QStringLiteral("ipv6")
+                                        : QStringLiteral("up");
+        selectedKind = iface.type() == QNetworkInterface::Wifi
+            ? QStringLiteral("wifi") : QStringLiteral("ethernet");
+    }
+
+    if (selectedInterface == m_networkInterface
+        && selectedAddress == m_networkAddress
+        && selectedState == m_networkState
+        && selectedKind == m_networkKind)
+        return;
+
+    m_networkInterface = selectedInterface;
+    m_networkAddress = selectedAddress;
+    m_networkState = selectedState;
+    m_networkKind = selectedKind;
+    emit networkChanged();
+}
+
 QString SystemBackend::desktopSession() const
 {
     const QString desktop = qEnvironmentVariable("XDG_CURRENT_DESKTOP", tr("Desktop sconosciuto"));
@@ -453,6 +574,7 @@ QString SystemBackend::quickSystemInfo() const
     QString text;
     QTextStream out(&text);
     out << tr("Informazioni rapide di sistema") << '\n';
+    out << tr("krisCC: ") << QCoreApplication::applicationVersion() << '\n';
     out << tr("Sistema operativo: ") << osName() << '\n';
     out << tr("Host: ") << hostName() << '\n';
     out << tr("Kernel: ") << kernelVersion() << '\n';
@@ -520,6 +642,15 @@ QString SystemBackend::flatpakIconPath(const QString &appId) const
         }
     }
     return {};
+}
+
+bool SystemBackend::launchFlatpak(const QString &appId) const
+{
+    const QString id = appId.trimmed();
+    const QString flatpak = resolveExecutable(QStringLiteral("flatpak"));
+    if (flatpak.isEmpty() || !Validators::flatpakId(id))
+        return false;
+    return QProcess::startDetached(flatpak, {QStringLiteral("run"), id});
 }
 
 QString SystemBackend::resolveExecutable(const QString &program) const
@@ -708,10 +839,81 @@ void SystemBackend::notify(const QString &summary, const QString &body) const
                             QStringList(), QVariantMap(), 5000);
 }
 
+QString SystemBackend::defaultBackupDirectory() const
+{
+    return QDir::home().filePath(QStringLiteral("krisCC Backups"));
+}
+
+bool SystemBackend::validateBackupDirectory(const QString &path, QString *canonicalPath) const
+{
+    QString localPath = path.trimmed();
+    if (localPath.startsWith(QStringLiteral("file:")))
+        localPath = QUrl(localPath).toLocalFile();
+    if (localPath.isEmpty())
+        return false;
+
+    const QFileInfo info(localPath);
+    const QString canonical = info.canonicalFilePath();
+    if (canonical.isEmpty() || !info.isDir() || !info.isWritable())
+        return false;
+    if (canonicalPath)
+        *canonicalPath = canonical;
+    return true;
+}
+
+QString SystemBackend::currentBackupRoot() const
+{
+    QString canonical;
+    return validateBackupDirectory(m_backupDirectory, &canonical) ? canonical : QString();
+}
+
+bool SystemBackend::setBackupDirectory(const QString &pathOrUrl)
+{
+    if (m_backupBusy)
+        return false;
+
+    QString localPath = pathOrUrl.trimmed();
+    if (localPath.startsWith(QStringLiteral("file:")))
+        localPath = QUrl(localPath).toLocalFile();
+    if (localPath.isEmpty())
+        return false;
+
+    QDir directory(localPath);
+    if (!directory.exists() && !directory.mkpath(QStringLiteral(".")))
+        return false;
+
+    QString canonical;
+    if (!validateBackupDirectory(directory.absolutePath(), &canonical))
+        return false;
+    if (m_backupDirectory == canonical)
+        return true;
+
+    m_backupDirectory = canonical;
+    QSettings settings;
+    settings.setValue(QStringLiteral("backup/directory"), m_backupDirectory);
+    emit backupDirectoryChanged();
+    return true;
+}
+
+bool SystemBackend::backupIsLocalSnapshot() const
+{
+    const QString root = currentBackupRoot();
+    if (root.isEmpty())
+        return true;
+    const QStorageInfo backupStorage(root);
+    const QStorageInfo homeStorage(QDir::homePath());
+    if (!backupStorage.isValid() || !homeStorage.isValid())
+        return true;
+    return backupStorage.device() == homeStorage.device();
+}
+
 QVariantList SystemBackend::backups() const
 {
     QVariantList result;
-    const QDir backupDir(QDir::homePath() + QStringLiteral("/krisCC Backups"));
+    const QString backupRoot = currentBackupRoot();
+    if (backupRoot.isEmpty())
+        return result;
+    const QDir backupDir(backupRoot);
     if (!backupDir.exists())
         return result;
 
@@ -733,8 +935,7 @@ QVariantList SystemBackend::backups() const
 
 bool SystemBackend::validateBackupPath(const QString &path, QString *canonicalPath) const
 {
-    const QDir backupDir(QDir::homePath() + QStringLiteral("/krisCC Backups"));
-    const QString backupRoot = QFileInfo(backupDir.absolutePath()).canonicalFilePath();
+    const QString backupRoot = currentBackupRoot();
     const QFileInfo info(path);
     const QString canonical = info.canonicalFilePath();
     if (backupRoot.isEmpty() || canonical.isEmpty() || !info.isFile())
@@ -759,7 +960,7 @@ bool SystemBackend::verifySnapshot(const QString &path)
 
     QString canonical;
     if (!validateBackupPath(path, &canonical)) {
-        setBackupResult(tr("Archivio di backup non valido o fuori dalla cartella krisCC Backups."),
+        setBackupResult(tr("Archivio di backup non valido o fuori dalla cartella backup selezionata."),
                         QString(), QStringLiteral("error"));
         return false;
     }
@@ -832,7 +1033,7 @@ bool SystemBackend::restoreSnapshot(const QString &path)
 
     QString canonical;
     if (!validateBackupPath(path, &canonical)) {
-        setBackupResult(tr("Archivio di backup non valido o fuori dalla cartella krisCC Backups."),
+        setBackupResult(tr("Archivio di backup non valido o fuori dalla cartella backup selezionata."),
                         QString(), QStringLiteral("error"));
         return false;
     }
@@ -963,11 +1164,25 @@ bool SystemBackend::createSnapshot(const QString &kind)
     }
 
     const QString home = QDir::homePath();
-    QDir backupDir(home + QStringLiteral("/krisCC Backups"));
+    QDir backupDir(m_backupDirectory.isEmpty() ? defaultBackupDirectory() : m_backupDirectory);
     if (!backupDir.exists() && !backupDir.mkpath(QStringLiteral("."))) {
         setBackupResult(tr("Impossibile creare la cartella dei backup."), QString(), QStringLiteral("error"));
         return false;
     }
+
+    QString canonicalBackupRoot;
+    if (!validateBackupDirectory(backupDir.absolutePath(), &canonicalBackupRoot)) {
+        setBackupResult(tr("La cartella backup selezionata non è disponibile o scrivibile."),
+                        QString(), QStringLiteral("error"));
+        return false;
+    }
+    if (m_backupDirectory != canonicalBackupRoot) {
+        m_backupDirectory = canonicalBackupRoot;
+        QSettings settings;
+        settings.setValue(QStringLiteral("backup/directory"), m_backupDirectory);
+        emit backupDirectoryChanged();
+    }
+    backupDir.setPath(canonicalBackupRoot);
 
     const QStorageInfo backupStorage(backupDir.absolutePath());
     if (backupStorage.isValid() && backupStorage.isReady()) {
@@ -992,11 +1207,28 @@ bool SystemBackend::createSnapshot(const QString &kind)
     const QString output = backupDir.filePath(QStringLiteral("%1-%2.tar.gz").arg(label, stamp));
     const QString partial = output + QStringLiteral(".partial");
     QFile::remove(partial);
+    {
+        QFile partialFile(partial);
+        if (!partialFile.open(QIODevice::WriteOnly)
+            || !partialFile.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner)) {
+            setBackupResult(tr("Impossibile creare il file parziale del backup con permessi sicuri."),
+                            QString(), QStringLiteral("error"));
+            return false;
+        }
+    }
 
     QStringList args = {QStringLiteral("-czf"), partial};
     if (kind == QStringLiteral("home")) {
         for (const QString &excluded : backupHomeExcludes())
             args << QStringLiteral("--exclude=./") + excluded;
+
+        const QString canonicalHome = QFileInfo(home).canonicalFilePath();
+        if (!canonicalHome.isEmpty()
+            && canonicalBackupRoot.startsWith(canonicalHome + QLatin1Char('/'))) {
+            const QString relativeBackup = QDir(canonicalHome).relativeFilePath(canonicalBackupRoot);
+            if (!relativeBackup.isEmpty() && relativeBackup != QStringLiteral("."))
+                args << QStringLiteral("--exclude=./") + relativeBackup;
+        }
         args << QStringLiteral("-C") << home << QStringLiteral(".");
     } else {
         QStringList entries;
@@ -1052,6 +1284,7 @@ bool SystemBackend::createSnapshot(const QString &kind)
                 return;
             }
             m_backupPartialPath.clear();
+            QFile::setPermissions(output, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
             if (exitCode == 0) {
                 setBackupResult(tr("Snapshot creato correttamente."), output, QStringLiteral("success"));
                 OperationLog::append(QStringLiteral("Backup"), QStringLiteral("create"),
@@ -1111,10 +1344,30 @@ bool SystemBackend::cancelSnapshot()
     return true;
 }
 
+bool SystemBackend::deleteSnapshot(const QString &path)
+{
+    if (m_backupBusy)
+        return false;
+    QString canonical;
+    if (!validateBackupPath(path, &canonical))
+        return false;
+    const QString name = QFileInfo(canonical).fileName();
+    if (!QFile::remove(canonical))
+        return false;
+    OperationLog::append(QStringLiteral("Backup"), QStringLiteral("delete"),
+                         QStringLiteral("success"), name);
+    setBackupResult(tr("Backup eliminato."), QString(), QStringLiteral("success"));
+    return true;
+}
+
 bool SystemBackend::openBackupFolder() const
 {
-    const QString path = QDir::homePath() + QStringLiteral("/krisCC Backups");
-    QDir().mkpath(path);
+    QString path = currentBackupRoot();
+    if (path.isEmpty()) {
+        path = m_backupDirectory.isEmpty() ? defaultBackupDirectory() : m_backupDirectory;
+        if (!QDir().mkpath(path))
+            return false;
+    }
     return QDesktopServices::openUrl(QUrl::fromLocalFile(path));
 }
 
@@ -1182,6 +1435,7 @@ void SystemBackend::setResourceMonitoringEnabled(bool enabled)
 
     m_previousCpuTotal = 0;
     m_previousCpuIdle = 0;
+    m_lastTopMemoryRefreshMs = 0;
     if (m_cpuUsagePercent != -1) {
         m_cpuUsagePercent = -1;
         emit resourcesChanged();
@@ -1259,6 +1513,12 @@ void SystemBackend::refreshResources()
     m_cpuTemperatureC = nextTemperature;
     if (changed)
         emit resourcesChanged();
+
+    const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+    if (m_lastTopMemoryRefreshMs == 0 || nowMs - m_lastTopMemoryRefreshMs >= 6000) {
+        refreshTopMemoryProcesses();
+        m_lastTopMemoryRefreshMs = nowMs;
+    }
 }
 
 double SystemBackend::readCpuTemperature() const

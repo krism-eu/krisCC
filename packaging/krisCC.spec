@@ -1,6 +1,6 @@
 Name:           krisCC
-Version:        0.7.0
-Release:        6%{?dist}
+Version:        0.7.3
+Release:        1%{?dist}
 Summary:        krisCC personal control center for KrisOS and Fedora bootc
 License:        MIT
 URL:            https://github.com/krism-eu/krisCC
@@ -22,6 +22,7 @@ Requires:       dnf5
 Requires:       dnf5-plugins
 Requires:       bootc
 Requires:       tar
+Requires:       bash
 
 %description
 krisCC is a compact personal Kirigami control center for KrisOS and Fedora bootc
@@ -53,6 +54,43 @@ Settings.
 %{_datadir}/icons/hicolor/scalable/apps/krisCC.svg
 
 %changelog
+* Tue Sep 22 2026 krism-eu - 0.7.3-1
+- Export exact latest-green repository commit from GitHub ZIP
+- Simplify Flatpak remote contract to name/url
+- Keep network status card in the 0.7 dashboard
+
+* Tue Sep 22 2026 krism-eu - 0.7.2-1
+- Adopt public X.Y.Z-only versioning; RPM Release remains packaging metadata
+- Preserve the last green 0.7 trial behavior unchanged
+
+* Mon Sep 21 2026 krism-eu - 0.7.1-5
+- Make downloaded BootC apply-and-reboot match the UI contract
+- Normalize sidebar page indices and fail closed on unexpected rk verbs
+- Reduce top-process sampling cost and harden DNF summary parsing
+- Fix overlay-relative dialog sizing, background diagnostics and bash dependency
+- Verify Fedora GNU tar traversal behavior in CI
+
+* Mon Sep 21 2026 krism-eu - 0.7.1-4
+- Keep Flatpak and Podman machine-readable stdout isolated from diagnostic stderr
+- Add regression coverage for structured stdout accompanied by stderr warnings
+
+* Mon Sep 21 2026 krism-eu - 0.7.1-3
+- Accept the real Flatpak remotes contract while keeping strict parsing elsewhere
+- Fill the Dashboard health grid with live interface/IP state and a colored connection indicator
+- Export any active public krisCC/KrisOS branch to one owner-private text file in Home
+- Remove the remaining duplicate Commands page heading
+
+* Mon Sep 21 2026 krism-eu - 0.7.1-2
+- Fix header/repository/dashboard alignment found by reference-host acceptance
+- Preserve Flatpak structured output before parsing empty trailing columns
+- Make top-memory process collection resilient to partial /proc visibility
+
+* Mon Sep 21 2026 krism-eu - 0.7.1-1
+- Harden privileged execution with root-owned timeouts and shared allowlists
+- Refresh the dashboard, virtualize RPM and Flatpak lists, and remove silent list truncation
+- Add firewall, top-memory process visibility, Flatpak launch, Podman container removal and backup deletion
+- Remove duplicate page headers and unreadable raw BootC status from the normal UI
+
 * Sun Sep 20 2026 krism-eu - 0.7.0-6
 - Fix resource sampling and load pages on demand
 - Unify native cards, output panels and responsive tools
@@ -185,22 +223,3 @@ Settings.
 
 * Wed Sep 16 2026 krism-eu - 0.4.0-4
 - Replace raw Flatpak command output with structured application cards
-- Add direct Flatpak install/remove actions and clearer remote views
-- Make RPM sizes, dependency preview and transaction totals explicit
-
-* Wed Sep 16 2026 krism-eu - 0.4.0-3
-- Add top navigation tabs, dedicated Flatpak and command-bookmark pages
-- Add RPM transaction previews, package origin filters and repository-file addition
-- Clarify external tool availability, active services and the unified backup workflow
-
-* Wed Sep 16 2026 krism-eu - 0.4.0-2
-- Fix DNF5 search metadata parsing
-- Refine software and repository presentation
-
-* Wed Sep 16 2026 krism-eu - 0.4.0-1
-- Move the UI to Kirigami and remove Plasma configuration duplication
-- Add package inventory, upgrades, recent packages and repository management
-- Add personal maintenance tools and local config/home backup snapshots
-
-* Tue Sep 15 2026 krism-eu - 0.3.0-1
-- Initial standalone K-ControlC package

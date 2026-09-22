@@ -1,10 +1,8 @@
 #include "PackageSearch.h"
+#include "ContractParsers.h"
 
 #include <QFile>
 #include <QFileInfo>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QTimer>
 #include <QTextStream>
 
@@ -80,11 +78,12 @@ void PackageSearch::search(const QString &term)
         return;
     }
 
+    if (m_truncated) {
+        m_truncated = false;
+        emit truncatedChanged();
+    }
     setSearching(true);
-    if (installedCacheCurrent())
-        startRepoQuery(sanitized);
-    else
-        startInstalledQuery(sanitized);
+    startInstalledQuery(sanitized);
 }
 
 void PackageSearch::loadInstalled(const QString &filter)
@@ -142,12 +141,6 @@ void PackageSearch::startInstalledQuery(const QString &term)
                     m_installed.insert(name);
             }
 
-            m_installedCacheDbPath = rpmDatabasePath();
-            const QFileInfo dbInfo(m_installedCacheDbPath);
-            m_installedCacheMtime = dbInfo.exists() ? dbInfo.lastModified() : QDateTime();
-            m_installedCacheValid = true;
-        } else {
-            m_installedCacheValid = false;
         }
 
         m_process = nullptr;
@@ -164,7 +157,6 @@ void PackageSearch::startInstalledQuery(const QString &term)
             return;
 
         m_installed.clear();
-        m_installedCacheValid = false;
         m_process = nullptr;
         process->deleteLater();
         emit searchError(tr("Impossibile avviare rpm per leggere i pacchetti installati."));
@@ -217,50 +209,8 @@ void PackageSearch::startRepoQuery(const QString &term)
             return;
         }
 
-        QList<Entry> entries;
-        QSet<QString> seen;
-        bool contractInvalid = false;
-        const auto lines = QString::fromUtf8(stdoutData).split('\n', Qt::SkipEmptyParts);
-        for (const QString &line : lines) {
-            const QStringList parts = line.split(QLatin1Char('\t'));
-            if (parts.size() != 7) {
-                contractInvalid = true;
-                break;
-            }
-
-            const QString name = parts.at(0).trimmed();
-            const QString arch = parts.at(4).trimmed();
-            bool downloadOk = false;
-            bool installOk = false;
-            const quint64 downloadSize = parts.at(5).toULongLong(&downloadOk);
-            const quint64 installSize = parts.at(6).toULongLong(&installOk);
-            if (name.isEmpty() || arch.isEmpty() || !downloadOk || !installOk) {
-                contractInvalid = true;
-                break;
-            }
-
-            const QString key = name + QLatin1Char('\x1f') + arch;
-            if (seen.contains(key))
-                continue;
-
-            seen.insert(key);
-            Entry entry;
-            entry.name = name;
-            entry.summary = parts.at(1).simplified().left(512);
-            entry.version = parts.at(2).trimmed();
-            entry.repository = parts.at(3).trimmed();
-            entry.arch = arch;
-            entry.downloadSize = downloadSize;
-            entry.installSize = installSize;
-            entry.installed = m_installed.contains(name);
-            entry.owned = m_owned.contains(name);
-            entry.persistent = m_persistent.contains(name);
-            entries.append(entry);
-            if (entries.size() >= 200)
-                break;
-        }
-
-        if (contractInvalid) {
+        const auto parsed = ContractParsers::parseDnfRepoquery(stdoutData);
+        if (!parsed.ok()) {
             clearResults();
             setSearching(false);
             emit searchError(tr("Formato di output DNF5 repoquery non riconosciuto."));
@@ -268,9 +218,35 @@ void PackageSearch::startRepoQuery(const QString &term)
             return;
         }
 
+        QList<Entry> entries;
+        bool truncated = false;
+        for (const QVariant &value : parsed.values) {
+            if (entries.size() >= 100) {
+                truncated = true;
+                break;
+            }
+            const QVariantMap row = value.toMap();
+            Entry entry;
+            entry.name = row.value(QStringLiteral("name")).toString();
+            entry.summary = row.value(QStringLiteral("summary")).toString();
+            entry.version = row.value(QStringLiteral("version")).toString();
+            entry.repository = row.value(QStringLiteral("repository")).toString();
+            entry.arch = row.value(QStringLiteral("arch")).toString();
+            entry.downloadSize = row.value(QStringLiteral("downloadSize")).toULongLong();
+            entry.installSize = row.value(QStringLiteral("installSize")).toULongLong();
+            entry.installed = m_installed.contains(entry.name);
+            entry.owned = m_owned.contains(entry.name);
+            entry.persistent = m_persistent.contains(entry.name);
+            entries.append(entry);
+        }
+
         beginResetModel();
         m_results = entries;
         endResetModel();
+        if (m_truncated != truncated) {
+            m_truncated = truncated;
+            emit truncatedChanged();
+        }
         emit countChanged();
         setSearching(false);
         emit searchFinished();
@@ -343,88 +319,47 @@ void PackageSearch::startListQuery(const QString &filter, bool installedEntries)
             return;
         }
 
-        QJsonParseError parseError;
-        const QJsonDocument document = QJsonDocument::fromJson(stdoutData, &parseError);
-        if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
-            setSearching(false);
-            emit searchError(tr("Output JSON DNF5 non valido: %1").arg(parseError.errorString()));
-            emit searchFinished();
-            return;
-        }
-
-        QList<Entry> entries;
-        QSet<QString> seen;
-        bool sawArray = false;
-        bool contractInvalid = false;
-        const QJsonObject root = document.object();
-        for (auto it = root.constBegin(); it != root.constEnd(); ++it) {
-            if (!it.value().isArray())
-                continue;
-            sawArray = true;
-            for (const QJsonValue &value : it.value().toArray()) {
-                if (!value.isObject()) {
-                    contractInvalid = true;
-                    break;
-                }
-                const QJsonObject object = value.toObject();
-                if (!object.value(QStringLiteral("name")).isString()
-                    || !object.value(QStringLiteral("arch")).isString()
-                    || !object.value(QStringLiteral("evr")).isString()
-                    || !object.value(QStringLiteral("repository")).isString()) {
-                    contractInvalid = true;
-                    break;
-                }
-
-                const QString name = object.value(QStringLiteral("name")).toString().trimmed();
-                const QString arch = object.value(QStringLiteral("arch")).toString().trimmed();
-                if (name.isEmpty() || arch.isEmpty()) {
-                    contractInvalid = true;
-                    break;
-                }
-
-                const QString key = name + QLatin1Char('\x1f') + arch;
-                if (seen.contains(key))
-                    continue;
-                seen.insert(key);
-
-                Entry entry;
-                entry.name = name;
-                entry.arch = arch;
-                entry.version = object.value(QStringLiteral("evr")).toString();
-                entry.repository = object.value(QStringLiteral("repository")).toString();
-                entry.installed = installedEntries || m_installed.contains(name);
-                entry.owned = m_owned.contains(name);
-                entry.persistent = m_persistent.contains(name);
-
-                if (installedEntries) {
-                    const bool local = entry.installed && !entry.owned && !entry.persistent;
-                    if (m_installedFilter == QStringLiteral("base") && !entry.owned)
-                        continue;
-                    if (m_installedFilter == QStringLiteral("persistent") && !entry.persistent)
-                        continue;
-                    if (m_installedFilter == QStringLiteral("local") && !local)
-                        continue;
-                }
-
-                entries.append(entry);
-                if (entries.size() >= 500)
-                    break;
-            }
-            if (contractInvalid || entries.size() >= 500)
-                break;
-        }
-
-        if (!sawArray || contractInvalid) {
+        const auto parsed = ContractParsers::parseDnfListJson(stdoutData);
+        if (!parsed.ok()) {
             setSearching(false);
             emit searchError(tr("Formato JSON DNF5 non riconosciuto."));
             emit searchFinished();
             return;
         }
 
-        beginResetModel();
-        m_results = entries;
-        endResetModel();
-        emit countChanged();
+        QList<Entry> entries;
+        for (const QVariant &value : parsed.values) {
+            const QVariantMap row = value.toMap();
+            Entry entry;
+            entry.name = row.value(QStringLiteral("name")).toString();
+            entry.arch = row.value(QStringLiteral("arch")).toString();
+            entry.version = row.value(QStringLiteral("version")).toString();
+            entry.repository = row.value(QStringLiteral("repository")).toString();
+            entry.installed = installedEntries || m_installed.contains(entry.name);
+            entry.owned = m_owned.contains(entry.name);
+            entry.persistent = m_persistent.contains(entry.name);
+
+            if (installedEntries) {
+                const bool local = entry.installed && !entry.owned && !entry.persistent;
+                if (m_installedFilter == QStringLiteral("base") && !entry.owned)
+                    continue;
+                if (m_installedFilter == QStringLiteral("persistent") && !entry.persistent)
+                    continue;
+                if (m_installedFilter == QStringLiteral("local") && !local)
+                    continue;
+            }
+            entries.append(entry);
+        }
+
+        if (installedEntries) {
+            m_sourceResults = entries;
+            applyLocalFilter();
+        } else {
+            beginResetModel();
+            m_results = entries;
+            endResetModel();
+            emit countChanged();
+        }
         setSearching(false);
         emit searchFinished();
     });
@@ -463,6 +398,7 @@ void PackageSearch::clearResults()
         return;
     beginResetModel();
     m_results.clear();
+    m_sourceResults.clear();
     endResetModel();
     emit countChanged();
 }
@@ -514,28 +450,36 @@ void PackageSearch::refreshPersistentSet()
     }
 }
 
-bool PackageSearch::installedCacheCurrent() const
+void PackageSearch::setLocalFilter(const QString &text)
 {
-    if (!m_installedCacheValid)
-        return false;
-    const QString dbPath = rpmDatabasePath();
-    if (dbPath.isEmpty() || dbPath != m_installedCacheDbPath)
-        return false;
-    const QFileInfo info(dbPath);
-    return info.exists() && info.lastModified() == m_installedCacheMtime;
+    const QString next = text.trimmed();
+    if (m_localFilter == next)
+        return;
+    m_localFilter = next;
+    applyLocalFilter();
 }
 
-QString PackageSearch::rpmDatabasePath() const
+void PackageSearch::applyLocalFilter()
 {
-    static const QStringList candidates = {
-        QStringLiteral("/usr/lib/sysimage/rpm/rpmdb.sqlite"),
-        QStringLiteral("/var/lib/rpm/rpmdb.sqlite")
-    };
-    for (const QString &path : candidates) {
-        if (QFileInfo::exists(path))
-            return path;
+    QList<Entry> filtered;
+    if (m_localFilter.isEmpty()) {
+        filtered = m_sourceResults;
+    } else {
+        for (const Entry &entry : m_sourceResults) {
+            const bool matches =
+                entry.name.contains(m_localFilter, Qt::CaseInsensitive)
+                || entry.version.contains(m_localFilter, Qt::CaseInsensitive)
+                || entry.repository.contains(m_localFilter, Qt::CaseInsensitive)
+                || entry.arch.contains(m_localFilter, Qt::CaseInsensitive);
+            if (matches)
+                filtered.append(entry);
+        }
     }
-    return {};
+
+    beginResetModel();
+    m_results = filtered;
+    endResetModel();
+    emit countChanged();
 }
 
 QString PackageSearch::sanitizeTerm(const QString &term)

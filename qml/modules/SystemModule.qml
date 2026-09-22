@@ -14,6 +14,7 @@ Kirigami.ScrollablePage {
     property string pendingService: ""
     property string pendingServiceTitle: ""
     property var historyEntries: []
+    property bool rebootAfterDownloadedApply: false
     property var services: [
         { id: "NetworkManager.service", title: qsTr("NetworkManager") },
         { id: "cups.service", title: qsTr("Stampa (CUPS)") },
@@ -47,9 +48,10 @@ Kirigami.ScrollablePage {
         return value.length > 28 ? value.substring(0, 28) + "…" : value
     }
 
-    Component.onCompleted: {
+    function refreshPage() {
         root.historyEntries = SystemBackend.operationHistoryEntries()
         BootcBackend.refreshStatus()
+        BootcBackend.refreshPackages()
         if (SystemBackend.uefiBootAvailable)
             SystemBackend.refreshUefiEntries()
         if (SystemBackend.grubEntriesAvailable)
@@ -57,10 +59,18 @@ Kirigami.ScrollablePage {
         SystemBackend.refreshServiceStates()
     }
 
+    onVisibleChanged: if (visible) root.refreshPage()
+    Component.onCompleted: if (visible) root.refreshPage()
+
     Connections {
         target: BootcBackend
         function onOperationFinished(success, output) {
             root.historyEntries = SystemBackend.operationHistoryEntries()
+            if (root.rebootAfterDownloadedApply) {
+                root.rebootAfterDownloadedApply = false
+                if (success)
+                    SystemBackend.requestReboot()
+            }
         }
     }
 
@@ -78,8 +88,6 @@ Kirigami.ScrollablePage {
     ColumnLayout {
         width: parent.width
         spacing: Kirigami.Units.largeSpacing
-
-        PageIntro { title: root.title; subtitle: qsTr("Aggiornamenti, salute, avvio e strumenti essenziali. Le normali preferenze desktop restano nelle Impostazioni di sistema Plasma.") }
 
         Controls.TabBar {
             id: sections
@@ -220,15 +228,6 @@ Kirigami.ScrollablePage {
                                 }
                             }
 
-                            Controls.CheckBox {
-                                id: bootTechnicalDetails
-                                text: qsTr("Dettagli tecnici")
-                            }
-                            OutputCard {
-                    visible: bootTechnicalDetails.checked
-                    embedded: true
-                    outputText: BootcBackend.statusText
-                }
                         }
                     }
 
@@ -719,10 +718,13 @@ Kirigami.ScrollablePage {
                   : qsTr("L'aggiornamento è già predisposto per il prossimo avvio; il sistema verrà riavviato ora. Il riavvio è autorizzato secondo la policy della sessione.")
         }
         onAccepted: {
-            if (downloadOnly)
-                BootcBackend.applyDownloaded()
-            else
+            if (downloadOnly) {
+                root.rebootAfterDownloadedApply = true
+                if (!BootcBackend.applyDownloaded())
+                    root.rebootAfterDownloadedApply = false
+            } else {
                 SystemBackend.requestReboot()
+            }
         }
     }
 

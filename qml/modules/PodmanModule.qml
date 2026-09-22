@@ -43,7 +43,7 @@ Kirigami.ScrollablePage {
         utilityBackend.runPodman(root.mode === "images" ? "images" : "list")
     }
 
-    function parseResult() {
+    function applyResult() {
         if (utilityBackend.busy)
             return
         var expected = root.mode === "images" ? "podman.images" : "podman.list"
@@ -55,18 +55,11 @@ Kirigami.ScrollablePage {
             root.parseError = utilityBackend.output.length > 0 ? utilityBackend.output : qsTr("Impossibile leggere i dati Podman.")
             return
         }
-        try {
-            var data = JSON.parse(utilityBackend.output || "[]")
-            if (root.mode === "images")
-                root.images = Array.isArray(data) ? data : []
-            else
-                root.containers = Array.isArray(data) ? data : []
-            root.parseError = ""
-        } catch (e) {
-            if (root.mode === "images") root.images = []
-            else root.containers = []
-            root.parseError = utilityBackend.output.length > 0 ? utilityBackend.output : qsTr("Output Podman non leggibile.")
-        }
+        if (root.mode === "images")
+            root.images = utilityBackend.rows
+        else
+            root.containers = utilityBackend.rows
+        root.parseError = ""
     }
 
     function containerName(item) {
@@ -85,6 +78,11 @@ Kirigami.ScrollablePage {
 
     function containerSize(item) {
         if (!item) return qsTr("n/d")
+        if (item.Size && typeof item.Size === "object") {
+            var objectRw = item.Size.rwSize !== undefined ? item.Size.rwSize : (item.Size.RwSize || 0)
+            var objectRoot = item.Size.rootFsSize !== undefined ? item.Size.rootFsSize : (item.Size.RootFsSize || 0)
+            return qsTr("RW %1 · totale %2").arg(root.humanSize(objectRw)).arg(root.humanSize(objectRoot))
+        }
         if (item.Size) return root.humanSize(item.Size)
         if (item.SizeRw !== undefined || item.SizeRootFs !== undefined) {
             var rw = item.SizeRw !== undefined ? item.SizeRw : 0
@@ -142,7 +140,7 @@ Kirigami.ScrollablePage {
                 root.refreshAfterAction = false
                 refreshTimer.restart()
             } else {
-                root.parseResult()
+                root.applyResult()
             }
         }
     }
@@ -157,12 +155,6 @@ Kirigami.ScrollablePage {
     ColumnLayout {
         width: parent.width
         spacing: Kirigami.Units.largeSpacing
-
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Kirigami.Units.smallSpacing
-            PageIntro { title: root.title; subtitle: qsTr("Container e immagini locali dell'utente corrente, con stato, dimensione e azioni esplicite.") }
-        }
 
         Controls.TabBar {
             id: podmanTabs
@@ -271,6 +263,15 @@ Kirigami.ScrollablePage {
                             Controls.Button { icon.name: "media-playback-start"; text: qsTr("Avvia"); enabled: !utilityBackend.busy; onClicked: root.runAction("start", root.containerName(modelData)) }
                             Controls.Button { icon.name: "media-playback-stop"; text: qsTr("Ferma"); enabled: !utilityBackend.busy; onClicked: root.runAction("stop", root.containerName(modelData)) }
                             Controls.Button { icon.name: "view-refresh"; text: qsTr("Riavvia"); enabled: !utilityBackend.busy; onClicked: root.runAction("restart", root.containerName(modelData)) }
+                            Controls.Button {
+                                icon.name: "edit-delete"
+                                text: qsTr("Elimina")
+                                enabled: !utilityBackend.busy
+                                onClicked: {
+                                    root.selectedName = root.containerName(modelData)
+                                    containerRemoveDialog.open()
+                                }
+                            }
                             Controls.Button { icon.name: "edit-rename";
                                 text: qsTr("Rinomina")
                                 enabled: !utilityBackend.busy
@@ -361,6 +362,21 @@ Kirigami.ScrollablePage {
                 }
             }
         }
+    }
+
+    Controls.Dialog {
+        id: containerRemoveDialog
+        modal: true
+        parent: Controls.Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
+        title: qsTr("Eliminare il container?")
+        standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
+        contentItem: Controls.Label {
+            wrapMode: Text.WordWrap
+            text: qsTr("%1\n\nIl container viene rimosso senza --force. Se è in esecuzione Podman rifiuterà l'operazione.").arg(root.selectedName)
+        }
+        onAccepted: root.runAction("remove", root.selectedName)
     }
 
     Controls.Dialog {

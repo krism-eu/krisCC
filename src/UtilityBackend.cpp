@@ -1,12 +1,14 @@
 #include "UtilityBackend.h"
 
 #include "OperationLog.h"
+#include "ContractParsers.h"
+#include "ProcessRunner.h"
+#include "Validators.h"
 
 #include <QDebug>
 #include <QFileInfo>
 #include <QRegularExpression>
 #include <QStandardPaths>
-#include <QTimer>
 
 namespace {
 constexpr int kShortQueryTimeoutMs = 30 * 1000;
@@ -27,6 +29,7 @@ bool shouldLogOperation(const QString &id)
         || id == QStringLiteral("podman.stop")
         || id == QStringLiteral("podman.restart")
         || id == QStringLiteral("podman.rename")
+        || id == QStringLiteral("podman.remove")
         || id == QStringLiteral("podman.image-remove");
 }
 }
@@ -38,14 +41,12 @@ UtilityBackend::UtilityBackend(QObject *parent)
 
 bool UtilityBackend::validPackageName(const QString &name) const
 {
-    static const QRegularExpression pattern(QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._+:-]{0,127}$"));
-    return pattern.match(name).hasMatch();
+    return Validators::packageName(name);
 }
 
 bool UtilityBackend::validContainerName(const QString &name) const
 {
-    static const QRegularExpression pattern(QStringLiteral("^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"));
-    return pattern.match(name).hasMatch();
+    return Validators::containerName(name);
 }
 
 void UtilityBackend::setImmediateError(const QString &title, const QString &operationId, const QString &message)
@@ -58,7 +59,7 @@ void UtilityBackend::setImmediateError(const QString &title, const QString &oper
 }
 
 bool UtilityBackend::start(const QString &program, const QStringList &args, const QString &title,
-                           const QString &operationId, int timeoutMs)
+                           const QString &operationId, int timeoutMs, bool structuredOutput)
 {
     if (m_busy) {
         qDebug().noquote() << "UtilityBackend: refusing" << operationId
@@ -75,92 +76,117 @@ bool UtilityBackend::start(const QString &program, const QStringList &args, cons
     }
 
     m_busy = true;
-    m_cancelRequested = false;
-    m_timedOut = false;
     m_title = title;
     m_operationId = operationId;
     m_output.clear();
+    m_rows.clear();
     m_resultState = QStringLiteral("running");
     emit stateChanged();
 
-    auto *process = new QProcess(this);
-    const QPointer<QProcess> guarded(process);
-    m_process = process;
-    process->setProcessChannelMode(QProcess::MergedChannels);
-
-    connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-            [this, guarded](int exitCode, QProcess::ExitStatus status) {
-        if (!guarded || guarded != m_process)
+    auto *runner = new ProcessRunner(this);
+    m_runner = runner;
+    connect(runner, &ProcessRunner::finished, this,
+            [this, runner, structuredOutput](ProcessRunner::Outcome outcome, int exitCode,
+                           const QByteArray &stdoutData, const QByteArray &stderrData,
+                           const QString &error) {
+        if (runner != m_runner)
             return;
-        const QString text = QString::fromUtf8(guarded->readAllStandardOutput()).trimmed();
-        if (m_cancelRequested) {
-            finish(text.isEmpty() ? tr("Operazione annullata.") : text, QStringLiteral("cancelled"));
-            return;
+        QByteArray combined = stdoutData;
+        if (!structuredOutput || outcome != ProcessRunner::Success) {
+            if (!combined.isEmpty() && !stderrData.isEmpty() && !combined.endsWith('\n'))
+                combined.append('\n');
+            combined.append(stderrData);
         }
-        if (m_timedOut) {
+        const QString text = QString::fromUtf8(combined);
+        switch (outcome) {
+        case ProcessRunner::Success:
+            finish(text, QStringLiteral("success"));
+            break;
+        case ProcessRunner::Cancelled:
+            finish(text.isEmpty() ? tr("Operazione annullata.") : text,
+                   QStringLiteral("cancelled"));
+            break;
+        case ProcessRunner::TimedOut:
             finish(text.isEmpty() ? tr("Tempo massimo superato; il comando è stato interrotto.") : text,
                    QStringLiteral("timeout"));
-            return;
+            break;
+        case ProcessRunner::FailedToStart:
+            finish(tr("Impossibile avviare il comando: %1").arg(error),
+                   QStringLiteral("error"));
+            break;
+        case ProcessRunner::ExitError:
+            finish(text.isEmpty() ? tr("Comando terminato con codice %1.").arg(exitCode) : text,
+                   QStringLiteral("error"));
+            break;
         }
-        const bool ok = status == QProcess::NormalExit && exitCode == 0;
-        finish(text.isEmpty() && !ok ? tr("Comando terminato con codice %1.").arg(exitCode) : text,
-               ok ? QStringLiteral("success") : QStringLiteral("error"));
     });
 
-    connect(process, &QProcess::errorOccurred, this,
-            [this, guarded](QProcess::ProcessError error) {
-        if (!guarded || guarded != m_process || error != QProcess::FailedToStart)
-            return;
-        finish(tr("Impossibile avviare il comando: %1").arg(guarded->errorString()),
-               QStringLiteral("error"));
-    });
-
-    if (timeoutMs > 0) {
-        QTimer::singleShot(timeoutMs, process, [this, guarded] {
-            if (!guarded || guarded != m_process || guarded->state() == QProcess::NotRunning)
-                return;
-            m_timedOut = true;
-            guarded->terminate();
-            QTimer::singleShot(2000, guarded, [guarded] {
-                if (guarded && guarded->state() != QProcess::NotRunning)
-                    guarded->kill();
-            });
-        });
+    ProcessRunner::Options options;
+    options.program = executable;
+    options.arguments = args;
+    options.timeoutMs = timeoutMs;
+    options.maxOutputBytes = 512 * 1024;
+    options.mergedChannels = !structuredOutput;
+    options.processGroup = true;
+    if (!runner->start(options)) {
+        m_runner = nullptr;
+        runner->deleteLater();
+        finish(tr("Impossibile inizializzare il comando."), QStringLiteral("error"));
+        return false;
     }
-
-    process->start(executable, args);
     return true;
 }
 
 void UtilityBackend::finish(const QString &message, const QString &state)
 {
     const QString completedOperation = m_operationId;
-    if (m_process) {
-        m_process->deleteLater();
-        m_process = nullptr;
+    if (m_runner) {
+        m_runner->deleteLater();
+        m_runner = nullptr;
     }
     m_busy = false;
-    m_cancelRequested = false;
-    m_timedOut = false;
-    m_output = message;
+    m_output = message.trimmed();
+    m_rows.clear();
     m_resultState = state;
+
+    if (state == QStringLiteral("success")) {
+        ContractParsers::Rows parsed;
+        bool expectsRows = false;
+        if (completedOperation == QStringLiteral("flatpak.search")) {
+            parsed = ContractParsers::parseFlatpakTsv(message.toUtf8(), 6);
+            expectsRows = true;
+        } else if (completedOperation == QStringLiteral("flatpak.remotes")) {
+            parsed = ContractParsers::parseFlatpakTsv(message.toUtf8(), 2);
+            expectsRows = true;
+        } else if (completedOperation == QStringLiteral("flatpak.installed")
+                   || completedOperation == QStringLiteral("flatpak.updates")
+                   || completedOperation == QStringLiteral("flatpak.system-installed")) {
+            parsed = ContractParsers::parseFlatpakTsv(message.toUtf8(), 4);
+            expectsRows = true;
+        } else if (completedOperation == QStringLiteral("podman.list")
+                   || completedOperation == QStringLiteral("podman.images")) {
+            parsed = ContractParsers::parsePodmanJson(message.toUtf8());
+            expectsRows = true;
+        }
+
+        if (expectsRows) {
+            if (!parsed.ok()) {
+                m_resultState = QStringLiteral("error");
+                m_output = tr("Formato di output non riconosciuto per %1.").arg(completedOperation);
+            } else {
+                m_rows = parsed.values;
+            }
+        }
+    }
+
     if (shouldLogOperation(completedOperation))
-        OperationLog::append(QStringLiteral("krisCC"), completedOperation, state);
+        OperationLog::append(QStringLiteral("krisCC"), completedOperation, m_resultState, m_title);
     emit stateChanged();
 }
 
 bool UtilityBackend::cancel()
 {
-    if (!m_process || !m_busy)
-        return false;
-    m_cancelRequested = true;
-    m_process->terminate();
-    const QPointer<QProcess> guarded = m_process;
-    QTimer::singleShot(2000, guarded, [guarded] {
-        if (guarded && guarded->state() != QProcess::NotRunning)
-            guarded->kill();
-    });
-    return true;
+    return m_runner && m_busy && m_runner->cancel();
 }
 
 void UtilityBackend::clearResult()
@@ -169,6 +195,7 @@ void UtilityBackend::clearResult()
         return;
     m_title.clear();
     m_output.clear();
+    m_rows.clear();
     m_operationId.clear();
     m_resultState = QStringLiteral("idle");
     emit stateChanged();
@@ -264,12 +291,17 @@ bool UtilityBackend::runFlatpak(const QString &mode, const QString &query, const
         return start(QStringLiteral("/usr/bin/flatpak"),
                      {QStringLiteral("list"), QStringLiteral("--user"), QStringLiteral("--app"),
                       QStringLiteral("--columns=name,application,version,origin")},
-                     tr("Flatpak installati"), QStringLiteral("flatpak.installed"), kRepositoryQueryTimeoutMs);
+                     tr("Flatpak installati"), QStringLiteral("flatpak.installed"), kRepositoryQueryTimeoutMs, true);
+    if (mode == QStringLiteral("system-installed"))
+        return start(QStringLiteral("/usr/bin/flatpak"),
+                     {QStringLiteral("list"), QStringLiteral("--system"), QStringLiteral("--app"),
+                      QStringLiteral("--columns=name,application,version,origin")},
+                     tr("Flatpak di sistema"), QStringLiteral("flatpak.system-installed"), kRepositoryQueryTimeoutMs, true);
     if (mode == QStringLiteral("updates"))
         return start(QStringLiteral("/usr/bin/flatpak"),
                      {QStringLiteral("remote-ls"), QStringLiteral("--user"), QStringLiteral("--updates"), QStringLiteral("--app"),
                       QStringLiteral("--columns=name,application,version,origin")},
-                     tr("Aggiornamenti Flatpak"), QStringLiteral("flatpak.updates"), kRepositoryQueryTimeoutMs);
+                     tr("Aggiornamenti Flatpak"), QStringLiteral("flatpak.updates"), kRepositoryQueryTimeoutMs, true);
     if (mode == QStringLiteral("update-all"))
         return start(QStringLiteral("/usr/bin/flatpak"),
                      {QStringLiteral("update"), QStringLiteral("--user"), QStringLiteral("--noninteractive"), QStringLiteral("--assumeyes")},
@@ -280,13 +312,13 @@ bool UtilityBackend::runFlatpak(const QString &mode, const QString &query, const
                      tr("Aggiornamento Flatpak: %1").arg(query.trimmed()), QStringLiteral("flatpak.update"), kInteractiveTimeoutMs);
     if (mode == QStringLiteral("remotes"))
         return start(QStringLiteral("/usr/bin/flatpak"),
-                     {QStringLiteral("remotes"), QStringLiteral("--user"), QStringLiteral("--columns=name,title,url,options")},
-                     tr("Remote Flatpak"), QStringLiteral("flatpak.remotes"), kRepositoryQueryTimeoutMs);
+                     {QStringLiteral("remotes"), QStringLiteral("--user"), QStringLiteral("--columns=name,url")},
+                     tr("Remote Flatpak"), QStringLiteral("flatpak.remotes"), kRepositoryQueryTimeoutMs, true);
     if (mode == QStringLiteral("search") && query.trimmed().size() >= 2)
         return start(QStringLiteral("/usr/bin/flatpak"),
                      {QStringLiteral("search"), QStringLiteral("--user"),
                       QStringLiteral("--columns=name,description,application,version,branch,remotes"), query.trimmed()},
-                     tr("Ricerca Flatpak: %1").arg(query.trimmed()), QStringLiteral("flatpak.search"), kRepositoryQueryTimeoutMs);
+                     tr("Ricerca Flatpak: %1").arg(query.trimmed()), QStringLiteral("flatpak.search"), kRepositoryQueryTimeoutMs, true);
     if (mode == QStringLiteral("install") && validPackageName(query.trimmed())) {
         const QString selectedRemote = remote.trimmed().isEmpty() ? QStringLiteral("flathub") : remote.trimmed();
         if (!validPackageName(selectedRemote)) {
@@ -324,11 +356,11 @@ bool UtilityBackend::runPodman(const QString &mode, const QString &container, co
     if (mode == QStringLiteral("list"))
         return start(QStringLiteral("/usr/bin/podman"),
                      {QStringLiteral("ps"), QStringLiteral("--all"), QStringLiteral("--size"), QStringLiteral("--format"), QStringLiteral("json")},
-                     tr("Container Podman"), QStringLiteral("podman.list"), kContainerQueryTimeoutMs);
+                     tr("Container Podman"), QStringLiteral("podman.list"), kContainerQueryTimeoutMs, true);
     if (mode == QStringLiteral("images"))
         return start(QStringLiteral("/usr/bin/podman"),
                      {QStringLiteral("images"), QStringLiteral("--format"), QStringLiteral("json")},
-                     tr("Immagini Podman"), QStringLiteral("podman.images"), kContainerQueryTimeoutMs);
+                     tr("Immagini Podman"), QStringLiteral("podman.images"), kContainerQueryTimeoutMs, true);
 
     const QString name = container.trimmed();
     if (!validContainerName(name))
@@ -344,6 +376,8 @@ bool UtilityBackend::runPodman(const QString &mode, const QString &container, co
         return start(QStringLiteral("/usr/bin/podman"), {QStringLiteral("stop"), name}, tr("Arresto container: %1").arg(name), QStringLiteral("podman.stop"), kPodmanActionTimeoutMs);
     if (mode == QStringLiteral("restart"))
         return start(QStringLiteral("/usr/bin/podman"), {QStringLiteral("restart"), name}, tr("Riavvio container: %1").arg(name), QStringLiteral("podman.restart"), kPodmanActionTimeoutMs);
+    if (mode == QStringLiteral("remove"))
+        return start(QStringLiteral("/usr/bin/podman"), {QStringLiteral("rm"), name}, tr("Elimina container: %1").arg(name), QStringLiteral("podman.remove"), kPodmanActionTimeoutMs);
     if (mode == QStringLiteral("rename") && validContainerName(value.trimmed()))
         return start(QStringLiteral("/usr/bin/podman"), {QStringLiteral("rename"), name, value.trimmed()}, tr("Rinomina container: %1").arg(name), QStringLiteral("podman.rename"), kPodmanActionTimeoutMs);
     if (mode == QStringLiteral("image-remove") && validPackageName(name))

@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 3.22)
 
+include(cmake/KrisCCVersion.cmake)
+
 project(krisCC
-    VERSION 0.7.0
+    VERSION ${KRISCC_VERSION}
     DESCRIPTION "Personal Control Center for KrisOS and Fedora bootc"
     LANGUAGES CXX
 )
@@ -11,7 +13,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 include(GNUInstallDirs)
 
-find_package(Qt6 6.7 REQUIRED COMPONENTS Core Gui Qml Quick DBus)
+find_package(Qt6 6.7 REQUIRED COMPONENTS Core Gui Qml Quick DBus Network Test)
 find_package(KF6Kirigami REQUIRED)
 qt_standard_project_setup(REQUIRES 6.7)
 
@@ -28,6 +30,12 @@ qt_add_executable(krisCC
     src/UtilityBackend.cpp src/UtilityBackend.h
     src/InstanceController.cpp src/InstanceController.h
     src/OperationLog.cpp src/OperationLog.h
+    src/Validators.cpp src/Validators.h
+    src/AdminPolicy.cpp src/AdminPolicy.h
+    src/ProcessRunner.cpp src/ProcessRunner.h
+    src/ContractParsers.cpp src/ContractParsers.h
+    src/RepositoryExportBackend.cpp src/RepositoryExportBackend.h
+    src/RepositoryExportCore.cpp src/RepositoryExportCore.h
 )
 
 set_source_files_properties(qml/components/UiMetrics.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -60,16 +68,64 @@ qt_add_qml_module(krisCC
 )
 
 target_link_libraries(krisCC PRIVATE
-    Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::DBus
+    Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::DBus Qt6::Network
     KF6::Kirigami
 )
-target_compile_definitions(krisCC PRIVATE KRISCC_VERSION="${PROJECT_VERSION}-6")
+target_compile_definitions(krisCC PRIVATE KRISCC_VERSION="${PROJECT_VERSION}")
 
 add_executable(kriscc-admin
     src/AdminHelper.cpp
+    src/AdminPolicy.cpp src/AdminPolicy.h
+    src/Validators.cpp src/Validators.h
 )
 set_target_properties(kriscc-admin PROPERTIES OUTPUT_NAME admin)
 target_link_libraries(kriscc-admin PRIVATE Qt6::Core)
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(kriscc-test-validators
+        tests/test_validators.cpp
+        src/Validators.cpp src/Validators.h
+    )
+    target_include_directories(kriscc-test-validators PRIVATE src)
+    target_link_libraries(kriscc-test-validators PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME validators COMMAND kriscc-test-validators)
+
+    add_executable(kriscc-test-admin-policy
+        tests/test_admin_policy.cpp
+        src/AdminPolicy.cpp src/AdminPolicy.h
+        src/Validators.cpp src/Validators.h
+    )
+    target_include_directories(kriscc-test-admin-policy PRIVATE src)
+    target_link_libraries(kriscc-test-admin-policy PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME admin-policy COMMAND kriscc-test-admin-policy)
+
+    add_executable(kriscc-test-process-runner
+        tests/test_process_runner.cpp
+        src/ProcessRunner.cpp src/ProcessRunner.h
+    )
+    target_include_directories(kriscc-test-process-runner PRIVATE src)
+    target_link_libraries(kriscc-test-process-runner PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME process-runner COMMAND kriscc-test-process-runner)
+    set_tests_properties(process-runner PROPERTIES TIMEOUT 15)
+
+    add_executable(kriscc-test-parsers
+        tests/test_contract_parsers.cpp
+        src/ContractParsers.cpp src/ContractParsers.h
+        src/Validators.cpp src/Validators.h
+    )
+    target_include_directories(kriscc-test-parsers PRIVATE src)
+    target_link_libraries(kriscc-test-parsers PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME parsers COMMAND kriscc-test-parsers)
+
+    add_executable(kriscc-test-repository-export
+        tests/test_repository_export_core.cpp
+        src/RepositoryExportCore.cpp src/RepositoryExportCore.h
+    )
+    target_include_directories(kriscc-test-repository-export PRIVATE src)
+    target_link_libraries(kriscc-test-repository-export PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME repository-export COMMAND kriscc-test-repository-export)
+endif()
 
 add_executable(kriscc-maintenance
     src/MaintenanceHelper.cpp

@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 #include <QDBusConnection>
 #include <QDBusInterface>
+#include <QDebug>
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
@@ -16,6 +17,7 @@
 #include "PackageSearch.h"
 #include "PolkitHelper.h"
 #include "RkBackend.h"
+#include "RepositoryExportBackend.h"
 #include "MaintenanceBackend.h"
 #include "SoftwareBackend.h"
 #include "SystemBackend.h"
@@ -66,6 +68,8 @@ int main(int argc, char *argv[])
 
     // Never leave an unreachable hidden process when the session bus or activation object is unavailable.
     const bool startHidden = parser.isSet(backgroundOption) && singleInstanceReady;
+    if (parser.isSet(backgroundOption) && !singleInstanceReady)
+        qWarning("krisCC: --background requested without a usable session D-Bus single-instance service; showing the window instead.");
 
     qmlRegisterType<PackageSearch>("org.kriscc", 1, 0, "PackageSearch");
     qmlRegisterType<UtilityBackend>("org.kriscc", 1, 0, "UtilityBackend");
@@ -77,6 +81,7 @@ int main(int argc, char *argv[])
     SoftwareBackend softwareBackend(&polkitHelper);
     SystemBackend systemBackend(&polkitHelper);
     CustomActionsBackend customActionsBackend;
+    RepositoryExportBackend repositoryExportBackend;
 
     QObject::connect(&rkBackend, &RkBackend::operationFinished, &bootcBackend,
                      [&bootcBackend](bool, const QString &) {
@@ -98,6 +103,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("SoftwareBackend"), &softwareBackend);
     engine.rootContext()->setContextProperty(QStringLiteral("SystemBackend"), &systemBackend);
     engine.rootContext()->setContextProperty(QStringLiteral("CustomActionsBackend"), &customActionsBackend);
+    engine.rootContext()->setContextProperty(QStringLiteral("RepositoryExportBackend"), &repositoryExportBackend);
     engine.rootContext()->setContextProperty(QStringLiteral("KrisccStartHidden"), startHidden);
     const bool smokeTest = qEnvironmentVariableIsSet("KRISCC_SMOKE_TEST");
     engine.rootContext()->setContextProperty(QStringLiteral("KrisccSmokeTest"), smokeTest);

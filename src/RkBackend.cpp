@@ -1,13 +1,10 @@
 #include "RkBackend.h"
 
 #include "PolkitHelper.h"
+#include "Validators.h"
+#include "ContractParsers.h"
 
 #include <QFileInfo>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QJsonParseError>
-#include <QRegularExpression>
 #include <QTimer>
 
 namespace {
@@ -44,7 +41,6 @@ RkBackend::RkBackend(PolkitHelper *polkit, QObject *parent)
         });
     }
 
-    QTimer::singleShot(0, this, &RkBackend::refreshStatus);
 }
 
 bool RkBackend::canSync() const
@@ -181,46 +177,33 @@ bool RkBackend::forget(const QString &packageName)
 
 void RkBackend::parseStatus(const QByteArray &data)
 {
-    QJsonParseError parseError;
-    const QJsonDocument document = QJsonDocument::fromJson(data, &parseError);
-    if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
-        finishStatusError(tr("rk status --json non valido: %1").arg(parseError.errorString()));
-        return;
-    }
-
-    const QJsonObject object = document.object();
-    if (object.value(QStringLiteral("schema")).toInt(-1) != 1) {
-        finishStatusError(tr("Versione del contratto rk status non supportata."));
-        return;
-    }
-
-    const QString overlay = object.value(QStringLiteral("overlay")).toString();
-    if (overlay != QStringLiteral("ready") && overlay != QStringLiteral("degraded")) {
-        finishStatusError(tr("Stato overlay rk non riconosciuto."));
-        return;
-    }
-    if (!object.value(QStringLiteral("pending_recovery")).isBool()
-        || !object.value(QStringLiteral("needs_sync")).isBool()
-        || !object.value(QStringLiteral("requests")).isArray()) {
-        finishStatusError(tr("rk status --json è incompleto."));
-        return;
-    }
-
-    QStringList requests;
-    for (const QJsonValue &value : object.value(QStringLiteral("requests")).toArray()) {
-        if (!value.isString() || !validPackageName(value.toString())) {
-            finishStatusError(tr("rk status contiene una richiesta pacchetto non valida."));
+    const auto parsed = ContractParsers::parseRkStatus(data);
+    if (!parsed.ok()) {
+        using Error = ContractParsers::Error;
+        switch (parsed.error) {
+        case Error::InvalidJson:
+            finishStatusError(tr("rk status --json non valido."));
             return;
+        case Error::UnsupportedContract:
+            finishStatusError(tr("Versione del contratto rk status non supportata."));
+            return;
+        case Error::InvalidShape:
+            finishStatusError(tr("rk status --json è incompleto."));
+            return;
+        case Error::InvalidValue:
+            finishStatusError(tr("rk status contiene valori non riconosciuti."));
+            return;
+        case Error::None:
+            break;
         }
-        requests.append(value.toString());
     }
 
-    m_statusText = QString::fromUtf8(document.toJson(QJsonDocument::Indented)).trimmed();
+    m_statusText = parsed.formatted;
     m_errorText.clear();
-    m_overlayState = overlay;
-    m_pendingRecovery = object.value(QStringLiteral("pending_recovery")).toBool();
-    m_needsSync = object.value(QStringLiteral("needs_sync")).toBool();
-    m_requests = requests;
+    m_overlayState = parsed.overlay;
+    m_pendingRecovery = parsed.pendingRecovery;
+    m_needsSync = parsed.needsSync;
+    m_requests = parsed.requests;
     m_statusValid = true;
     emit stateChanged();
 }
@@ -239,9 +222,7 @@ void RkBackend::finishStatusError(const QString &message)
 
 bool RkBackend::validPackageName(const QString &packageName) const
 {
-    static const QRegularExpression pattern(
-        QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._+:-]{0,127}$"));
-    return pattern.match(packageName).hasMatch();
+    return Validators::packageName(packageName);
 }
 
 void RkBackend::startPrivileged(const QStringList &args)
@@ -255,5 +236,25 @@ void RkBackend::startPrivileged(const QStringList &args)
     m_operationOutput.clear();
     m_operationLines.clear();
     emit operationStateChanged();
-    m_polkit->execute(QStringLiteral("/usr/bin/rk"), args);
+    QStringList adminArgs;
+    if (args == QStringList{QStringLiteral("sync")}) {
+        adminArgs << QStringLiteral("rk-sync");
+    } else if (args.size() == 2
+               && (args.at(0) == QStringLiteral("add")
+                   || args.at(0) == QStringLiteral("rm")
+                   || args.at(0) == QStringLiteral("forget"))) {
+        const QString verb = args.at(0);
+        adminArgs << (verb == QStringLiteral("add") ? QStringLiteral("rk-add")
+                    : verb == QStringLiteral("rm") ? QStringLiteral("rk-rm")
+                                                   : QStringLiteral("rk-forget"))
+                  << args.at(1);
+    } else {
+        m_operationOwned = false;
+        m_operationRunning = false;
+        m_operationState = QStringLiteral("error");
+        m_operationOutput = tr("Operazione rk non valida.");
+        emit operationStateChanged();
+        return;
+    }
+    m_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin"), adminArgs);
 }

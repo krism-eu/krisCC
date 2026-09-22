@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as Controls
+import QtQuick.Controls.Basic as Basic
 import org.kde.kirigami as Kirigami
 import org.kriscc
 
@@ -20,8 +21,8 @@ Kirigami.ApplicationWindow {
         { section: 2, label: qsTr("Flatpak"), icon: "applications-all" },
         { section: 3, label: qsTr("Container"), icon: "package" },
         { section: 4, label: qsTr("Sistema"), icon: "computer" },
-        { section: 6, label: qsTr("Backup e Recovery"), icon: "document-save-all" },
-        { section: 5, label: qsTr("Comandi"), icon: "utilities-terminal" }
+        { section: 5, label: qsTr("Backup e Recovery"), icon: "document-save-all" },
+        { section: 6, label: qsTr("Comandi"), icon: "utilities-terminal" }
     ]
 
     pageStack.globalToolBar.style: Kirigami.ApplicationHeaderStyle.None
@@ -52,8 +53,8 @@ Kirigami.ApplicationWindow {
         else if (pageId === "flatpak") showIndex(2)
         else if (pageId === "podman") showIndex(3)
         else if (pageId === "system" || pageId === "bootc" || pageId === "tools") showIndex(4)
-        else if (pageId === "commands") showIndex(5)
-        else if (pageId === "recovery") showIndex(6)
+        else if (pageId === "recovery") showIndex(5)
+        else if (pageId === "commands") showIndex(6)
         else showIndex(0)
     }
 
@@ -120,6 +121,7 @@ Kirigami.ApplicationWindow {
                             hoverEnabled: true
                             leftPadding: Kirigami.Units.largeSpacing
                             rightPadding: Kirigami.Units.largeSpacing
+                            Accessible.name: modelData.label
                             onClicked: root.showIndex(modelData.section)
 
                             contentItem: RowLayout {
@@ -182,7 +184,7 @@ Kirigami.ApplicationWindow {
                         Layout.preferredHeight: 42
                         text: qsTr("Informazioni")
                         icon.name: "help-about"
-                        onClicked: root.showIndex(4)
+                        onClicked: informationDialog.open()
                     }
                 }
             }
@@ -205,34 +207,37 @@ Kirigami.ApplicationWindow {
                     Layout.preferredHeight: 72
                     color: Kirigami.Theme.backgroundColor
 
-                    RowLayout {
-                        anchors.fill: parent
+                    ColumnLayout {
+                        anchors.left: parent.left
                         anchors.leftMargin: UiMetrics.pageMargin
-                        anchors.rightMargin: UiMetrics.pageMargin
+                        anchors.right: versionLabel.left
+                        anchors.rightMargin: Kirigami.Units.largeSpacing
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 1
 
-                        ColumnLayout {
+                        Controls.Label {
                             Layout.fillWidth: true
-                            spacing: 1
-                            Controls.Label {
-                                text: root.sectionTitle(root.currentSection)
-                                font.bold: true
-                                font.pointSize: Kirigami.Theme.defaultFont.pointSize + 3
-                            }
-                            Controls.Label {
-                                text: qsTr("KrisOS Control Center")
-                                opacity: UiMetrics.secondaryOpacity
-                            }
+                            text: root.sectionTitle(root.currentSection)
+                            font.bold: true
+                            font.pointSize: Kirigami.Theme.defaultFont.pointSize + 3
+                            elide: Text.ElideRight
                         }
-
-                        ColumnLayout {
-                            spacing: 1
-                            Controls.Label {
-                                Layout.alignment: Qt.AlignRight
-                                text: qsTr("v%1").arg(Qt.application.version)
-                                opacity: UiMetrics.secondaryOpacity
-                            }
-
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            text: qsTr("KrisOS Control Center")
+                            opacity: UiMetrics.secondaryOpacity
+                            elide: Text.ElideRight
                         }
+                    }
+
+                    Controls.Label {
+                        id: versionLabel
+                        anchors.right: parent.right
+                        anchors.rightMargin: UiMetrics.pageMargin
+                        anchors.verticalCenter: parent.verticalCenter
+                        horizontalAlignment: Text.AlignRight
+                        text: qsTr("v%1").arg(Qt.application.version)
+                        opacity: UiMetrics.secondaryOpacity
                     }
 
                     Rectangle {
@@ -301,7 +306,7 @@ Kirigami.ApplicationWindow {
                         property bool visited: false
                         active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 5)
                         onLoaded: Qt.callLater(function() { visited = true })
-                        sourceComponent: Component { CommandsModule { Layout.fillWidth: true; Layout.fillHeight: true } }
+                        sourceComponent: Component { RecoveryModule { Layout.fillWidth: true; Layout.fillHeight: true } }
                     }
                     Loader {
                         Layout.fillWidth: true
@@ -309,9 +314,39 @@ Kirigami.ApplicationWindow {
                         property bool visited: false
                         active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 6)
                         onLoaded: Qt.callLater(function() { visited = true })
-                        sourceComponent: Component { RecoveryModule { Layout.fillWidth: true; Layout.fillHeight: true } }
+                        sourceComponent: Component { CommandsModule { Layout.fillWidth: true; Layout.fillHeight: true } }
                     }
                 }
+            }
+        }
+    }
+
+    Controls.Dialog {
+        id: informationDialog
+        modal: true
+        parent: Controls.Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 34,
+                        parent ? parent.width - Kirigami.Units.largeSpacing * 2
+                               : Kirigami.Units.gridUnit * 34)
+        title: qsTr("Informazioni")
+        standardButtons: Controls.Dialog.Close
+        contentItem: ColumnLayout {
+            spacing: Kirigami.Units.smallSpacing
+            Basic.TextArea {
+                id: informationText
+                Layout.fillWidth: true
+                Layout.preferredHeight: Kirigami.Units.gridUnit * 15
+                readOnly: true
+                selectByMouse: true
+                wrapMode: Text.Wrap
+                text: informationDialog.visible ? SystemBackend.quickSystemInfo() : ""
+            }
+            Controls.Button {
+                Layout.alignment: Qt.AlignRight
+                text: qsTr("Copia")
+                icon.name: "edit-copy"
+                onClicked: SystemBackend.copyToClipboard(informationText.text)
             }
         }
     }

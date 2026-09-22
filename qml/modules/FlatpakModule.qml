@@ -4,39 +4,26 @@ import QtQuick.Controls as Controls
 import org.kde.kirigami as Kirigami
 import org.kriscc
 
-Kirigami.ScrollablePage {
+Kirigami.Page {
     id: root
     padding: UiMetrics.pageMargin
     title: qsTr("Flatpak")
 
     UtilityBackend { id: utilityBackend }
+    UtilityBackend { id: systemScopeBackend }
     property string mode: "search"
     property string lastQuery: ""
     property bool refreshUpdatesAfterAction: false
     property bool refreshSearchAfterInstall: false
     property bool refreshRemotesAfterAdd: false
     property bool refreshInstalledAfterAction: false
+    property bool systemScopeChecked: false
 
-    function expectedOperationId() {
-        return "flatpak." + root.mode
-    }
-
-    function rows() {
-        if (utilityBackend.busy || utilityBackend.resultState !== "success"
-                || utilityBackend.operationId !== root.expectedOperationId() || !utilityBackend.output)
-            return []
-        var lines = utilityBackend.output.split("\n")
-        var result = []
-        for (var i = 0; i < lines.length; ++i) {
-            var line = lines[i].trim()
-            if (!line)
-                continue
-            var fields = line.split("\t")
-            if (fields.length < 2)
-                continue
-            result.push(fields)
-        }
-        return result
+    function refreshSystemScope() {
+        if (!SystemBackend.programAvailable("flatpak") || systemScopeBackend.busy)
+            return
+        root.systemScopeChecked = true
+        systemScopeBackend.runFlatpak("system-installed", "")
     }
 
     function modeIndex(newMode) {
@@ -75,6 +62,9 @@ Kirigami.ScrollablePage {
         utilityBackend.runFlatpak("remove", appId)
     }
 
+    onVisibleChanged: if (visible && !root.systemScopeChecked) root.refreshSystemScope()
+    Component.onCompleted: if (visible) root.refreshSystemScope()
+
     Connections {
         target: utilityBackend
         function onStateChanged() {
@@ -105,14 +95,8 @@ Kirigami.ScrollablePage {
     }
 
     ColumnLayout {
-        width: parent.width
+        anchors.fill: parent
         spacing: Kirigami.Units.largeSpacing
-
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Kirigami.Units.smallSpacing
-            PageIntro { title: root.title; subtitle: qsTr("Ricerca, installazione e aggiornamenti delle applicazioni Flatpak nel tuo profilo utente.") }
-        }
 
         Controls.TabBar {
             id: flatpakTabs
@@ -169,7 +153,7 @@ Kirigami.ScrollablePage {
             Controls.Button {
                 text: qsTr("Aggiorna tutto")
                 icon.name: "system-software-update"
-                enabled: !utilityBackend.busy && root.rows().length > 0
+                enabled: !utilityBackend.busy && utilityBackend.rows.length > 0
                 onClicked: updateAllDialog.open()
             }
         }
@@ -211,8 +195,18 @@ Kirigami.ScrollablePage {
 
         Kirigami.InlineMessage {
             Layout.fillWidth: true
+            visible: root.systemScopeChecked
+                     && !systemScopeBackend.busy
+                     && systemScopeBackend.resultState === "success"
+                     && systemScopeBackend.rows.length > 0
+            type: Kirigami.MessageType.Information
+            text: qsTr("Sono presenti %1 applicazioni Flatpak installate a livello di sistema. Questa pagina gestisce solo il profilo utente.").arg(systemScopeBackend.rows.length)
+        }
+
+        Kirigami.InlineMessage {
+            Layout.fillWidth: true
             visible: !utilityBackend.busy && utilityBackend.operationId.indexOf("flatpak.") === 0
-                     && utilityBackend.resultState !== "idle" && utilityBackend.output.length > 0 && root.rows().length === 0
+                     && utilityBackend.resultState !== "idle" && utilityBackend.output.length > 0 && utilityBackend.rows.length === 0
                      && !(root.mode === "search" && root.lastQuery.length < 2)
             type: utilityBackend.resultState === "success" ? Kirigami.MessageType.Information : Kirigami.MessageType.Error
             text: utilityBackend.output
@@ -220,11 +214,11 @@ Kirigami.ScrollablePage {
 
         ListView {
             Layout.fillWidth: true
-            Layout.preferredHeight: contentHeight
-            interactive: false
+            Layout.fillHeight: true
+            interactive: true
             clip: true
             spacing: Kirigami.Units.smallSpacing
-            model: root.mode === "search" && root.lastQuery.length < 2 ? [] : root.rows()
+            model: root.mode === "search" && root.lastQuery.length < 2 ? [] : utilityBackend.rows
 
             delegate: Kirigami.AbstractCard {
                 required property var modelData
@@ -241,6 +235,8 @@ Kirigami.ScrollablePage {
                             Layout.preferredHeight: Kirigami.Units.iconSizes.large
                             Layout.alignment: Qt.AlignTop
                             source: {
+                                if (root.mode === "remotes")
+                                    return "network-server"
                                 var appId = root.mode === "search" ? (modelData[2] || "") : (modelData[1] || "")
                                 var resolved = SystemBackend.flatpakIconPath(appId)
                                 return resolved.length > 0 ? resolved : "package-x-generic"
@@ -290,6 +286,14 @@ Kirigami.ScrollablePage {
 
                         Controls.Button {
                             visible: root.mode === "installed" && modelData.length >= 2
+                            text: qsTr("Avvia")
+                            icon.name: "media-playback-start"
+                            enabled: !utilityBackend.busy
+                            onClicked: SystemBackend.launchFlatpak(modelData[1])
+                        }
+
+                        Controls.Button {
+                            visible: root.mode === "installed" && modelData.length >= 2
                             text: qsTr("Rimuovi")
                             icon.name: "edit-delete"
                             enabled: !utilityBackend.busy
@@ -321,7 +325,7 @@ Kirigami.ScrollablePage {
             Layout.fillWidth: true
             visible: root.mode === "search" && root.lastQuery.length >= 2 && !utilityBackend.busy
                   && utilityBackend.operationId === "flatpak.search" && utilityBackend.resultState === "success"
-                  && root.rows().length === 0
+                  && utilityBackend.rows.length === 0
             type: Kirigami.MessageType.Information
             text: qsTr("Nessun risultato.")
         }
@@ -330,7 +334,7 @@ Kirigami.ScrollablePage {
             Layout.fillWidth: true
             visible: root.mode === "updates" && !utilityBackend.busy
                   && utilityBackend.operationId === "flatpak.updates" && utilityBackend.resultState === "success"
-                  && root.rows().length === 0
+                  && utilityBackend.rows.length === 0
             type: Kirigami.MessageType.Positive
             text: qsTr("Nessun aggiornamento Flatpak disponibile.")
         }

@@ -1,4 +1,5 @@
 #include "CustomActionsBackend.h"
+#include "ProcessRunner.h"
 
 #include <QDir>
 #include <QFile>
@@ -11,10 +12,8 @@
 #include <QSaveFile>
 #include <QSet>
 #include <QStandardPaths>
-#include <QTimer>
 #include <QUuid>
 
-#include <signal.h>
 #include <unistd.h>
 
 namespace {
@@ -22,7 +21,6 @@ constexpr qsizetype kMaxActions = 100;
 constexpr qsizetype kMaxName = 80;
 constexpr qsizetype kMaxDescription = 240;
 constexpr qsizetype kMaxScript = 64 * 1024;
-constexpr qsizetype kMaxOutput = 128 * 1024;
 constexpr int kActionTimeoutMs = 30 * 60 * 1000;
 const QString kShell = QStringLiteral("/usr/bin/bash");
 }
@@ -33,13 +31,7 @@ CustomActionsBackend::CustomActionsBackend(QObject *parent)
     reload();
 }
 
-CustomActionsBackend::~CustomActionsBackend()
-{
-    if (m_process && m_process->state() != QProcess::NotRunning) {
-        signalProcess(true);
-        m_process->waitForFinished(1000);
-    }
-}
+CustomActionsBackend::~CustomActionsBackend() = default;
 
 QString CustomActionsBackend::storagePath() const
 {
@@ -342,68 +334,60 @@ bool CustomActionsBackend::runAction(const QString &id)
     }
 
     const QVariantMap action = m_actions.at(index).toMap();
-    auto *process = new QProcess(this);
-    m_process = process;
+    auto *runner = new ProcessRunner(this);
+    m_runner = runner;
     m_running = true;
-    m_cancelRequested = false;
-    m_timedOut = false;
     m_runningId = id;
     m_output.clear();
     m_errorText.clear();
     m_resultState = QStringLiteral("running");
     emit stateChanged();
 
-    process->setWorkingDirectory(QDir::homePath());
-    process->setProcessChannelMode(QProcess::MergedChannels);
-    process->setChildProcessModifier([] {
-        (void)::setsid();
+    connect(runner, &ProcessRunner::outputReady, this, [this, runner](const QByteArray &data) {
+        if (runner == m_runner)
+            appendOutput(data);
     });
-
-    connect(process, &QProcess::readyReadStandardOutput, this, [this, process] {
-        if (process == m_process)
-            appendOutput(process->readAllStandardOutput());
-    });
-    connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-            [this, process](int exitCode, QProcess::ExitStatus status) {
-        if (process != m_process)
+    connect(runner, &ProcessRunner::finished, this,
+            [this, runner](ProcessRunner::Outcome outcome, int exitCode,
+                           const QByteArray &, const QByteArray &, const QString &error) {
+        if (runner != m_runner)
             return;
-        appendOutput(process->readAllStandardOutput());
-        process->deleteLater();
-        m_process = nullptr;
-        if (m_timedOut)
-            finish(QStringLiteral("timeout"), tr("Tempo massimo di 30 minuti superato."));
-        else if (m_cancelRequested)
-            finish(QStringLiteral("cancelled"), tr("Comando annullato."));
-        else if (status == QProcess::NormalExit && exitCode == 0)
+        m_runner = nullptr;
+        runner->deleteLater();
+        switch (outcome) {
+        case ProcessRunner::Success:
             finish(QStringLiteral("success"));
-        else
-            finish(QStringLiteral("error"),
-                   tr("Comando terminato con codice %1.").arg(exitCode));
-    });
-    connect(process, &QProcess::errorOccurred, this,
-            [this, process](QProcess::ProcessError error) {
-        if (process != m_process || error != QProcess::FailedToStart)
-            return;
-        const QString reason = process->errorString();
-        process->deleteLater();
-        m_process = nullptr;
-        finish(QStringLiteral("error"), tr("Impossibile avviare lo script: %1").arg(reason));
+            break;
+        case ProcessRunner::TimedOut:
+            finish(QStringLiteral("timeout"), tr("Tempo massimo di 30 minuti superato."));
+            break;
+        case ProcessRunner::Cancelled:
+            finish(QStringLiteral("cancelled"), tr("Comando annullato."));
+            break;
+        case ProcessRunner::FailedToStart:
+            finish(QStringLiteral("error"), tr("Impossibile avviare lo script: %1").arg(error));
+            break;
+        case ProcessRunner::ExitError:
+            finish(QStringLiteral("error"), tr("Comando terminato con codice %1.").arg(exitCode));
+            break;
+        }
     });
 
-    process->start(kShell, {QStringLiteral("--noprofile"), QStringLiteral("--norc"),
-                            QStringLiteral("-c"),
-                            action.value(QStringLiteral("script")).toString()});
-
-    QTimer::singleShot(kActionTimeoutMs, process, [this, process] {
-        if (process != m_process || process->state() == QProcess::NotRunning)
-            return;
-        m_timedOut = true;
-        signalProcess(false);
-        QTimer::singleShot(2000, process, [this, process] {
-            if (process == m_process && process->state() != QProcess::NotRunning)
-                signalProcess(true);
-        });
-    });
+    ProcessRunner::Options options;
+    options.program = kShell;
+    options.arguments = {QStringLiteral("--noprofile"), QStringLiteral("--norc"),
+                         QStringLiteral("-c"), action.value(QStringLiteral("script")).toString()};
+    options.workingDirectory = QDir::homePath();
+    options.timeoutMs = kActionTimeoutMs;
+    options.maxOutputBytes = 128 * 1024;
+    options.mergedChannels = true;
+    options.processGroup = true;
+    if (!runner->start(options)) {
+        m_runner = nullptr;
+        runner->deleteLater();
+        finish(QStringLiteral("error"), tr("Impossibile inizializzare lo script."));
+        return false;
+    }
     return true;
 }
 
@@ -412,8 +396,9 @@ void CustomActionsBackend::appendOutput(const QByteArray &data)
     if (data.isEmpty())
         return;
     m_output += QString::fromUtf8(data);
-    if (m_output.size() > kMaxOutput)
-        m_output = tr("[output precedente omesso]\n") + m_output.right(kMaxOutput);
+    constexpr qsizetype maxOutput = 128 * 1024;
+    if (m_output.size() > maxOutput)
+        m_output = tr("[output precedente omesso]\n") + m_output.right(maxOutput);
     emit stateChanged();
 }
 
@@ -430,28 +415,8 @@ void CustomActionsBackend::finish(const QString &state, const QString &message)
     emit stateChanged();
 }
 
-void CustomActionsBackend::signalProcess(bool force)
-{
-    if (!m_process || m_process->state() == QProcess::NotRunning)
-        return;
-    const qint64 pid = m_process->processId();
-    if (pid > 0 && ::kill(-pid, force ? SIGKILL : SIGTERM) == 0)
-        return;
-    if (force)
-        m_process->kill();
-    else
-        m_process->terminate();
-}
-
 void CustomActionsBackend::cancel()
 {
-    if (!m_process || !m_running)
-        return;
-    m_cancelRequested = true;
-    signalProcess(false);
-    const QPointer<QProcess> process = m_process;
-    QTimer::singleShot(2000, this, [this, process] {
-        if (process && process == m_process && process->state() != QProcess::NotRunning)
-            signalProcess(true);
-    });
+    if (m_runner && m_running)
+        m_runner->cancel();
 }
