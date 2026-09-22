@@ -1,5 +1,5 @@
 Name:           krisCC
-Version:        0.8.0
+Version:        0.8.1
 Release:        1%{?dist}
 Summary:        krisCC personal control center for KrisOS and Fedora bootc
 License:        MIT
@@ -54,11 +54,17 @@ Settings.
 %{_datadir}/icons/hicolor/scalable/apps/krisCC.svg
 
 %changelog
+* Tue Sep 22 2026 krism-eu - 0.8.1-1
+- Restore the proven minimal Flatpak remote name/url contract from the 0.7 integration line
+- Keep repository source export in GitHub CI only and remove it from the Control Center runtime
+- Keep the live Dashboard network card and the X.Y.Z-only public version contract
+- Repair the semantic release audit that blocked the failed 0.8.0 candidate
+
 * Mon Sep 21 2026 krism-eu - 0.8.0-1
 - Keep the application version strictly X.Y.Z while RPM Release stays packaging-only
 - Attach the exact generating source tree as a single text artifact beside each candidate RPM
 - Start the 0.8 development line with user-facing semantic versions only
-- Carry forward structural hardening, live network health and repository export
+- Carry forward structural hardening and live network health
 - Keep RPM Release as internal Fedora packaging metadata
 
 * Mon Sep 21 2026 krism-eu - 0.7.1-5
@@ -75,7 +81,6 @@ Settings.
 * Mon Sep 21 2026 krism-eu - 0.7.1-3
 - Accept the real Flatpak remotes contract while keeping strict parsing elsewhere
 - Fill the Dashboard health grid with live interface/IP state and a colored connection indicator
-- Export any active public krisCC/KrisOS branch to one owner-private text file in Home
 - Remove the remaining duplicate Commands page heading
 
 * Mon Sep 21 2026 krism-eu - 0.7.1-2

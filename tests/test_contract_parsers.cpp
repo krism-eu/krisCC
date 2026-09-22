@@ -70,6 +70,15 @@ private slots:
         QCOMPARE(remotes.values.at(0).toStringList().size(), 4);
         QCOMPARE(remotes.values.at(0).toStringList().at(3), QString());
 
+        const auto minimalRemotes = ContractParsers::parseFlatpakTsv(
+            "flathub\thttps://dl.flathub.org/repo/\n", 2);
+        QVERIFY(minimalRemotes.ok());
+        QCOMPARE(minimalRemotes.values.size(), 1);
+        QCOMPARE(minimalRemotes.values.at(0).toStringList(),
+                 QStringList({QStringLiteral("flathub"),
+                              QStringLiteral("https://dl.flathub.org/repo/")}));
+        QVERIFY(!ContractParsers::parseFlatpakTsv("broken\n", 2).ok());
+
         const auto podman = ContractParsers::parsePodmanJson("[{\"Names\":[\"demo\"],\"State\":\"running\",\"Size\":{\"rootFsSize\":2048,\"rwSize\":512}}]");
         QVERIFY(podman.ok());
         QCOMPARE(podman.values.size(), 1);

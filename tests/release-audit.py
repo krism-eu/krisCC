@@ -7,22 +7,29 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+
 def read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
+
 
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise AssertionError(message)
 
+
 version_cfg = read("cmake/KrisCCVersion.cmake")
 spec = read("packaging/krisCC.spec")
-m_v = re.search(r'KRISCC_VERSION\\s+"([^"]+)"', version_cfg)
-m_r = re.search(r'^Release:[ \\t]+([0-9]+)%\\{\\?dist\\}', spec, re.MULTILINE)
+m_v = re.search(r'KRISCC_VERSION\s+"([^"]+)"', version_cfg)
+m_r = re.search(r'^Release:[ \t]+([0-9]+)%\{\?dist\}', spec, re.MULTILINE)
 require(m_v and m_r, "missing canonical krisCC version or RPM release")
 VERSION, RELEASE = m_v.group(1), m_r.group(1)
+require(re.fullmatch(r'[0-9]+\.[0-9]+\.[0-9]+', VERSION) is not None,
+        "public version must be exactly X.Y.Z")
+require(RELEASE == "1", "RPM Release is packaging-only and must stay 1")
 
 cmake = read("CMakeLists.txt")
 workflow = read(".github/workflows/build.yml")
+main_cpp = read("src/main.cpp")
 polkit_cpp = read("src/PolkitHelper.cpp")
 admin_cpp = read("src/AdminHelper.cpp")
 admin_policy = read("src/AdminPolicy.cpp")
@@ -34,6 +41,7 @@ system_cpp = read("src/SystemBackend.cpp")
 software_qml = read("qml/modules/SoftwareModule.qml")
 flatpak_qml = read("qml/modules/FlatpakModule.qml")
 system_qml = read("qml/modules/SystemModule.qml")
+commands_qml = read("qml/modules/CommandsModule.qml")
 
 require(f'Version:        {VERSION}' in spec, "RPM Version differs from canonical version")
 require(f'Release:        {RELEASE}%{{?dist}}' in spec, "RPM Release differs from canonical release")
@@ -46,25 +54,19 @@ require(f'krisCC-{VERSION}-{RELEASE}.fc44.x86_64.rpm' in workflow,
 require(f'<release version="{VERSION}"' in read("data/org.kriscc.KrisCC.metainfo.xml"),
         "AppStream release is stale")
 
+# Structural contracts: real tests, shared validators/parsers/runners and narrow privilege boundary.
 require("src/Validators.cpp src/Validators.h" in cmake, "shared validators not linked")
 require("src/AdminPolicy.cpp src/AdminPolicy.h" in cmake, "shared admin policy not linked")
-require("kriscc-test-validators" in cmake
-        and "kriscc-test-admin-policy" in cmake
-        and "kriscc-test-process-runner" in cmake
-        and "kriscc-test-parsers" in cmake
-        and "kriscc-test-repository-export" in cmake,
-        "semantic unit tests are not wired into CTest")
 require("src/ProcessRunner.cpp src/ProcessRunner.h" in cmake,
         "shared user-level ProcessRunner not linked")
 require("src/ContractParsers.cpp src/ContractParsers.h" in cmake,
         "shared contract parsers not linked")
-require("src/RepositoryExportBackend.cpp src/RepositoryExportBackend.h" in cmake
-        and "src/RepositoryExportCore.cpp src/RepositoryExportCore.h" in cmake,
-        "repository export backend/core not linked")
-repo_export_core = read("src/RepositoryExportCore.cpp")
-require('QStringLiteral("krism-eu/krisCC")' in repo_export_core
-        and 'QStringLiteral("krism-eu/KrisOS")' in repo_export_core,
-        "repository export allowlist is incomplete")
+require("kriscc-test-validators" in cmake
+        and "kriscc-test-admin-policy" in cmake
+        and "kriscc-test-process-runner" in cmake
+        and "kriscc-test-parsers" in cmake,
+        "semantic unit tests are not wired into CTest")
+
 require("AdminPolicy::resolve" in admin_cpp and "AdminPolicy::resolve" in polkit_cpp,
         "client/root privileged allowlist does not share AdminPolicy")
 require('QStringLiteral("/usr/bin/rk")' in admin_policy
@@ -81,6 +83,7 @@ require('m_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin")' in rk_cp
         "krisCC rk mutations must pass through the supervised admin helper")
 require('m_polkit->execute(QStringLiteral("/usr/bin/rk")' not in rk_cpp,
         "krisCC must not launch privileged rk directly")
+
 process_runner = read("src/ProcessRunner.cpp")
 require("setStandardInputFile(QProcess::nullDevice())" in process_runner,
         "shared user-level ProcessRunner must close stdin")
@@ -128,6 +131,7 @@ for qml in ROOT.glob("qml/**/*.qml"):
     require(not re.search(r'/(?:usr/)?bin/(?:bootc|dnf5|efibootmgr|grub2-reboot)', qml_text),
             f"{qml}: privileged executable leaked into QML")
 
+# Confirmed UI/data-contract fixes.
 require("Layout.preferredHeight: contentHeight" not in software_qml,
         "Software list virtualization regressed")
 require("Layout.preferredHeight: contentHeight" not in flatpak_qml,
@@ -155,9 +159,13 @@ require("topMemoryProcesses" in read("src/SystemBackend.h"),
 require("networkState" in read("src/SystemBackend.h")
         and '"network"' in read("qml/modules/DashboardModule.qml"),
         "Dashboard network card contract is missing")
-require("parseFlatpakRemotes" in read("src/UtilityBackend.cpp")
-        and "parseFlatpakRemotes" in read("src/ContractParsers.cpp"),
-        "Flatpak remote parser is not contract-specific")
+require('QStringLiteral("--columns=name,url")' in utility_cpp,
+        "Flatpak remotes must use the minimal name/url contract")
+require("parseFlatpakTsv(message.toUtf8(), 2)" in utility_cpp,
+        "Flatpak remote output must use the fixed two-column parser")
+require('if (root.mode === "remotes")' in flatpak_qml
+        and 'return "network-server"' in flatpak_qml,
+        "Flatpak remote rows must not be treated as application IDs")
 require("anchors.right: parent.right" in read("qml/Main.qml")
         and "id: versionLabel" in read("qml/Main.qml"),
         "Version label is not anchored to the physical right edge")
@@ -172,8 +180,22 @@ require("partialFile.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteO
         "backup partial file must be created as 0600")
 require("JSON.parse(" not in read("qml/modules/PodmanModule.qml"),
         "Podman JSON parsing must stay in C++")
-require('split("\\n")' not in read("qml/modules/FlatpakModule.qml"),
+require('split("\\n")' not in flatpak_qml,
         "Flatpak TSV parsing must stay in C++")
+
+# Repository source export is a CI/release artifact only, never a Control Center feature.
+require("RepositoryExportBackend" not in cmake
+        and "RepositoryExportCore" not in cmake,
+        "repository export must not be linked into krisCC")
+require("RepositoryExportBackend" not in main_cpp,
+        "repository export backend must not be exposed to QML")
+require("RepositoryExportBackend" not in commands_qml
+        and "Esporta repository" not in commands_qml,
+        "repository export must not appear in the Control Center")
+require((ROOT / "tools/export-source-tree.py").is_file(),
+        "exact source-tree exporter is missing")
+require("artifacts/source" in workflow and "export-source-tree.py" in workflow,
+        "CI does not retain the exact source dump next to the RPM")
 
 wrapper = read("src/bootc-status.sh")
 require('exec /usr/bin/timeout --signal=TERM --kill-after=3s 30s /usr/bin/bootc status --format json --format-version=1' in wrapper,
@@ -183,15 +205,9 @@ require('"$@"' not in wrapper, "BootC wrapper accepts arbitrary arguments")
 for ignored in ("stage/", "artifacts/", "audit-build/", "*.rpm"):
     require(ignored in read(".gitignore"), f".gitignore missing {ignored}")
 
-require("RepositoryExportBackend" in read("qml/modules/CommandsModule.qml"),
-        "Commands page does not expose repository export")
 require("0.6 è" not in read("INTEGRAZIONE.md"), "integration docs are stale")
 require("release 0.5.1" not in read("i18n/README.md"), "i18n docs are stale")
 require("auth_admin_keep" not in read("data/org.kriscc.controlcenter.policy"),
         "Polkit retention is forbidden")
-require((ROOT / "tools/export-source-tree.py").is_file(),
-        "exact source-tree exporter is missing")
-require("artifacts/source" in workflow and "export-source-tree.py" in workflow,
-        "CI does not retain the exact source dump next to the RPM")
 
 print(f"release audit OK: krisCC {VERSION}-{RELEASE}")

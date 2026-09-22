@@ -2,7 +2,7 @@ name: Build
 
 on:
   push:
-    branches: [main]
+    branches: [main, '*.*']
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -127,7 +127,7 @@ jobs:
         run: |
           rpmspec -P packaging/krisCC.spec >/dev/null
           test "$(rpmspec -q --qf '%{NAME}\n' packaging/krisCC.spec | head -n1)" = "krisCC"
-          test "$(rpmspec -q --qf '%{VERSION}-%{RELEASE}\n' packaging/krisCC.spec | head -n1)" = "0.8.0-1.fc44"
+          test "$(rpmspec -q --qf '%{VERSION}-%{RELEASE}\n' packaging/krisCC.spec | head -n1)" = "0.8.1-1.fc44"
           ! rpmspec -P packaging/krisCC.spec | grep -Eq '^Provides:[[:space:]]+(kcc|k-controlc)([[:space:]=]|$)'
           ! rpmspec -P packaging/krisCC.spec | grep -Eq '^Obsoletes:[[:space:]]+(kcc|k-controlc)([[:space:]<=>]|$)'
           rpmspec -P packaging/krisCC.spec | grep -Eq '^Requires:[[:space:]]+dnf5-plugins([[:space:]]|$)'
@@ -144,7 +144,7 @@ jobs:
           test -f stage/usr/share/icons/hicolor/scalable/apps/krisCC.svg
           test -f stage/usr/share/polkit-1/actions/org.kriscc.controlcenter.policy
           test -f stage/usr/share/metainfo/org.kriscc.KrisCC.metainfo.xml
-          test "$(QT_QPA_PLATFORM=offscreen stage/usr/bin/krisCC --version)" = "krisCC 0.8.0"
+          test "$(QT_QPA_PLATFORM=offscreen stage/usr/bin/krisCC --version)" = "krisCC 0.8.1"
           tar -C stage -czf krisCC-stage.tar.gz .
 
       - name: Export exact source tree
@@ -155,12 +155,12 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts/source
           python3 tools/export-source-tree.py \
-            --output artifacts/source/krisCC-0.8.0-source.txt \
+            --output artifacts/source/krisCC-0.8.1-source.txt \
             --repository "$GITHUB_REPOSITORY" \
             --ref "$SOURCE_REF"
-          grep -Fq "COMMIT: $(git rev-parse HEAD)" artifacts/source/krisCC-0.8.0-source.txt
-          grep -Fq "===== FILE: CMakeLists.txt =====" artifacts/source/krisCC-0.8.0-source.txt
-          test -s artifacts/source/krisCC-0.8.0-source.txt
+          grep -Fq "COMMIT: $(git rev-parse HEAD)" artifacts/source/krisCC-0.8.1-source.txt
+          grep -Fq "===== FILE: CMakeLists.txt =====" artifacts/source/krisCC-0.8.1-source.txt
+          test -s artifacts/source/krisCC-0.8.1-source.txt
 
       - name: Build RPM
         shell: bash
@@ -176,8 +176,8 @@ jobs:
               --exclude='./stage' \
               --exclude='./artifacts' \
               --exclude='./krisCC-stage.tar.gz' \
-              --transform='s,^\./,krisCC-0.8.0/,' \
-              -czf "$HOME/rpmbuild/SOURCES/krisCC-0.8.0.tar.gz" .
+              --transform='s,^\./,krisCC-0.8.1/,' \
+              -czf "$HOME/rpmbuild/SOURCES/krisCC-0.8.1.tar.gz" .
             cp "$GITHUB_WORKSPACE/packaging/krisCC.spec" "$HOME/rpmbuild/SPECS/krisCC.spec"
             rpmbuild -ba "$HOME/rpmbuild/SPECS/krisCC.spec"
             mkdir -p "$GITHUB_WORKSPACE/artifacts/rpm" "$GITHUB_WORKSPACE/artifacts/srpm" "$GITHUB_WORKSPACE/artifacts/stage"
@@ -186,17 +186,17 @@ jobs:
             cp "$GITHUB_WORKSPACE/krisCC-stage.tar.gz" "$GITHUB_WORKSPACE/artifacts/stage/"
             cd "$GITHUB_WORKSPACE/artifacts/rpm"
             sha256sum krisCC-*.rpm > SHA256SUMS
-            awk '$2 == "krisCC-0.8.0-1.fc44.x86_64.rpm" { found++ } END { exit(found == 1 ? 0 : 1) }' SHA256SUMS
+            awk '$2 == "krisCC-0.8.1-1.fc44.x86_64.rpm" { found++ } END { exit(found == 1 ? 0 : 1) }' SHA256SUMS
           ) 2>&1 | tee "$GITHUB_WORKSPACE/artifacts/logs/rpmbuild.log"
 
       - name: Inspect built RPM artifact
         shell: bash
         run: |
           set -euxo pipefail
-          rpm_file='artifacts/rpm/krisCC-0.8.0-1.fc44.x86_64.rpm'
+          rpm_file='artifacts/rpm/krisCC-0.8.1-1.fc44.x86_64.rpm'
           test -f "$rpm_file"
           test "$(rpm -qp --qf '%{NAME}\n' "$rpm_file")" = "krisCC"
-          test "$(rpm -qp --qf '%{VERSION}-%{RELEASE}\n' "$rpm_file")" = "0.8.0-1.fc44"
+          test "$(rpm -qp --qf '%{VERSION}-%{RELEASE}\n' "$rpm_file")" = "0.8.1-1.fc44"
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/bin/krisCC'
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/admin'
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/bootc-status'
@@ -252,7 +252,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cmake -S . -B audit-build -G Ninja             -DCMAKE_BUILD_TYPE=Release             -DCMAKE_CXX_FLAGS='-Wall -Wextra -Wpedantic -Werror'
+          cmake -S . -B audit-build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_FLAGS='-Wall -Wextra -Wpedantic -Werror'
           cmake --build audit-build
 
       - name: QML lint
@@ -296,20 +296,19 @@ jobs:
           QT_FORCE_STDERR_LOGGING: "1"
         run: |
           set -euxo pipefail
-          rpm_file="$GITHUB_WORKSPACE/artifacts/rpm/krisCC-0.8.0-1.fc44.x86_64.rpm"
+          rpm_file="$GITHUB_WORKSPACE/artifacts/rpm/krisCC-0.8.1-1.fc44.x86_64.rpm"
           test -f "$rpm_file"
           (cd "$GITHUB_WORKSPACE/artifacts/rpm" && sha256sum -c SHA256SUMS)
           dnf -y install "$rpm_file"
-          test "$(rpm -q --qf '%{VERSION}-%{RELEASE}\n' krisCC)" = "0.8.0-1.fc44"
+          test "$(rpm -q --qf '%{VERSION}-%{RELEASE}\n' krisCC)" = "0.8.1-1.fc44"
           rpm -V krisCC
-          test "$(QT_QPA_PLATFORM=offscreen /usr/bin/krisCC --version)" = "krisCC 0.8.0"
+          test "$(QT_QPA_PLATFORM=offscreen /usr/bin/krisCC --version)" = "krisCC 0.8.1"
           test -x /usr/libexec/kriscc/admin
           test -x /usr/libexec/kriscc/bootc-status
           test -x /usr/libexec/kriscc/maintenance
           ! /usr/libexec/kriscc/admin invalid-operation
           ! /usr/libexec/kriscc/maintenance trash-home
           /usr/bin/krisCC
-
 
   release:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish_candidate
@@ -400,7 +399,7 @@ jobs:
             cd "$release_dir"
             sha256sum -c SHA256SUMS
           )
-          source_dump="artifacts/source/krisCC-0.8.0-source.txt"
+          source_dump="artifacts/source/krisCC-0.8.1-source.txt"
           test -s "$source_dump"
           gh release create "$TAG" \
             --repo "$GITHUB_REPOSITORY" \
