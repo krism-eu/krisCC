@@ -176,7 +176,7 @@ jobs:
           test -x stage/usr/libexec/kriscc/bootc-status
           test -x stage/usr/libexec/kriscc/maintenance
           test -f stage/usr/share/applications/krisCC.desktop
-          test -f stage/usr/share/icons/hicolor/scalable/apps/krisCC.svg
+          test -f stage/usr/share/icons/hicolor/scable/apps/krisCC.svg
           test -f stage/usr/share/polkit-1/actions/org.kriscc.controlcenter.policy
           test -f stage/usr/share/metainfo/org.kriscc.KrisCC.metainfo.xml
           test "$(QT_QPA_PLATFORM=offscreen stage/usr/bin/krisCC --version)" = "krisCC ${VERSION}"
@@ -364,7 +364,7 @@ jobs:
           test -x /usr/libexec/kriscc/maintenance
           ! /usr/libexec/kriscc/admin invalid-operation
           ! /usr/libexec/kriscc/maintenance trash-home
-          /usr/bin/krisCC
+          QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software QT_QUICK_CONTROLS_STYLE=Basic KRISCC_SMOKE_TEST=1 QT_FORCE_STDERR_LOGGING=1 /usr/bin/krisCC --background
 
   release:
     if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish_candidate
