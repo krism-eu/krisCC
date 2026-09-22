@@ -203,6 +203,15 @@ void UtilityBackend::clearResult()
 
 bool UtilityBackend::runBookmark(const QString &id)
 {
+    if (id == QStringLiteral("pipewire-restart"))
+        return start(QStringLiteral("systemctl"), {QStringLiteral("--user"), QStringLiteral("restart"), QStringLiteral("pipewire"), QStringLiteral("pipewire-pulse"), QStringLiteral("wireplumber")}, tr("Riavvio Audio PipeWire"), QStringLiteral("bookmark.pipewire-restart"), kShortQueryTimeoutMs);
+    if (id == QStringLiteral("journal-vacuum"))
+        return start(QStringLiteral("journalctl"), {QStringLiteral("--vacuum-size=150M")}, tr("Pulizia Journal Systemd"), QStringLiteral("bookmark.journal-vacuum"), kShortQueryTimeoutMs);
+    if (id == QStringLiteral("gpu-driver"))
+        return start(QStringLiteral("glxinfo"), {QStringLiteral("-B")}, tr("Info Driver GPU"), QStringLiteral("bookmark.gpu-driver"), kShortQueryTimeoutMs);
+    if (id == QStringLiteral("vulkan-info"))
+        return start(QStringLiteral("vulkaninfo"), {QStringLiteral("--summary")}, tr("Riepilogo Vulkan"), QStringLiteral("bookmark.vulkan-info"), kShortQueryTimeoutMs);
+
     if (id == QStringLiteral("failed-units"))
         return start(QStringLiteral("systemctl"), {QStringLiteral("--failed"), QStringLiteral("--no-pager"), QStringLiteral("--plain")}, tr("Unità systemd fallite"), QStringLiteral("bookmark.failed-units"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("user-failed-units"))
