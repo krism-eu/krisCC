@@ -404,12 +404,31 @@ QString SystemBackend::memorySummary() const
 
 QString SystemBackend::storageSummary() const
 {
-    QStorageInfo storage(QDir::homePath());
-    if (!storage.isValid() || !storage.isReady() || storage.bytesTotal() == 0)
-        storage = QStorageInfo(QStringLiteral("/var"));
-    if (!storage.isValid() || !storage.isReady() || storage.bytesTotal() == 0)
+    const auto summaryFor = [](const QString &path) -> QString {
+        QStorageInfo storage(path);
+        if (!storage.isValid() || !storage.isReady() || storage.bytesTotal() == 0)
+            return QString();
+        return QCoreApplication::translate("SystemBackend", "%1 liberi su %2")
+            .arg(humanGiB(storage.bytesAvailable()), humanGiB(storage.bytesTotal()));
+    };
+
+    QString home = summaryFor(QDir::homePath());
+    if (home.isEmpty())
+        home = summaryFor(QStringLiteral("/var/home"));
+
+    QString system = summaryFor(QStringLiteral("/sysroot"));
+    if (system.isEmpty())
+        system = summaryFor(QStringLiteral("/"));
+
+    if (home.isEmpty() && system.isEmpty())
         return tr("Non disponibile");
-    return tr("%1 liberi su %2").arg(humanGiB(storage.bytesAvailable()), humanGiB(storage.bytesTotal()));
+
+    QStringList lines;
+    if (!home.isEmpty())
+        lines.append(tr("Home: %1").arg(home));
+    if (!system.isEmpty())
+        lines.append(tr("Sistema: %1").arg(system));
+    return lines.join(QLatin1Char('\n'));
 }
 
 void SystemBackend::refreshDashboardState()
@@ -736,6 +755,11 @@ bool SystemBackend::openTemporaryFolder() const
 bool SystemBackend::openHomeFolder() const
 {
     return QDesktopServices::openUrl(QUrl::fromLocalFile(QDir::homePath()));
+}
+
+bool SystemBackend::openRootFolder() const
+{
+    return QDesktopServices::openUrl(QUrl::fromLocalFile(QStringLiteral("/")));
 }
 
 bool SystemBackend::programAvailable(const QString &program) const

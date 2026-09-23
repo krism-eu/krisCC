@@ -195,14 +195,17 @@ require("topMemoryProcesses" in read("src/SystemBackend.h"),
         "Dashboard top-memory model is missing")
 require("std::min<qsizetype>(10, entries.size())" in system_cpp,
         "Dashboard must expose the top ten RAM process groups")
-require('model: ["overlay", "sync", "selinux", "firewall",' in dashboard_qml
-        and '"cpu", "temperature", "storage", "network"]' in dashboard_qml,
-        "Dashboard status grid order changed")
-require('{ id: "system", title: qsTr("Sistema")' in dashboard_qml
-        and dashboard_qml.find('{ id: "system", title: qsTr("Sistema")')
-            < dashboard_qml.find('{ id: "flatpak", title: qsTr("Flatpak")')
+require('model: ["overlay", "sync", "selinux", "firewall", "storage", "network"]' in dashboard_qml,
+        "Dashboard six-tile status grid order changed")
+require('{ id: "system", title: qsTr("Sistema")' not in dashboard_qml
+        and dashboard_qml.find('{ id: "flatpak", title: qsTr("Flatpak")')
             < dashboard_qml.find('{ id: "software", title: qsTr("Software")'),
-        "Dashboard top module order must remain System/Flatpak/Software")
+        "Dashboard top row must start with Flatpak/Software and omit the redundant System tile")
+require('qsTr("CPU")' in dashboard_qml
+        and 'qsTr("Temperatura")' in dashboard_qml
+        and 'Layout.column: 2' in dashboard_qml
+        and 'Layout.row: 0' in dashboard_qml,
+        "Dashboard combined CPU/temperature card is missing from the third top column")
 require("memoryTotalMiB" not in dashboard_qml,
         "Dashboard RAM card must not show total/swap text")
 require("networkState" in read("src/SystemBackend.h")
@@ -210,16 +213,17 @@ require("networkState" in read("src/SystemBackend.h")
         "Dashboard network card contract is missing")
 require('SystemBackend.launchTool("kfind")' in dashboard_qml
         and "SystemBackend.openTemporaryFolder()" in dashboard_qml
-        and "SystemBackend.openHomeFolder()" in dashboard_qml,
-        "Dashboard quick actions lost KFind, temporary folder or Home")
+        and "SystemBackend.openHomeFolder()" in dashboard_qml
+        and "SystemBackend.openRootFolder()" in dashboard_qml,
+        "Dashboard quick actions lost KFind, temporary folder, Home or root filesystem")
 require('qsTr("Backup e Recovery")' not in dashboard_qml,
         "Dashboard quick actions must not duplicate Backup and Recovery")
 require('qsTr("Terminale")' in dashboard_qml
-        and dashboard_qml.find('Item { Layout.fillWidth: true }')
-            < dashboard_qml.rfind('qsTr("Terminale")'),
-        "Dashboard terminal shortcut must stay right-aligned")
+        and 'columns: width >= 900 ? 6' in dashboard_qml
+        and 'uniformCellWidths: true' in dashboard_qml,
+        "Dashboard quick actions must remain six equal-width buttons on wide layouts")
 require('"podman", title: qsTr("Container")' not in dashboard_qml,
-        "Dashboard lower module row must remain the three-column Software/Flatpak/System layout")
+        "Dashboard must not duplicate the Container navigation tile")
 require("Aggiorna Control Center" not in dashboard_qml
         and "checkControlCenterUpdate()" in commands_qml
         and 'openRequested("system")' in commands_qml
@@ -248,9 +252,14 @@ require('text: qsTr("Info Center")' in read("qml/Main.qml")
         and read("qml/Main.qml").find('text: qsTr("Info Center")')
             < read("qml/Main.qml").find('text: qsTr("Impostazioni Plasma")'),
         "Info Center must stay in the fixed sidebar above Plasma settings")
-require("Layout.horizontalStretchFactor: 2" in dashboard_qml
-        and "Layout.horizontalStretchFactor: 1" in dashboard_qml,
-        "Dashboard status/RAM one-third layout contract is missing")
+require("columns: 3" in dashboard_qml
+        and "Layout.rowSpan: 3" in dashboard_qml
+        and "Layout.column: 2" in dashboard_qml,
+        "Dashboard central area must use one aligned three-column grid")
+require('QStringLiteral("/sysroot")' in system_cpp
+        and 'tr("Home: %1")' in system_cpp
+        and 'tr("Sistema: %1")' in system_cpp,
+        "Dashboard storage tile must report both Home and system filesystem")
 require("Layout.maximumWidth: Layout.preferredWidth" in read("qml/modules/SoftwareModule.qml"),
         "Repository status/action columns are not fixed-width aligned")
 require("else if (tabs.currentIndex === 2) upgradesModel.loadUpgrades()" in software_qml

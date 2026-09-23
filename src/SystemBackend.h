@@ -108,6 +108,7 @@ public:
     Q_INVOKABLE bool launchTool(const QString &toolId) const;
     Q_INVOKABLE bool openTemporaryFolder() const;
     Q_INVOKABLE bool openHomeFolder() const;
+    Q_INVOKABLE bool openRootFolder() const;
     Q_INVOKABLE bool programAvailable(const QString &program) const;
     Q_INVOKABLE void checkControlCenterUpdate();
     Q_INVOKABLE void refreshServiceStates();
