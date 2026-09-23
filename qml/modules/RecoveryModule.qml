@@ -111,17 +111,12 @@ Kirigami.ScrollablePage {
                                 Kirigami.Icon {
                                     Layout.preferredWidth: 20
                                     Layout.preferredHeight: 20
-                                    source: modelData.included ? "dialog-ok-apply" : "list-remove"
+                                    source: "dialog-ok-apply"
                                 }
                                 Controls.Label {
                                     Layout.fillWidth: true
                                     font.bold: false
-                                    text: (modelData.included ? qsTr("Incluso: ") : qsTr("Escluso: ")) + modelData.path
-                                }
-                                Controls.Label {
-                                    visible: modelData.exists !== undefined
-                                    opacity: UiMetrics.secondaryOpacity
-                                    text: modelData.exists ? qsTr("presente") : qsTr("assente")
+                                    text: qsTr("Incluso: ") + modelData.path
                                 }
                             }
                         }

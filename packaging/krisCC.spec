@@ -61,6 +61,7 @@ Settings.
 - Keep Software upgrade enumeration lazy until the Aggiornabili tab is opened
 - Align the Dashboard on one three-column grid with combined CPU/temperature and dual storage status
 - Use six uniform quick actions and refresh the application icon
+- Finalize the Dashboard performance column and simplify backup previews to included content only
 
 * Wed Sep 23 2026 krism-eu - 0.7.4-1
 - Fail closed on incomplete tar backups and preflight archives before restore
