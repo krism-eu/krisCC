@@ -10,6 +10,8 @@ Kirigami.ScrollablePage {
     padding: UiMetrics.pageMargin
     title: qsTr("Comandi")
 
+    signal openRequested(string pageId)
+
     UtilityBackend { id: utilityBackend }
 
     property string pendingCustomId: ""
@@ -148,7 +150,7 @@ Kirigami.ScrollablePage {
                             wrapMode: Text.WordWrap
                             text: SystemBackend.controlCenterUpdateStatus.length > 0
                                   ? SystemBackend.controlCenterUpdateStatus
-                                  : qsTr("Controlla la release stable ufficiale di krisCC e, se disponibile, installa il relativo RPM.")
+                                  : qsTr("Controlla la release stable ufficiale di krisCC. Gli aggiornamenti del Control Center vengono applicati insieme all'immagine KrisOS.")
                             opacity: UiMetrics.secondaryOpacity
                         }
                         RowLayout {
@@ -160,11 +162,11 @@ Kirigami.ScrollablePage {
                                 onClicked: SystemBackend.checkControlCenterUpdate()
                             }
                             Controls.Button {
-                                text: qsTr("Aggiorna Control Center")
+                                text: qsTr("Aggiorna tramite KrisOS")
                                 icon.name: "system-software-update"
                                 enabled: SystemBackend.controlCenterUpdateAvailable
                                          && !SystemBackend.controlCenterUpdateBusy
-                                onClicked: controlCenterUpdateDialog.open()
+                                onClicked: root.openRequested("system")
                             }
                             Item { Layout.fillWidth: true }
                             Controls.Label {
@@ -424,25 +426,6 @@ Kirigami.ScrollablePage {
                 }
             }
         }
-    }
-
-    Controls.Dialog {
-        id: controlCenterUpdateDialog
-        modal: true
-        parent: Controls.Overlay.overlay
-        anchors.centerIn: parent
-        width: Math.min(Kirigami.Units.gridUnit * 30,
-                        parent ? parent.width - Kirigami.Units.largeSpacing * 2
-                               : Kirigami.Units.gridUnit * 30)
-        title: qsTr("Aggiornare il Control Center?")
-        standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
-        contentItem: Controls.Label {
-            Layout.fillWidth: true
-            wrapMode: Text.WordWrap
-            text: qsTr("Verrà installata la release stable krisCC %1 dal repository ufficiale. L'operazione richiede autorizzazione amministrativa.")
-                  .arg(SystemBackend.controlCenterLatestVersion)
-        }
-        onAccepted: SystemBackend.updateControlCenter()
     }
 
     Controls.Dialog {

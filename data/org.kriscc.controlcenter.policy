@@ -69,14 +69,6 @@
     <annotate key="org.freedesktop.policykit.exec.argv1">bootc-apply-downloaded</annotate>
   </action>
 
-  <action id="org.kriscc.controlcenter.cc.update">
-    <description>Update krisCC from the official stable release</description>
-    <message>Authentication is required to update the Control Center</message>
-    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/admin</annotate>
-    <annotate key="org.freedesktop.policykit.exec.argv1">cc-update</annotate>
-  </action>
-
   <action id="org.kriscc.controlcenter.repo.enable">
     <description>Enable a DNF repository</description>
     <message>Authentication is required to enable this DNF repository</message>

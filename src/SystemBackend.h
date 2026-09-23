@@ -109,7 +109,6 @@ public:
     Q_INVOKABLE bool openTemporaryFolder() const;
     Q_INVOKABLE bool programAvailable(const QString &program) const;
     Q_INVOKABLE void checkControlCenterUpdate();
-    Q_INVOKABLE bool updateControlCenter();
     Q_INVOKABLE void refreshServiceStates();
     Q_INVOKABLE bool restartService(const QString &service);
     Q_INVOKABLE void requestReboot();
@@ -164,7 +163,6 @@ private:
     void refreshTopMemoryProcesses();
     void refreshNetworkState();
     double readCpuTemperature() const;
-    void verifyInstalledControlCenterVersion();
 
     PolkitHelper *m_polkit = nullptr;
     QNetworkAccessManager *m_networkAccess = nullptr;
@@ -195,7 +193,6 @@ private:
     quint64 m_serviceRefreshGeneration = 0;
     bool m_controlCenterUpdateBusy = false;
     bool m_controlCenterUpdateAvailable = false;
-    bool m_controlCenterUpdateInstalling = false;
     QString m_controlCenterLatestVersion;
     QString m_controlCenterUpdateStatus;
     QPointer<ProcessRunner> m_backupRunner;

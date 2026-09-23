@@ -146,23 +146,6 @@ SystemBackend::SystemBackend(PolkitHelper *polkit, QObject *parent)
     m_resourceTimer->setInterval(2000);
     connect(m_resourceTimer, &QTimer::timeout, this, &SystemBackend::refreshResources);
 
-    if (m_polkit) {
-        connect(m_polkit, &PolkitHelper::finished, this,
-                [this](bool success, const QString &output) {
-            if (!m_controlCenterUpdateInstalling)
-                return;
-            m_controlCenterUpdateInstalling = false;
-            if (!success) {
-                m_controlCenterUpdateBusy = false;
-                m_controlCenterUpdateStatus = output.trimmed().isEmpty()
-                    ? tr("Aggiornamento del Control Center non riuscito.")
-                    : output.trimmed();
-                emit controlCenterUpdateChanged();
-                return;
-            }
-            verifyInstalledControlCenterVersion();
-        });
-    }
 }
 
 bool SystemBackend::canSelectNextBoot() const
@@ -842,7 +825,7 @@ void SystemBackend::checkControlCenterUpdate()
         m_controlCenterUpdateAvailable = comparison > 0;
         if (comparison > 0) {
             m_controlCenterUpdateStatus =
-                tr("Disponibile krisCC %1 (installata %2).")
+                tr("Disponibile krisCC %1 (installata %2). krisCC fa parte dell'immagine KrisOS: applica l'aggiornamento dalla sezione Sistema.")
                     .arg(latest, QCoreApplication::applicationVersion());
         } else if (comparison == 0) {
             m_controlCenterUpdateStatus =
@@ -854,67 +837,6 @@ void SystemBackend::checkControlCenterUpdate()
         }
         emit controlCenterUpdateChanged();
     });
-}
-
-bool SystemBackend::updateControlCenter()
-{
-    if (m_controlCenterUpdateBusy || !m_controlCenterUpdateAvailable
-        || m_controlCenterLatestVersion.isEmpty() || !m_polkit || m_polkit->running())
-        return false;
-
-    m_controlCenterUpdateBusy = true;
-    m_controlCenterUpdateInstalling = true;
-    m_controlCenterUpdateStatus =
-        tr("Installazione di krisCC %1 in corso…").arg(m_controlCenterLatestVersion);
-    emit controlCenterUpdateChanged();
-
-    m_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin"),
-                      {QStringLiteral("cc-update"), m_controlCenterLatestVersion});
-    return true;
-}
-
-void SystemBackend::verifyInstalledControlCenterVersion()
-{
-    auto *runner = new ProcessRunner(this);
-    connect(runner, &ProcessRunner::finished, this,
-            [this, runner](ProcessRunner::Outcome outcome, int,
-                           const QByteArray &stdoutData, const QByteArray &,
-                           const QString &) {
-        const QString installed = QString::fromUtf8(stdoutData).trimmed();
-        const QString expected = m_controlCenterLatestVersion + QStringLiteral("-1.fc44");
-        const bool verified = outcome == ProcessRunner::Success
-            && installed == expected;
-        runner->deleteLater();
-
-        m_controlCenterUpdateBusy = false;
-        if (verified) {
-            m_controlCenterUpdateAvailable = false;
-            m_controlCenterUpdateStatus =
-                tr("krisCC %1 installato. Chiudi e riapri il Control Center.")
-                    .arg(m_controlCenterLatestVersion);
-        } else {
-            m_controlCenterUpdateStatus =
-                tr("Installazione completata ma la versione installata non è stata verificata.");
-        }
-        emit controlCenterUpdateChanged();
-    });
-
-    ProcessRunner::Options options;
-    options.program = QStringLiteral("/usr/bin/rpm");
-    options.arguments = {QStringLiteral("-q"), QStringLiteral("--qf"),
-                         QStringLiteral("%{VERSION}-%{RELEASE}"),
-                         QStringLiteral("krisCC")};
-    options.timeoutMs = 30 * 1000;
-    options.maxOutputBytes = 16 * 1024;
-    options.mergedChannels = false;
-    options.processGroup = true;
-    if (!runner->start(options)) {
-        runner->deleteLater();
-        m_controlCenterUpdateBusy = false;
-        m_controlCenterUpdateStatus =
-            tr("Installazione completata ma non è stato possibile verificare la versione.");
-        emit controlCenterUpdateChanged();
-    }
 }
 
 void SystemBackend::refreshServiceStates()

@@ -39,6 +39,10 @@ flatpak_qml = read("qml/modules/FlatpakModule.qml")
 system_qml = read("qml/modules/SystemModule.qml")
 dashboard_qml = read("qml/modules/DashboardModule.qml")
 commands_qml = read("qml/modules/CommandsModule.qml")
+recovery_qml = read("qml/modules/RecoveryModule.qml")
+contract_parsers_h = read("src/ContractParsers.h")
+contract_parsers_cpp = read("src/ContractParsers.cpp")
+contract_parsers_test = read("tests/test_contract_parsers.cpp")
 
 require(f'Version:        {VERSION}' in spec, "RPM Version differs from canonical version")
 require('Release:        1%{?dist}' in spec,
@@ -104,10 +108,8 @@ require('QStringLiteral("/usr/bin/rk")' in admin_policy
         "AdminPolicy lost fixed executable mapping")
 require("/usr/bin/bash" not in admin_policy and "/usr/bin/sh" not in admin_policy,
         "AdminPolicy must never expose a root shell")
-require('QStringLiteral("cc-update")' in admin_policy
-        and 'https://github.com/krism-eu/krisCC/releases/download/v%1/%2' in admin_policy
-        and 'QStringLiteral("install"), QStringLiteral("--assumeyes"), url' in admin_policy,
-        "Control Center update is not constrained to the official versioned RPM")
+require('QStringLiteral("cc-update")' not in admin_policy,
+        "krisCC is image-owned and must not have a standalone privileged RPM updater")
 require("setStandardInputFile(QProcess::nullDevice())" in admin_cpp,
         "root helper stdin must be closed")
 require("SIGTERM" in admin_cpp and "SIGKILL" in admin_cpp and "return 124" in admin_cpp,
@@ -195,12 +197,19 @@ require('"podman", title: qsTr("Container")' not in dashboard_qml,
         "Dashboard lower module row must remain the three-column Software/Flatpak/System layout")
 require("Aggiorna Control Center" not in dashboard_qml
         and "checkControlCenterUpdate()" in commands_qml
-        and "updateControlCenter()" in commands_qml,
-        "Control Center updater must live in Commands, not Dashboard")
+        and 'openRequested("system")' in commands_qml
+        and "updateControlCenter()" not in commands_qml,
+        "Control Center release check must stay in Commands and route updates through KrisOS")
 require('QStringLiteral("--columns=name,url")' in utility_cpp,
         "Flatpak remotes must use the minimal name/url contract")
 require("parseFlatpakTsv(message.toUtf8(), 2)" in utility_cpp,
         "Flatpak remote output is not parsed as the fixed two-column contract")
+require("parseFlatpakRemotes" not in contract_parsers_h
+        and "parseFlatpakRemotes" not in contract_parsers_cpp
+        and "parseFlatpakRemotes" not in contract_parsers_test,
+        "dead legacy Flatpak remote parser returned")
+require("(?:rpm|i686|x86_64|noarch)" in recovery_qml,
+        "Recovery forget input must reject package suffixes rejected by Validators::packageName")
 require("anchors.right: parent.right" in read("qml/Main.qml")
         and "id: versionLabel" in read("qml/Main.qml"),
         "Version label is not anchored to the physical right edge")

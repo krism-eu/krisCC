@@ -314,7 +314,11 @@ Kirigami.ApplicationWindow {
                         property bool visited: false
                         active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 6)
                         onLoaded: Qt.callLater(function() { visited = true })
-                        sourceComponent: Component { CommandsModule { Layout.fillWidth: true; Layout.fillHeight: true } }
+                        sourceComponent: Component { CommandsModule {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            onOpenRequested: function(pageId) { root.openById(pageId) }
+                        } }
                     }
                 }
             }
