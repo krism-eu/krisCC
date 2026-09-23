@@ -115,6 +115,15 @@ require("setStandardInputFile(QProcess::nullDevice())" in process_runner,
         "shared user-level ProcessRunner must close stdin")
 require("ProcessRunner" in custom_cpp and "ProcessRunner" in utility_cpp,
         "custom actions and utility commands must use the shared ProcessRunner")
+require("ProcessRunner" in system_cpp
+        and "m_backupRunner" in read("src/SystemBackend.h")
+        and "kBackupVerifyTimeoutMs" in system_cpp
+        and "kBackupOperationTimeoutMs" in system_cpp,
+        "backup operations must use the bounded shared ProcessRunner")
+require("(exitCode == 0 || exitCode == 1)" not in system_cpp,
+        "tar exit code 1 must never be published as a valid backup")
+require('preflightOptions.arguments = {QStringLiteral("-tzf"), canonical};' in system_cpp,
+        "restore must gate extraction behind an archive preflight")
 
 require("options.mergedChannels = !structuredOutput;" in utility_cpp,
         "machine-readable utility output must be isolated from stderr")
@@ -182,6 +191,9 @@ require("Layout.horizontalStretchFactor: 2" in read("qml/modules/DashboardModule
         "RAM card is not explicitly wider than CPU/temperature cards")
 require("Layout.maximumWidth: Layout.preferredWidth" in read("qml/modules/SoftwareModule.qml"),
         "Repository status/action columns are not fixed-width aligned")
+require(re.search(r'requestAction\(\s*"repo-enable"', software_qml) is not None
+        and 'if (action === "repo-enable")' in software_qml,
+        "repository enable mutation must require the shared confirmation flow")
 require("backupDirectory" in read("src/SystemBackend.h")
         and "setBackupDirectory" in system_cpp,
         "selectable backup destination is missing")

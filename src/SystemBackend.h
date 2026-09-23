@@ -10,6 +10,7 @@
 class QTimer;
 
 class PolkitHelper;
+class ProcessRunner;
 
 class SystemBackend : public QObject
 {
@@ -177,12 +178,11 @@ private:
     QString m_networkState = QStringLiteral("down");
     QString m_networkKind = QStringLiteral("ethernet");
     quint64 m_serviceRefreshGeneration = 0;
-    QPointer<QProcess> m_backupProcess;
+    QPointer<ProcessRunner> m_backupRunner;
     bool m_backupBusy = false;
     QString m_backupStatus;
     QString m_backupPath;
     QString m_backupState = QStringLiteral("idle");
     QString m_backupDirectory;
     QString m_backupPartialPath;
-    bool m_backupCancelled = false;
 };

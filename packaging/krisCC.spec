@@ -1,5 +1,5 @@
 Name:           krisCC
-Version:        0.7.3
+Version:        0.7.4
 Release:        1%{?dist}
 Summary:        krisCC personal control center for KrisOS and Fedora bootc
 License:        MIT
@@ -54,6 +54,11 @@ Settings.
 %{_datadir}/icons/hicolor/scalable/apps/krisCC.svg
 
 %changelog
+* Wed Sep 23 2026 krism-eu - 0.7.4-1
+- Fail closed on incomplete tar backups and preflight archives before restore
+- Bound backup create, verify and restore operations with process-group timeouts
+- Require confirmation before re-enabling DNF repositories
+
 * Tue Sep 22 2026 krism-eu - 0.7.3-1
 - Export exact latest-green repository commit from GitHub ZIP
 - Simplify Flatpak remote contract to name/url

@@ -79,6 +79,10 @@ Kirigami.Page {
             root.operationDomain = "rk"
             return RkBackend.sync()
         }
+        if (action === "repo-enable") {
+            root.operationDomain = "repo"
+            return SoftwareBackend.enableRepository(value)
+        }
         if (action === "repo-disable") {
             root.operationDomain = "repo"
             return SoftwareBackend.disableRepository(value)
@@ -467,8 +471,11 @@ Kirigami.Page {
                                                 qsTr("I pacchetti di questo repository non saranno più disponibili per ricerca e transazioni rk finché non verrà riattivato.")
                                             )
                                         } else {
-                                            root.operationDomain = "repo"
-                                            SoftwareBackend.enableRepository(modelData.id)
+                                            root.requestAction(
+                                                "repo-enable", modelData.id,
+                                                qsTr("Attivare %1?").arg(modelData.id),
+                                                qsTr("I pacchetti di questo repository torneranno disponibili per ricerca e transazioni rk.")
+                                            )
                                         }
                                     }
                                 }
