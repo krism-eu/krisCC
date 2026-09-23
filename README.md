@@ -12,7 +12,7 @@ Le regole di stabilità, compatibilità e integrazione sono definite in [ARCHITE
 - **Software RPM**: ricerca, installati, aggiornabili, provenienza Base/Persistente/Layer non richiesti e piano della transazione tramite la stessa policy `rk` usata per installare.
 - **Flatpak**: ricerca strutturata, installati, aggiornamenti, update singolo o completo del profilo utente, remote e integrazione Flathub senza dipendere da Discover.
 - **Container / Podman**: elenco container e immagini locali, stato, nome/tag, dimensione, informazioni, log, start/stop/restart, rinomina, rimozione dei container e rimozione esplicita delle immagini senza force.
-- **Sistema**: centro aggiornamenti BootC/Flatpak/rk, salute e sicurezza read-only, storage, voci UEFI e GRUB/BLS, selezione one-shot del prossimo avvio e strumenti KDE essenziali.
+- **Sistema**: centro aggiornamenti BootC/rk, salute e sicurezza read-only, storage, voci UEFI e GRUB/BLS, selezione one-shot del prossimo avvio e strumenti KDE essenziali.
 - **Comandi**: diagnostica read-only pronta per systemd, journal, rete, spazio, inode, mount e avvio, più **Miei comandi** per salvare comandi o script Bash multilinea personali in `~/.config/krisCC/custom-actions.json`. Il file è privato (`0600`), versionato e fail-closed; le azioni girano soltanto con i privilegi dell'utente corrente, con stdin chiuso, e Annulla/timeout termina l'intero gruppo di processi dello script.
 - **Backup e recovery**: creazione, anteprima precisa di inclusioni/esclusioni, elenco, verifica e ripristino degli snapshot `tar.gz`, più stato RK strutturato, sync e forget di recovery. Il backup home esclude runtime/app Flatpak e storage Podman ricostruibili, mantenendo i dati Flatpak in `~/.var/app`.
 - **Cronologia**: registro locale privato e limitato delle operazioni mutanti eseguite da krisCC. Non vengono salvati output completi né argomenti sensibili delle operazioni amministrative.
@@ -66,7 +66,7 @@ cmake --build build
 
 ## RPM e integrazione nell'immagine
 
-Lo spec RPM è `packaging/krisCC.spec` e produce **`krisCC-0.7.4-*.rpm`**. La CI Fedora 44 costruisce l'RPM, lo installa in un ambiente pulito, riesegue lo smoke test e produce `SHA256SUMS` dell'artefatto RPM.
+Lo spec RPM è `packaging/krisCC.spec` e produce **`krisCC-0.7.5-*.rpm`**. La CI Fedora 44 costruisce l'RPM, lo installa in un ambiente pulito, riesegue lo smoke test e produce `SHA256SUMS` dell'artefatto RPM.
 
 Il flusso previsto per KrisOS è:
 
@@ -80,8 +80,8 @@ Esempio manuale:
 
 ```bash
 mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-git archive --format=tar.gz --prefix=krisCC-0.7.4/ \
-  -o ~/rpmbuild/SOURCES/krisCC-0.7.4.tar.gz HEAD
+git archive --format=tar.gz --prefix=krisCC-0.7.5/ \
+  -o ~/rpmbuild/SOURCES/krisCC-0.7.5.tar.gz HEAD
 cp packaging/krisCC.spec ~/rpmbuild/SPECS/krisCC.spec
 rpmbuild -ba ~/rpmbuild/SPECS/krisCC.spec
 ```

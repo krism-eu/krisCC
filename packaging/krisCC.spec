@@ -1,5 +1,5 @@
 Name:           krisCC
-Version:        0.7.4
+Version:        0.7.5
 Release:        1%{?dist}
 Summary:        krisCC personal control center for KrisOS and Fedora bootc
 License:        MIT
@@ -54,6 +54,12 @@ Settings.
 %{_datadir}/icons/hicolor/scalable/apps/krisCC.svg
 
 %changelog
+* Wed Sep 23 2026 krism-eu - 0.7.5-1
+- Preserve KrisOS image-owned krisCC semantics and route updates through the OS image
+- Remove the dead Flatpak remote parser and align recovery input validation
+- Streamline Dashboard and System layouts and add on-demand Flatpak details
+- Keep Software upgrade enumeration lazy until the Aggiornabili tab is opened
+
 * Wed Sep 23 2026 krism-eu - 0.7.4-1
 - Fail closed on incomplete tar backups and preflight archives before restore
 - Bound backup create, verify and restore operations with process-group timeouts
