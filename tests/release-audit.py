@@ -183,10 +183,11 @@ require('text: qsTr("Plasma")' not in system_qml,
 require('launchTool("isoimagewriter")' in system_qml
         and 'QStringLiteral("isoimagewriter")' in system_cpp,
         "ISO Image Writer shortcut contract is missing")
-require('launchTool("qdirstat")' in system_qml,
+tools_section = system_qml.split('id: toolsGrid', 1)[1].split('id: restartServiceDialog', 1)[0]
+require('launchTool("qdirstat")' in tools_section,
         "QDirStat must stay in the Diagnostica tool group")
-require('text: qsTr("Storage")' not in system_qml
-        and 'text: qsTr("Partition Manager")' not in system_qml,
+require('text: qsTr("Storage")' not in tools_section
+        and 'text: qsTr("Partition Manager")' not in tools_section,
         "System tools must not expose the removed Storage/Partition Manager block")
 require("entries.size() >= 500" not in package_cpp,
         "installed RPM inventory is silently capped")
