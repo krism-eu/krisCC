@@ -23,6 +23,14 @@ private slots:
         QVERIFY(repo.has_value());
         QCOMPARE(repo->program, QStringLiteral("/usr/bin/dnf5"));
 
+        auto ccUpdate = AdminPolicy::resolve({QStringLiteral("cc-update"),
+                                              QStringLiteral("0.7.4")});
+        QVERIFY(ccUpdate.has_value());
+        QCOMPARE(ccUpdate->program, QStringLiteral("/usr/bin/dnf5"));
+        QCOMPARE(ccUpdate->arguments,
+                 QStringList({QStringLiteral("install"), QStringLiteral("--assumeyes"),
+                              QStringLiteral("https://github.com/krism-eu/krisCC/releases/download/v0.7.4/krisCC-0.7.4-1.fc44.x86_64.rpm")}));
+
         auto uefi = AdminPolicy::resolve({QStringLiteral("boot-next-uefi"),
                                           QStringLiteral("00af")});
         QVERIFY(uefi.has_value());
@@ -37,16 +45,20 @@ private slots:
         QVERIFY(!AdminPolicy::resolve({QStringLiteral("boot-next-uefi"), QStringLiteral("-o")}).has_value());
         QVERIFY(!AdminPolicy::resolve({QStringLiteral("boot-next-grub"), QStringLiteral("--unrestricted")}).has_value());
         QVERIFY(!AdminPolicy::resolve({QStringLiteral("bootc-check"), QStringLiteral("--extra")}).has_value());
+        QVERIFY(!AdminPolicy::resolve({QStringLiteral("cc-update"), QStringLiteral("0.7")}).has_value());
+        QVERIFY(!AdminPolicy::resolve({QStringLiteral("cc-update"), QStringLiteral("0.7.4/../../x")}).has_value());
     }
     void timeoutsAreBoundedByDomain()
     {
         const auto bootc = AdminPolicy::resolve({QStringLiteral("bootc-check")});
         const auto repo = AdminPolicy::resolve({QStringLiteral("repo-enable"), QStringLiteral("fedora")});
         const auto nextBoot = AdminPolicy::resolve({QStringLiteral("boot-next-uefi"), QStringLiteral("0001")});
-        QVERIFY(bootc && repo && nextBoot);
+        const auto ccUpdate = AdminPolicy::resolve({QStringLiteral("cc-update"), QStringLiteral("0.7.4")});
+        QVERIFY(bootc && repo && nextBoot && ccUpdate);
         QCOMPARE(bootc->timeoutMs, 30 * 60 * 1000);
         QCOMPARE(repo->timeoutMs, 5 * 60 * 1000);
         QCOMPARE(nextBoot->timeoutMs, 2 * 60 * 1000);
+        QCOMPARE(ccUpdate->timeoutMs, 30 * 60 * 1000);
     }
 };
 QTEST_APPLESS_MAIN(AdminPolicyTest)

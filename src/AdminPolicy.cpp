@@ -2,6 +2,8 @@
 
 #include "Validators.h"
 
+#include <QRegularExpression>
+
 namespace {
 constexpr int kShortTimeoutMs = 2 * 60 * 1000;
 constexpr int kRepositoryTimeoutMs = 5 * 60 * 1000;
@@ -66,6 +68,22 @@ std::optional<AdminPolicy::Command> AdminPolicy::resolve(const QStringList &requ
                        {QStringLiteral("config-manager"), QStringLiteral("addrepo"),
                         QStringLiteral("--from-repofile=") + value},
                        kRepositoryTimeoutMs};
+    }
+
+    if (operation == QStringLiteral("cc-update")) {
+        static const QRegularExpression versionPattern(
+            QStringLiteral("^[0-9]+\\.[0-9]+\\.[0-9]+$"));
+        if (!versionPattern.match(value).hasMatch())
+            return std::nullopt;
+
+        const QString rpmName =
+            QStringLiteral("krisCC-%1-1.fc44.x86_64.rpm").arg(value);
+        const QString url =
+            QStringLiteral("https://github.com/krism-eu/krisCC/releases/download/v%1/%2")
+                .arg(value, rpmName);
+        return Command{QStringLiteral("/usr/bin/dnf5"),
+                       {QStringLiteral("install"), QStringLiteral("--assumeyes"), url},
+                       kLongTimeoutMs};
     }
 
     if (operation == QStringLiteral("boot-next-uefi") && Validators::bootToken(value)) {

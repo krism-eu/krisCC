@@ -37,6 +37,8 @@ system_cpp = read("src/SystemBackend.cpp")
 software_qml = read("qml/modules/SoftwareModule.qml")
 flatpak_qml = read("qml/modules/FlatpakModule.qml")
 system_qml = read("qml/modules/SystemModule.qml")
+dashboard_qml = read("qml/modules/DashboardModule.qml")
+commands_qml = read("qml/modules/CommandsModule.qml")
 
 require(f'Version:        {VERSION}' in spec, "RPM Version differs from canonical version")
 require('Release:        1%{?dist}' in spec,
@@ -102,6 +104,10 @@ require('QStringLiteral("/usr/bin/rk")' in admin_policy
         "AdminPolicy lost fixed executable mapping")
 require("/usr/bin/bash" not in admin_policy and "/usr/bin/sh" not in admin_policy,
         "AdminPolicy must never expose a root shell")
+require('QStringLiteral("cc-update")' in admin_policy
+        and 'https://github.com/krism-eu/krisCC/releases/download/v%1/%2' in admin_policy
+        and 'QStringLiteral("install"), QStringLiteral("--assumeyes"), url' in admin_policy,
+        "Control Center update is not constrained to the official versioned RPM")
 require("setStandardInputFile(QProcess::nullDevice())" in admin_cpp,
         "root helper stdin must be closed")
 require("SIGTERM" in admin_cpp and "SIGKILL" in admin_cpp and "return 124" in admin_cpp,
@@ -177,9 +183,20 @@ require('QStringLiteral("firewalld.service")' in system_cpp,
         "Dashboard firewall state is not sourced from firewalld")
 require("topMemoryProcesses" in read("src/SystemBackend.h"),
         "Dashboard top-memory model is missing")
+require("std::min<qsizetype>(10, entries.size())" in system_cpp,
+        "Dashboard must expose the top ten RAM process groups")
 require("networkState" in read("src/SystemBackend.h")
-        and '"network"' in read("qml/modules/DashboardModule.qml"),
+        and '"network"' in dashboard_qml,
         "Dashboard network card contract is missing")
+require('SystemBackend.launchTool("kfind")' in dashboard_qml
+        and "SystemBackend.openTemporaryFolder()" in dashboard_qml,
+        "Dashboard quick actions lost KFind or the temporary folder shortcut")
+require('"podman", title: qsTr("Container")' not in dashboard_qml,
+        "Dashboard lower module row must remain the three-column Software/Flatpak/System layout")
+require("Aggiorna Control Center" not in dashboard_qml
+        and "checkControlCenterUpdate()" in commands_qml
+        and "updateControlCenter()" in commands_qml,
+        "Control Center updater must live in Commands, not Dashboard")
 require('QStringLiteral("--columns=name,url")' in utility_cpp,
         "Flatpak remotes must use the minimal name/url contract")
 require("parseFlatpakTsv(message.toUtf8(), 2)" in utility_cpp,

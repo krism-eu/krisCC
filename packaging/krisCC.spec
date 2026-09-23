@@ -58,6 +58,8 @@ Settings.
 - Fail closed on incomplete tar backups and preflight archives before restore
 - Bound backup create, verify and restore operations with process-group timeouts
 - Require confirmation before re-enabling DNF repositories
+- Rebalance the dashboard around RAM plus an eight-tile status grid and top-ten process view
+- Add KFind and temporary-folder shortcuts and a constrained stable krisCC updater in Commands
 
 * Tue Sep 22 2026 krism-eu - 0.7.3-1
 - Export exact latest-green repository commit from GitHub ZIP

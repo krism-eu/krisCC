@@ -20,13 +20,17 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
 #include <QHostAddress>
 #include <QLocale>
+#include <QNetworkAccessManager>
 #include <QNetworkAddressEntry>
 #include <QNetworkInterface>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include <QHash>
 #include <QProcess>
 #include <QRegularExpression>
@@ -40,6 +44,7 @@
 #include <QTimer>
 #include <QUrl>
 #include <QVariantMap>
+#include <QVersionNumber>
 
 #include <sys/sysinfo.h>
 #include <unistd.h>
@@ -135,9 +140,29 @@ SystemBackend::SystemBackend(PolkitHelper *polkit, QObject *parent)
     else
         m_backupDirectory = defaultBackupDirectory();
 
+    m_networkAccess = new QNetworkAccessManager(this);
+
     m_resourceTimer = new QTimer(this);
     m_resourceTimer->setInterval(2000);
     connect(m_resourceTimer, &QTimer::timeout, this, &SystemBackend::refreshResources);
+
+    if (m_polkit) {
+        connect(m_polkit, &PolkitHelper::finished, this,
+                [this](bool success, const QString &output) {
+            if (!m_controlCenterUpdateInstalling)
+                return;
+            m_controlCenterUpdateInstalling = false;
+            if (!success) {
+                m_controlCenterUpdateBusy = false;
+                m_controlCenterUpdateStatus = output.trimmed().isEmpty()
+                    ? tr("Aggiornamento del Control Center non riuscito.")
+                    : output.trimmed();
+                emit controlCenterUpdateChanged();
+                return;
+            }
+            verifyInstalledControlCenterVersion();
+        });
+    }
 }
 
 bool SystemBackend::canSelectNextBoot() const
@@ -489,7 +514,7 @@ void SystemBackend::refreshTopMemoryProcesses()
     });
 
     QVariantList result;
-    const qsizetype limit = std::min<qsizetype>(7, entries.size());
+    const qsizetype limit = std::min<qsizetype>(10, entries.size());
     for (qsizetype i = 0; i < limit; ++i) {
         QVariantMap row;
         row.insert(QStringLiteral("name"), entries.at(i).displayName);
@@ -699,7 +724,8 @@ QString SystemBackend::toolProgram(const QString &toolId) const
         {QStringLiteral("ksystemlog"), QStringLiteral("ksystemlog")},
         {QStringLiteral("systemmonitor"), QStringLiteral("plasma-systemmonitor")},
         {QStringLiteral("qdirstat"), QStringLiteral("qdirstat")},
-        {QStringLiteral("konsole"), QStringLiteral("konsole")}
+        {QStringLiteral("konsole"), QStringLiteral("konsole")},
+        {QStringLiteral("kfind"), QStringLiteral("kfind")}
     };
     return resolveExecutable(names.value(toolId));
 }
@@ -718,9 +744,177 @@ bool SystemBackend::launchTool(const QString &toolId) const
     return info.exists() && info.isExecutable() && QProcess::startDetached(program, {});
 }
 
+bool SystemBackend::openTemporaryFolder() const
+{
+    return QDesktopServices::openUrl(QUrl::fromLocalFile(QDir::tempPath()));
+}
+
 bool SystemBackend::programAvailable(const QString &program) const
 {
     return !resolveExecutable(program).isEmpty();
+}
+
+void SystemBackend::checkControlCenterUpdate()
+{
+    if (m_controlCenterUpdateBusy || !m_networkAccess)
+        return;
+
+    m_controlCenterUpdateBusy = true;
+    m_controlCenterUpdateAvailable = false;
+    m_controlCenterLatestVersion.clear();
+    m_controlCenterUpdateStatus = tr("Verifica aggiornamenti in corso…");
+    emit controlCenterUpdateChanged();
+
+    QNetworkRequest request(
+        QUrl(QStringLiteral("https://api.github.com/repos/krism-eu/krisCC/releases/latest")));
+    request.setRawHeader("Accept", "application/vnd.github+json");
+    request.setRawHeader("User-Agent",
+                         QByteArray("krisCC/") + QCoreApplication::applicationVersion().toUtf8());
+
+    QNetworkReply *reply = m_networkAccess->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply] {
+        const auto finishError = [this](const QString &message) {
+            m_controlCenterUpdateBusy = false;
+            m_controlCenterUpdateAvailable = false;
+            m_controlCenterLatestVersion.clear();
+            m_controlCenterUpdateStatus = message;
+            emit controlCenterUpdateChanged();
+        };
+
+        if (reply->error() != QNetworkReply::NoError) {
+            const QString error = reply->errorString();
+            reply->deleteLater();
+            finishError(tr("Verifica aggiornamenti non riuscita: %1").arg(error));
+            return;
+        }
+
+        QJsonParseError parseError;
+        const QJsonDocument document = QJsonDocument::fromJson(reply->readAll(), &parseError);
+        reply->deleteLater();
+        if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
+            finishError(tr("Risposta release non valida."));
+            return;
+        }
+
+        const QJsonObject release = document.object();
+        if (release.value(QStringLiteral("draft")).toBool()
+            || release.value(QStringLiteral("prerelease")).toBool()) {
+            finishError(tr("La release stable restituita non è valida."));
+            return;
+        }
+
+        const QString tag = release.value(QStringLiteral("tag_name")).toString().trimmed();
+        static const QRegularExpression tagPattern(
+            QStringLiteral("^v([0-9]+\\.[0-9]+\\.[0-9]+)$"));
+        const QRegularExpressionMatch match = tagPattern.match(tag);
+        if (!match.hasMatch()) {
+            finishError(tr("Versione release non riconosciuta."));
+            return;
+        }
+
+        const QString latest = match.captured(1);
+        const QString expectedAsset =
+            QStringLiteral("krisCC-%1-1.fc44.x86_64.rpm").arg(latest);
+        bool assetFound = false;
+        for (const QJsonValue &value : release.value(QStringLiteral("assets")).toArray()) {
+            if (value.isObject()
+                && value.toObject().value(QStringLiteral("name")).toString() == expectedAsset) {
+                assetFound = true;
+                break;
+            }
+        }
+        if (!assetFound) {
+            finishError(tr("La release %1 non contiene l'RPM previsto.").arg(tag));
+            return;
+        }
+
+        const QVersionNumber current =
+            QVersionNumber::fromString(QCoreApplication::applicationVersion());
+        const QVersionNumber remote = QVersionNumber::fromString(latest);
+        if (current.isNull() || remote.isNull()) {
+            finishError(tr("Impossibile confrontare le versioni del Control Center."));
+            return;
+        }
+
+        m_controlCenterUpdateBusy = false;
+        m_controlCenterLatestVersion = latest;
+        const int comparison = QVersionNumber::compare(remote, current);
+        m_controlCenterUpdateAvailable = comparison > 0;
+        if (comparison > 0) {
+            m_controlCenterUpdateStatus =
+                tr("Disponibile krisCC %1 (installata %2).")
+                    .arg(latest, QCoreApplication::applicationVersion());
+        } else if (comparison == 0) {
+            m_controlCenterUpdateStatus =
+                tr("Il Control Center è già aggiornato (%1).").arg(latest);
+        } else {
+            m_controlCenterUpdateStatus =
+                tr("La versione installata %1 è più recente della stable %2.")
+                    .arg(QCoreApplication::applicationVersion(), latest);
+        }
+        emit controlCenterUpdateChanged();
+    });
+}
+
+bool SystemBackend::updateControlCenter()
+{
+    if (m_controlCenterUpdateBusy || !m_controlCenterUpdateAvailable
+        || m_controlCenterLatestVersion.isEmpty() || !m_polkit || m_polkit->running())
+        return false;
+
+    m_controlCenterUpdateBusy = true;
+    m_controlCenterUpdateInstalling = true;
+    m_controlCenterUpdateStatus =
+        tr("Installazione di krisCC %1 in corso…").arg(m_controlCenterLatestVersion);
+    emit controlCenterUpdateChanged();
+
+    m_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin"),
+                      {QStringLiteral("cc-update"), m_controlCenterLatestVersion});
+    return true;
+}
+
+void SystemBackend::verifyInstalledControlCenterVersion()
+{
+    auto *runner = new ProcessRunner(this);
+    connect(runner, &ProcessRunner::finished, this,
+            [this, runner](ProcessRunner::Outcome outcome, int,
+                           const QByteArray &stdoutData, const QByteArray &,
+                           const QString &) {
+        const QString installed = QString::fromUtf8(stdoutData).trimmed();
+        const QString expected = m_controlCenterLatestVersion + QStringLiteral("-1.fc44");
+        const bool verified = outcome == ProcessRunner::Success
+            && installed == expected;
+        runner->deleteLater();
+
+        m_controlCenterUpdateBusy = false;
+        if (verified) {
+            m_controlCenterUpdateAvailable = false;
+            m_controlCenterUpdateStatus =
+                tr("krisCC %1 installato. Chiudi e riapri il Control Center.")
+                    .arg(m_controlCenterLatestVersion);
+        } else {
+            m_controlCenterUpdateStatus =
+                tr("Installazione completata ma la versione installata non è stata verificata.");
+        }
+        emit controlCenterUpdateChanged();
+    });
+
+    ProcessRunner::Options options;
+    options.program = QStringLiteral("/usr/bin/rpm");
+    options.arguments = {QStringLiteral("-q"), QStringLiteral("--qf"),
+                         QStringLiteral("%{VERSION}-%{RELEASE}"),
+                         QStringLiteral("krisCC")};
+    options.timeoutMs = 30 * 1000;
+    options.maxOutputBytes = 16 * 1024;
+    options.mergedChannels = false;
+    options.processGroup = true;
+    if (!runner->start(options)) {
+        runner->deleteLater();
+        m_controlCenterUpdateBusy = false;
+        m_controlCenterUpdateStatus =
+            tr("Installazione completata ma non è stato possibile verificare la versione.");
+        emit controlCenterUpdateChanged();
+    }
 }
 
 void SystemBackend::refreshServiceStates()

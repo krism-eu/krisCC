@@ -119,6 +119,63 @@ Kirigami.ScrollablePage {
                     }
                 }
 
+                Kirigami.AbstractCard {
+                    Layout.fillWidth: true
+                    contentItem: ColumnLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        RowLayout {
+                            Layout.fillWidth: true
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 0
+                                Kirigami.Heading {
+                                    level: 3
+                                    font.bold: true
+                                    text: qsTr("Control Center")
+                                }
+                                Controls.Label {
+                                    text: qsTr("Versione installata: %1").arg(Qt.application.version)
+                                    opacity: UiMetrics.secondaryOpacity
+                                }
+                            }
+                            Controls.BusyIndicator {
+                                visible: SystemBackend.controlCenterUpdateBusy
+                                running: visible
+                            }
+                        }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            text: SystemBackend.controlCenterUpdateStatus.length > 0
+                                  ? SystemBackend.controlCenterUpdateStatus
+                                  : qsTr("Controlla la release stable ufficiale di krisCC e, se disponibile, installa il relativo RPM.")
+                            opacity: UiMetrics.secondaryOpacity
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Controls.Button {
+                                text: qsTr("Verifica aggiornamenti")
+                                icon.name: "view-refresh"
+                                enabled: !SystemBackend.controlCenterUpdateBusy
+                                onClicked: SystemBackend.checkControlCenterUpdate()
+                            }
+                            Controls.Button {
+                                text: qsTr("Aggiorna Control Center")
+                                icon.name: "system-software-update"
+                                enabled: SystemBackend.controlCenterUpdateAvailable
+                                         && !SystemBackend.controlCenterUpdateBusy
+                                onClicked: controlCenterUpdateDialog.open()
+                            }
+                            Item { Layout.fillWidth: true }
+                            Controls.Label {
+                                visible: SystemBackend.controlCenterLatestVersion.length > 0
+                                text: qsTr("Stable: %1").arg(SystemBackend.controlCenterLatestVersion)
+                                opacity: UiMetrics.secondaryOpacity
+                            }
+                        }
+                    }
+                }
+
                 GridLayout {
                     Layout.fillWidth: true
                     columns: width > 820 ? 2 : 1
@@ -367,6 +424,25 @@ Kirigami.ScrollablePage {
                 }
             }
         }
+    }
+
+    Controls.Dialog {
+        id: controlCenterUpdateDialog
+        modal: true
+        parent: Controls.Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30,
+                        parent ? parent.width - Kirigami.Units.largeSpacing * 2
+                               : Kirigami.Units.gridUnit * 30)
+        title: qsTr("Aggiornare il Control Center?")
+        standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
+        contentItem: Controls.Label {
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            text: qsTr("Verrà installata la release stable krisCC %1 dal repository ufficiale. L'operazione richiede autorizzazione amministrativa.")
+                  .arg(SystemBackend.controlCenterLatestVersion)
+        }
+        onAccepted: SystemBackend.updateControlCenter()
     }
 
     Controls.Dialog {
