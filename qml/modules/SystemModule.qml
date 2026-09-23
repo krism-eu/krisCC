@@ -544,6 +544,14 @@ Kirigami.ScrollablePage {
                                 enabled: SystemBackend.toolAvailable("isoimagewriter")
                                 onClicked: SystemBackend.launchTool("isoimagewriter")
                             }
+                            Controls.Button {
+                                text: SystemBackend.toolAvailable("qdirstat")
+                                      ? qsTr("QDirStat")
+                                      : qsTr("QDirStat · non installato")
+                                icon.name: "folder-chart"
+                                enabled: SystemBackend.toolAvailable("qdirstat")
+                                onClicked: SystemBackend.launchTool("qdirstat")
+                            }
                         }
                     }
 
@@ -611,31 +619,6 @@ Kirigami.ScrollablePage {
                         }
                     }
 
-                    Kirigami.AbstractCard {
-                        Layout.fillWidth: true
-                        Layout.columnSpan: toolsGrid.columns
-                        Layout.alignment: Qt.AlignTop
-                        contentItem: ColumnLayout {
-                            Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Storage") }
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Controls.Button {
-                                    Layout.fillWidth: true
-                                    text: SystemBackend.toolAvailable("qdirstat") ? qsTr("QDirStat") : qsTr("QDirStat · non installato")
-                                    icon.name: "folder-chart"
-                                    enabled: SystemBackend.toolAvailable("qdirstat")
-                                    onClicked: SystemBackend.launchTool("qdirstat")
-                                }
-                                Controls.Button {
-                                    Layout.fillWidth: true
-                                    icon.name: "partitionmanager"
-                                    text: qsTr("Partition Manager")
-                                    enabled: SystemBackend.toolAvailable("partitionmanager")
-                                    onClicked: SystemBackend.launchTool("partitionmanager")
-                                }
-                            }
-                        }
-                    }
                 }
 
                 Kirigami.AbstractCard {
