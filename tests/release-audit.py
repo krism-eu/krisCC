@@ -201,11 +201,14 @@ require('{ id: "system", title: qsTr("Sistema")' not in dashboard_qml
         and dashboard_qml.find('{ id: "flatpak", title: qsTr("Flatpak")')
             < dashboard_qml.find('{ id: "software", title: qsTr("Software")'),
         "Dashboard top row must start with Flatpak/Software and omit the redundant System tile")
-require('qsTr("CPU")' in dashboard_qml
+require('qsTr("Prestazioni")' in dashboard_qml
+        and 'qsTr("CPU")' in dashboard_qml
         and 'qsTr("Temperatura")' in dashboard_qml
+        and 'qsTr("RAM")' in dashboard_qml
         and 'Layout.column: 2' in dashboard_qml
-        and 'Layout.row: 0' in dashboard_qml,
-        "Dashboard combined CPU/temperature card is missing from the third top column")
+        and 'Layout.row: 0' in dashboard_qml
+        and 'Layout.rowSpan: 4' in dashboard_qml,
+        "Dashboard performance card must fill the complete third column")
 require("memoryTotalMiB" not in dashboard_qml,
         "Dashboard RAM card must not show total/swap text")
 require("networkState" in read("src/SystemBackend.h")
@@ -253,9 +256,11 @@ require('text: qsTr("Info Center")' in read("qml/Main.qml")
             < read("qml/Main.qml").find('text: qsTr("Impostazioni Plasma")'),
         "Info Center must stay in the fixed sidebar above Plasma settings")
 require("columns: 3" in dashboard_qml
-        and "Layout.rowSpan: 3" in dashboard_qml
+        and "Layout.rowSpan: 4" in dashboard_qml
         and "Layout.column: 2" in dashboard_qml,
-        "Dashboard central area must use one aligned three-column grid")
+        "Dashboard central area must use one aligned three-column grid without a top-right gap")
+require('Home + partizione sistema' not in dashboard_qml,
+        "Dashboard storage card must not add a redundant storage subtitle")
 require('QStringLiteral("/sysroot")' in system_cpp
         and 'tr("Home: %1")' in system_cpp
         and 'tr("Sistema: %1")' in system_cpp,
@@ -271,6 +276,13 @@ require(re.search(r'requestAction\(\s*"repo-enable"', software_qml) is not None
 require("backupDirectory" in read("src/SystemBackend.h")
         and "setBackupDirectory" in system_cpp,
         "selectable backup destination is missing")
+require('qsTr("Escluso: ")' not in recovery_qml
+        and 'qsTr("presente")' not in recovery_qml
+        and 'qsTr("assente")' not in recovery_qml,
+        "Backup preview must show only entries that are actually included")
+require('item.insert(QStringLiteral("included"), false)' not in system_cpp
+        and 'item.insert(QStringLiteral("exists")' not in system_cpp,
+        "Backup preview backend must not expose excluded or absent rows")
 require("partialFile.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner)" in system_cpp,
         "backup partial file must be created as 0600")
 require("JSON.parse(" not in read("qml/modules/PodmanModule.qml"),

@@ -169,57 +169,6 @@ Kirigami.ScrollablePage {
                 }
             }
 
-            Kirigami.AbstractCard {
-                Layout.column: 2
-                Layout.row: 0
-                Layout.fillWidth: true
-                contentItem: RowLayout {
-                    spacing: Kirigami.Units.largeSpacing
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Kirigami.Icon {
-                            source: "cpu"
-                            Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
-                            Layout.preferredHeight: Layout.preferredWidth
-                        }
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 0
-                            Controls.Label { text: qsTr("CPU"); font.bold: true }
-                            Controls.Label {
-                                text: SystemBackend.cpuUsagePercent >= 0
-                                      ? qsTr("%1%").arg(SystemBackend.cpuUsagePercent)
-                                      : qsTr("Campionamento…")
-                            }
-                        }
-                    }
-
-                    Kirigami.Separator {
-                        Layout.fillHeight: true
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        Kirigami.Icon {
-                            source: "temperature-normal"
-                            Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
-                            Layout.preferredHeight: Layout.preferredWidth
-                        }
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            spacing: 0
-                            Controls.Label { text: qsTr("Temperatura"); font.bold: true }
-                            Controls.Label {
-                                text: SystemBackend.cpuTemperatureC >= 0
-                                      ? qsTr("%1 °C").arg(SystemBackend.cpuTemperatureC.toFixed(0))
-                                      : qsTr("Non disponibile")
-                            }
-                        }
-                    }
-                }
-            }
-
             Repeater {
                 model: ["overlay", "sync", "selinux", "firewall", "storage", "network"]
                 delegate: Kirigami.AbstractCard {
@@ -272,7 +221,8 @@ Kirigami.ScrollablePage {
                         }
                         Controls.Label {
                             Layout.fillWidth: true
-                            text: modelData === "storage" ? qsTr("Home + partizione sistema") : root.statusDetail(modelData)
+                            visible: modelData !== "storage"
+                            text: root.statusDetail(modelData)
                             opacity: UiMetrics.secondaryOpacity
                             wrapMode: Text.WordWrap
                         }
@@ -282,31 +232,85 @@ Kirigami.ScrollablePage {
 
             Kirigami.AbstractCard {
                 Layout.column: 2
-                Layout.row: 1
-                Layout.rowSpan: 3
+                Layout.row: 0
+                Layout.rowSpan: 4
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 contentItem: ColumnLayout {
                     spacing: Kirigami.Units.smallSpacing
+
+                    Kirigami.Heading {
+                        level: 3
+                        font.bold: true
+                        text: qsTr("Prestazioni")
+                    }
+
                     RowLayout {
-                        Kirigami.Icon {
-                            source: "memory"
-                            Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
-                            Layout.preferredHeight: Layout.preferredWidth
+                        Layout.fillWidth: true
+                        spacing: Kirigami.Units.largeSpacing
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 0
+                            RowLayout {
+                                Kirigami.Icon {
+                                    source: "cpu"
+                                    Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                                    Layout.preferredHeight: Layout.preferredWidth
+                                }
+                                Controls.Label { text: qsTr("CPU"); font.bold: true }
+                            }
+                            Controls.Label {
+                                text: SystemBackend.cpuUsagePercent >= 0
+                                      ? qsTr("%1%").arg(SystemBackend.cpuUsagePercent)
+                                      : qsTr("Campionamento…")
+                            }
                         }
-                        Kirigami.Heading {
-                            level: 3
-                            font.bold: true
-                            text: qsTr("RAM usata")
+
+                        Kirigami.Separator { Layout.fillHeight: true }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 0
+                            RowLayout {
+                                Kirigami.Icon {
+                                    source: "temperature-normal"
+                                    Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                                    Layout.preferredHeight: Layout.preferredWidth
+                                }
+                                Controls.Label { text: qsTr("Temperatura"); font.bold: true }
+                            }
+                            Controls.Label {
+                                text: SystemBackend.cpuTemperatureC >= 0
+                                      ? qsTr("%1 °C").arg(SystemBackend.cpuTemperatureC.toFixed(0))
+                                      : qsTr("Non disponibile")
+                            }
+                        }
+
+                        Kirigami.Separator { Layout.fillHeight: true }
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 0
+                            RowLayout {
+                                Kirigami.Icon {
+                                    source: "memory"
+                                    Layout.preferredWidth: Kirigami.Units.iconSizes.small
+                                    Layout.preferredHeight: Layout.preferredWidth
+                                }
+                                Controls.Label { text: qsTr("RAM"); font.bold: true }
+                            }
+                            Controls.Label {
+                                text: SystemBackend.memoryUsedMiB >= 0
+                                      ? qsTr("%1 MiB").arg(SystemBackend.memoryUsedMiB)
+                                      : qsTr("Non disponibile")
+                            }
                         }
                     }
-                    Controls.Label {
-                        text: SystemBackend.memoryUsedMiB >= 0
-                              ? qsTr("%1 MiB").arg(SystemBackend.memoryUsedMiB)
-                              : qsTr("Non disponibile")
-                    }
+
                     Kirigami.Separator { Layout.fillWidth: true }
                     Controls.Label { text: qsTr("Processi con più RAM"); font.bold: true }
+
                     Repeater {
                         model: SystemBackend.topMemoryProcesses
                         delegate: RowLayout {
@@ -323,6 +327,7 @@ Kirigami.ScrollablePage {
                             }
                         }
                     }
+
                     Controls.Label {
                         Layout.fillWidth: true
                         visible: SystemBackend.topMemoryProcesses.length === 0

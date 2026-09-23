@@ -1609,10 +1609,10 @@ QVariantList SystemBackend::backupPreview(const QString &kind) const
 
     if (kind == QStringLiteral("config")) {
         for (const QString &entry : backupConfigEntries()) {
+            if (!QFileInfo::exists(home + QLatin1Char('/') + entry))
+                continue;
             QVariantMap item;
             item.insert(QStringLiteral("path"), QStringLiteral("~/") + entry);
-            item.insert(QStringLiteral("included"), true);
-            item.insert(QStringLiteral("exists"), QFileInfo::exists(home + QLatin1Char('/') + entry));
             result.append(item);
         }
         return result;
@@ -1621,16 +1621,7 @@ QVariantList SystemBackend::backupPreview(const QString &kind) const
     if (kind == QStringLiteral("home")) {
         QVariantMap allHome;
         allHome.insert(QStringLiteral("path"), QStringLiteral("~/"));
-        allHome.insert(QStringLiteral("included"), true);
-        allHome.insert(QStringLiteral("exists"), true);
         result.append(allHome);
-        for (const QString &entry : backupHomeExcludes()) {
-            QVariantMap item;
-            item.insert(QStringLiteral("path"), QStringLiteral("~/") + entry);
-            item.insert(QStringLiteral("included"), false);
-            item.insert(QStringLiteral("exists"), QFileInfo::exists(home + QLatin1Char('/') + entry));
-            result.append(item);
-        }
     }
     return result;
 }
