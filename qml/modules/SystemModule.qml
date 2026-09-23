@@ -230,6 +230,7 @@ Kirigami.ScrollablePage {
 
                         }
                     }
+                }
 
                 Kirigami.AbstractCard {
                     Layout.fillWidth: true
