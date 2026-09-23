@@ -135,15 +135,100 @@ Kirigami.ScrollablePage {
 
         GridLayout {
             Layout.fillWidth: true
-            columns: width > 1200 ? 6 : width > 760 ? 3 : width > 520 ? 2 : 1
+            columns: 3
             uniformCellWidths: true
             columnSpacing: Kirigami.Units.largeSpacing
             rowSpacing: Kirigami.Units.largeSpacing
+
             Repeater {
-                model: ["overlay", "selinux", "sync", "storage", "firewall", "network"]
+                model: [
+                    { id: "flatpak", title: qsTr("Flatpak"), icon: "applications-all" },
+                    { id: "software", title: qsTr("Software"), icon: "package-x-generic" }
+                ]
+                delegate: Kirigami.AbstractCard {
+                    required property var modelData
+                    required property int index
+                    Layout.column: index
+                    Layout.row: 0
+                    Layout.fillWidth: true
+                    onClicked: root.openRequested(modelData.id)
+                    contentItem: ColumnLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        Kirigami.Icon {
+                            source: modelData.icon
+                            Layout.preferredWidth: Kirigami.Units.iconSizes.medium
+                            Layout.preferredHeight: Layout.preferredWidth
+                        }
+                        Kirigami.Heading { level: 2; font.bold: true; text: modelData.title }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            text: root.moduleValue(modelData.id)
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                }
+            }
+
+            Kirigami.AbstractCard {
+                Layout.column: 2
+                Layout.row: 0
+                Layout.fillWidth: true
+                contentItem: RowLayout {
+                    spacing: Kirigami.Units.largeSpacing
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Kirigami.Icon {
+                            source: "cpu"
+                            Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                            Layout.preferredHeight: Layout.preferredWidth
+                        }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 0
+                            Controls.Label { text: qsTr("CPU"); font.bold: true }
+                            Controls.Label {
+                                text: SystemBackend.cpuUsagePercent >= 0
+                                      ? qsTr("%1%").arg(SystemBackend.cpuUsagePercent)
+                                      : qsTr("Campionamento…")
+                            }
+                        }
+                    }
+
+                    Kirigami.Separator {
+                        Layout.fillHeight: true
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Kirigami.Icon {
+                            source: "temperature-normal"
+                            Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                            Layout.preferredHeight: Layout.preferredWidth
+                        }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 0
+                            Controls.Label { text: qsTr("Temperatura"); font.bold: true }
+                            Controls.Label {
+                                text: SystemBackend.cpuTemperatureC >= 0
+                                      ? qsTr("%1 °C").arg(SystemBackend.cpuTemperatureC.toFixed(0))
+                                      : qsTr("Non disponibile")
+                            }
+                        }
+                    }
+                }
+            }
+
+            Repeater {
+                model: ["overlay", "sync", "selinux", "firewall", "storage", "network"]
                 delegate: Kirigami.AbstractCard {
                     required property string modelData
+                    required property int index
+                    Layout.column: index % 2
+                    Layout.row: 1 + Math.floor(index / 2)
                     Layout.fillWidth: true
+                    Layout.fillHeight: true
                     contentItem: ColumnLayout {
                         spacing: Kirigami.Units.smallSpacing
                         RowLayout {
@@ -180,84 +265,45 @@ Kirigami.ScrollablePage {
                                 wrapMode: Text.WordWrap
                             }
                         }
-                        Controls.Label { Layout.fillWidth: true; text: root.statusValue(modelData); font.bold: false; wrapMode: Text.WordWrap }
-                        Controls.Label { Layout.fillWidth: true; text: root.statusDetail(modelData); opacity: UiMetrics.secondaryOpacity; wrapMode: Text.WordWrap }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            text: root.statusValue(modelData)
+                            wrapMode: Text.WordWrap
+                        }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            text: modelData === "storage" ? qsTr("Home + partizione sistema") : root.statusDetail(modelData)
+                            opacity: UiMetrics.secondaryOpacity
+                            wrapMode: Text.WordWrap
+                        }
                     }
                 }
             }
-        }
-
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Kirigami.Units.largeSpacing
 
             Kirigami.AbstractCard {
+                Layout.column: 2
+                Layout.row: 1
+                Layout.rowSpan: 3
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.horizontalStretchFactor: 1
                 contentItem: ColumnLayout {
                     spacing: Kirigami.Units.smallSpacing
-
                     RowLayout {
                         Kirigami.Icon {
-                            source: "cpu"
+                            source: "memory"
                             Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
                             Layout.preferredHeight: Layout.preferredWidth
                         }
                         Kirigami.Heading {
                             level: 3
                             font.bold: true
-                            text: qsTr("CPU")
+                            text: qsTr("RAM usata")
                         }
-                        Item { Layout.fillWidth: true }
-                        Controls.Label {
-                            text: SystemBackend.cpuUsagePercent >= 0 ? qsTr("%1%").arg(SystemBackend.cpuUsagePercent) : qsTr("Campionamento…")
-                            font.bold: true
-                            font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
-                        }
-                    }
-
-                    Kirigami.Separator { Layout.fillWidth: true }
-
-                    RowLayout {
-                        Kirigami.Icon {
-                            source: "temperature-normal"
-                            Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
-                            Layout.preferredHeight: Layout.preferredWidth
-                        }
-                        Kirigami.Heading {
-                            level: 3
-                            font.bold: true
-                            text: qsTr("Temperatura CPU")
-                        }
-                        Item { Layout.fillWidth: true }
-                        Controls.Label {
-                            text: SystemBackend.cpuTemperatureC >= 0 ? qsTr("%1 °C").arg(SystemBackend.cpuTemperatureC.toFixed(0)) : qsTr("Non disponibile")
-                            font.bold: true
-                            font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
-                        }
-                    }
-
-                    Item { Layout.fillHeight: true }
-                }
-            }
-
-            Kirigami.AbstractCard {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.horizontalStretchFactor: 2
-                contentItem: ColumnLayout {
-                    RowLayout {
-                        Kirigami.Icon { source: "memory"; Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium; Layout.preferredHeight: Layout.preferredWidth }
-                        Kirigami.Heading { level: 3; font.bold: true; text: qsTr("RAM usata") }
                     }
                     Controls.Label {
-                        text: SystemBackend.memoryUsedMiB >= 0 ? qsTr("%1 MiB").arg(SystemBackend.memoryUsedMiB) : qsTr("Non disponibile")
-                    }
-                    Controls.Label {
-                        Layout.fillWidth: true
-                        text: SystemBackend.memoryTotalMiB >= 0 ? qsTr("su %1 MiB · swap esclusa").arg(SystemBackend.memoryTotalMiB) : qsTr("swap esclusa")
-                        opacity: UiMetrics.secondaryOpacity
+                        text: SystemBackend.memoryUsedMiB >= 0
+                              ? qsTr("%1 MiB").arg(SystemBackend.memoryUsedMiB)
+                              : qsTr("Non disponibile")
                     }
                     Kirigami.Separator { Layout.fillWidth: true }
                     Controls.Label { text: qsTr("Processi con più RAM"); font.bold: true }
@@ -283,33 +329,7 @@ Kirigami.ScrollablePage {
                         text: qsTr("Dati processo non disponibili")
                         opacity: UiMetrics.secondaryOpacity
                     }
-                }
-            }
-        }
-
-        GridLayout {
-            Layout.fillWidth: true
-            columns: width > 960 ? 4 : width > 520 ? 2 : 1
-            uniformCellWidths: true
-            columnSpacing: Kirigami.Units.largeSpacing
-            rowSpacing: Kirigami.Units.largeSpacing
-            Repeater {
-                model: [
-                    { id: "software", title: qsTr("Software"), icon: "package-x-generic" },
-                    { id: "flatpak", title: qsTr("Flatpak"), icon: "applications-all" },
-                    { id: "podman", title: qsTr("Container"), icon: "package" },
-                    { id: "system", title: qsTr("Sistema"), icon: "computer" }
-                ]
-                delegate: Kirigami.AbstractCard {
-                    required property var modelData
-                    Layout.fillWidth: true
-                    onClicked: root.openRequested(modelData.id)
-                    contentItem: ColumnLayout {
-                        spacing: Kirigami.Units.smallSpacing
-                        Kirigami.Icon { source: modelData.icon; Layout.preferredWidth: Kirigami.Units.iconSizes.medium; Layout.preferredHeight: Layout.preferredWidth }
-                        Kirigami.Heading { level: 2; font.bold: true; text: modelData.title }
-                        Controls.Label { Layout.fillWidth: true; text: root.moduleValue(modelData.id); font.bold: false; wrapMode: Text.WordWrap }
-                    }
+                    Item { Layout.fillHeight: true }
                 }
             }
         }
@@ -319,12 +339,51 @@ Kirigami.ScrollablePage {
             contentItem: ColumnLayout {
                 spacing: Kirigami.Units.smallSpacing
                 Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Azioni rapide") }
-                Flow {
+                GridLayout {
                     Layout.fillWidth: true
-                    spacing: Kirigami.Units.smallSpacing
-                    Controls.Button { text: qsTr("Svuota cestini"); icon.name: "user-trash"; enabled: MaintenanceBackend.available && !MaintenanceBackend.running; onClicked: quickTrashDialog.open() }
-                    Controls.Button { text: qsTr("Backup e Recovery"); icon.name: "document-save-all"; onClicked: root.openRequested("recovery") }
-                    Controls.Button { text: qsTr("Terminale"); icon.name: "utilities-terminal"; onClicked: SystemBackend.launchTool("konsole") }
+                    columns: width >= 900 ? 6 : width >= 560 ? 3 : 2
+                    uniformCellWidths: true
+                    columnSpacing: Kirigami.Units.smallSpacing
+                    rowSpacing: Kirigami.Units.smallSpacing
+
+                    Controls.Button {
+                        Layout.fillWidth: true
+                        text: qsTr("Svuota cestini")
+                        icon.name: "user-trash"
+                        enabled: MaintenanceBackend.available && !MaintenanceBackend.running
+                        onClicked: quickTrashDialog.open()
+                    }
+                    Controls.Button {
+                        Layout.fillWidth: true
+                        text: qsTr("Cerca")
+                        icon.name: "edit-find"
+                        enabled: SystemBackend.toolAvailable("kfind")
+                        onClicked: SystemBackend.launchTool("kfind")
+                    }
+                    Controls.Button {
+                        Layout.fillWidth: true
+                        text: qsTr("Temporanea")
+                        icon.name: "folder-temp"
+                        onClicked: SystemBackend.openTemporaryFolder()
+                    }
+                    Controls.Button {
+                        Layout.fillWidth: true
+                        text: qsTr("Home")
+                        icon.name: "user-home"
+                        onClicked: SystemBackend.openHomeFolder()
+                    }
+                    Controls.Button {
+                        Layout.fillWidth: true
+                        text: qsTr("Radice /")
+                        icon.name: "folder"
+                        onClicked: SystemBackend.openRootFolder()
+                    }
+                    Controls.Button {
+                        Layout.fillWidth: true
+                        text: qsTr("Terminale")
+                        icon.name: "utilities-terminal"
+                        onClicked: SystemBackend.launchTool("konsole")
+                    }
                 }
                 Kirigami.InlineMessage {
                     Layout.fillWidth: true

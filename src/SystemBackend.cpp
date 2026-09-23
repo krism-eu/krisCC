@@ -2,6 +2,7 @@
 
 #include "OperationLog.h"
 #include "PolkitHelper.h"
+#include "ProcessRunner.h"
 #include "Validators.h"
 #include "ContractParsers.h"
 
@@ -19,13 +20,17 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
 #include <QHostAddress>
 #include <QLocale>
+#include <QNetworkAccessManager>
 #include <QNetworkAddressEntry>
 #include <QNetworkInterface>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include <QHash>
 #include <QProcess>
 #include <QRegularExpression>
@@ -39,6 +44,7 @@
 #include <QTimer>
 #include <QUrl>
 #include <QVariantMap>
+#include <QVersionNumber>
 
 #include <sys/sysinfo.h>
 #include <unistd.h>
@@ -46,6 +52,9 @@
 #include <algorithm>
 
 namespace {
+constexpr int kBackupVerifyTimeoutMs = 10 * 60 * 1000;
+constexpr int kBackupOperationTimeoutMs = 30 * 60 * 1000;
+
 QString humanGiB(quint64 bytes)
 {
     return QString::number(double(bytes) / (1024.0 * 1024.0 * 1024.0), 'f', 1)
@@ -131,9 +140,12 @@ SystemBackend::SystemBackend(PolkitHelper *polkit, QObject *parent)
     else
         m_backupDirectory = defaultBackupDirectory();
 
+    m_networkAccess = new QNetworkAccessManager(this);
+
     m_resourceTimer = new QTimer(this);
     m_resourceTimer->setInterval(2000);
     connect(m_resourceTimer, &QTimer::timeout, this, &SystemBackend::refreshResources);
+
 }
 
 bool SystemBackend::canSelectNextBoot() const
@@ -336,10 +348,8 @@ bool SystemBackend::selectNextGrub(const QString &value)
 
 SystemBackend::~SystemBackend()
 {
-    if (m_backupProcess && m_backupProcess->state() != QProcess::NotRunning) {
-        m_backupProcess->kill();
-        m_backupProcess->waitForFinished(2000);
-    }
+    if (m_backupRunner && m_backupRunner->running())
+        m_backupRunner->cancel();
     if (!m_backupPartialPath.isEmpty())
         QFile::remove(m_backupPartialPath);
 }
@@ -394,12 +404,31 @@ QString SystemBackend::memorySummary() const
 
 QString SystemBackend::storageSummary() const
 {
-    QStorageInfo storage(QDir::homePath());
-    if (!storage.isValid() || !storage.isReady() || storage.bytesTotal() == 0)
-        storage = QStorageInfo(QStringLiteral("/var"));
-    if (!storage.isValid() || !storage.isReady() || storage.bytesTotal() == 0)
+    const auto summaryFor = [](const QString &path) -> QString {
+        QStorageInfo storage(path);
+        if (!storage.isValid() || !storage.isReady() || storage.bytesTotal() == 0)
+            return QString();
+        return QCoreApplication::translate("SystemBackend", "%1 liberi su %2")
+            .arg(humanGiB(storage.bytesAvailable()), humanGiB(storage.bytesTotal()));
+    };
+
+    QString home = summaryFor(QDir::homePath());
+    if (home.isEmpty())
+        home = summaryFor(QStringLiteral("/var/home"));
+
+    QString system = summaryFor(QStringLiteral("/sysroot"));
+    if (system.isEmpty())
+        system = summaryFor(QStringLiteral("/"));
+
+    if (home.isEmpty() && system.isEmpty())
         return tr("Non disponibile");
-    return tr("%1 liberi su %2").arg(humanGiB(storage.bytesAvailable()), humanGiB(storage.bytesTotal()));
+
+    QStringList lines;
+    if (!home.isEmpty())
+        lines.append(tr("Home: %1").arg(home));
+    if (!system.isEmpty())
+        lines.append(tr("Sistema: %1").arg(system));
+    return lines.join(QLatin1Char('\n'));
 }
 
 void SystemBackend::refreshDashboardState()
@@ -487,7 +516,7 @@ void SystemBackend::refreshTopMemoryProcesses()
     });
 
     QVariantList result;
-    const qsizetype limit = std::min<qsizetype>(7, entries.size());
+    const qsizetype limit = std::min<qsizetype>(10, entries.size());
     for (qsizetype i = 0; i < limit; ++i) {
         QVariantMap row;
         row.insert(QStringLiteral("name"), entries.at(i).displayName);
@@ -697,7 +726,9 @@ QString SystemBackend::toolProgram(const QString &toolId) const
         {QStringLiteral("ksystemlog"), QStringLiteral("ksystemlog")},
         {QStringLiteral("systemmonitor"), QStringLiteral("plasma-systemmonitor")},
         {QStringLiteral("qdirstat"), QStringLiteral("qdirstat")},
-        {QStringLiteral("konsole"), QStringLiteral("konsole")}
+        {QStringLiteral("konsole"), QStringLiteral("konsole")},
+        {QStringLiteral("kfind"), QStringLiteral("kfind")},
+        {QStringLiteral("isoimagewriter"), QStringLiteral("isoimagewriter")}
     };
     return resolveExecutable(names.value(toolId));
 }
@@ -716,9 +747,126 @@ bool SystemBackend::launchTool(const QString &toolId) const
     return info.exists() && info.isExecutable() && QProcess::startDetached(program, {});
 }
 
+bool SystemBackend::openTemporaryFolder() const
+{
+    return QDesktopServices::openUrl(QUrl::fromLocalFile(QDir::tempPath()));
+}
+
+bool SystemBackend::openHomeFolder() const
+{
+    return QDesktopServices::openUrl(QUrl::fromLocalFile(QDir::homePath()));
+}
+
+bool SystemBackend::openRootFolder() const
+{
+    return QDesktopServices::openUrl(QUrl::fromLocalFile(QStringLiteral("/")));
+}
+
 bool SystemBackend::programAvailable(const QString &program) const
 {
     return !resolveExecutable(program).isEmpty();
+}
+
+void SystemBackend::checkControlCenterUpdate()
+{
+    if (m_controlCenterUpdateBusy || !m_networkAccess)
+        return;
+
+    m_controlCenterUpdateBusy = true;
+    m_controlCenterUpdateAvailable = false;
+    m_controlCenterLatestVersion.clear();
+    m_controlCenterUpdateStatus = tr("Verifica aggiornamenti in corso…");
+    emit controlCenterUpdateChanged();
+
+    QNetworkRequest request(
+        QUrl(QStringLiteral("https://api.github.com/repos/krism-eu/krisCC/releases/latest")));
+    request.setRawHeader("Accept", "application/vnd.github+json");
+    request.setRawHeader("User-Agent",
+                         QByteArray("krisCC/") + QCoreApplication::applicationVersion().toUtf8());
+
+    QNetworkReply *reply = m_networkAccess->get(request);
+    connect(reply, &QNetworkReply::finished, this, [this, reply] {
+        const auto finishError = [this](const QString &message) {
+            m_controlCenterUpdateBusy = false;
+            m_controlCenterUpdateAvailable = false;
+            m_controlCenterLatestVersion.clear();
+            m_controlCenterUpdateStatus = message;
+            emit controlCenterUpdateChanged();
+        };
+
+        if (reply->error() != QNetworkReply::NoError) {
+            const QString error = reply->errorString();
+            reply->deleteLater();
+            finishError(tr("Verifica aggiornamenti non riuscita: %1").arg(error));
+            return;
+        }
+
+        QJsonParseError parseError;
+        const QJsonDocument document = QJsonDocument::fromJson(reply->readAll(), &parseError);
+        reply->deleteLater();
+        if (parseError.error != QJsonParseError::NoError || !document.isObject()) {
+            finishError(tr("Risposta release non valida."));
+            return;
+        }
+
+        const QJsonObject release = document.object();
+        if (release.value(QStringLiteral("draft")).toBool()
+            || release.value(QStringLiteral("prerelease")).toBool()) {
+            finishError(tr("La release stable restituita non è valida."));
+            return;
+        }
+
+        const QString tag = release.value(QStringLiteral("tag_name")).toString().trimmed();
+        static const QRegularExpression tagPattern(
+            QStringLiteral("^v([0-9]+\\.[0-9]+\\.[0-9]+)$"));
+        const QRegularExpressionMatch match = tagPattern.match(tag);
+        if (!match.hasMatch()) {
+            finishError(tr("Versione release non riconosciuta."));
+            return;
+        }
+
+        const QString latest = match.captured(1);
+        const QString expectedAsset =
+            QStringLiteral("krisCC-%1-1.fc44.x86_64.rpm").arg(latest);
+        bool assetFound = false;
+        for (const QJsonValue &value : release.value(QStringLiteral("assets")).toArray()) {
+            if (value.isObject()
+                && value.toObject().value(QStringLiteral("name")).toString() == expectedAsset) {
+                assetFound = true;
+                break;
+            }
+        }
+        if (!assetFound) {
+            finishError(tr("La release %1 non contiene l'RPM previsto.").arg(tag));
+            return;
+        }
+
+        const QVersionNumber current =
+            QVersionNumber::fromString(QCoreApplication::applicationVersion());
+        const QVersionNumber remote = QVersionNumber::fromString(latest);
+        if (current.isNull() || remote.isNull()) {
+            finishError(tr("Impossibile confrontare le versioni del Control Center."));
+            return;
+        }
+
+        m_controlCenterUpdateBusy = false;
+        m_controlCenterLatestVersion = latest;
+        const int comparison = QVersionNumber::compare(remote, current);
+        m_controlCenterUpdateAvailable = comparison > 0;
+        if (comparison > 0) {
+            m_controlCenterUpdateStatus =
+                tr("Disponibile krisCC %1 (installata %2). krisCC fa parte dell'immagine KrisOS: applica l'aggiornamento dalla sezione Sistema.")
+                    .arg(latest, QCoreApplication::applicationVersion());
+        } else if (comparison == 0) {
+            m_controlCenterUpdateStatus =
+                tr("Il Control Center è già aggiornato (%1).").arg(latest);
+        } else {
+            m_controlCenterUpdateStatus =
+                tr("La versione installata %1 è più recente della stable %2.")
+                    .arg(QCoreApplication::applicationVersion(), latest);
+        }
+        emit controlCenterUpdateChanged();
+    });
 }
 
 void SystemBackend::refreshServiceStates()
@@ -986,58 +1134,62 @@ bool SystemBackend::verifySnapshot(const QString &path)
         return false;
     }
 
-    auto *process = new QProcess(this);
-    const QPointer<QProcess> guarded(process);
-    m_backupProcess = process;
-    m_backupCancelled = false;
-    process->setProcessChannelMode(QProcess::SeparateChannels);
-    process->setStandardOutputFile(QProcess::nullDevice());
+    auto *runner = new ProcessRunner(this);
+    m_backupRunner = runner;
     setBackupBusy(true);
     setBackupResult(tr("Verifica archivio in corso…"), canonical, QStringLiteral("running"));
 
-    connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-            [this, guarded, canonical](int exitCode, QProcess::ExitStatus status) {
-        if (!guarded || guarded != m_backupProcess)
+    connect(runner, &ProcessRunner::finished, this,
+            [this, runner, canonical](ProcessRunner::Outcome outcome, int,
+                                      const QByteArray &, const QByteArray &stderrData,
+                                      const QString &errorString) {
+        if (runner != m_backupRunner)
             return;
-        const QString details = QString::fromUtf8(guarded->readAllStandardError()).trimmed();
-        const bool cancelled = m_backupCancelled;
-        m_backupProcess = nullptr;
-        guarded->deleteLater();
+        m_backupRunner = nullptr;
+        runner->deleteLater();
         setBackupBusy(false);
-        m_backupCancelled = false;
 
-        if (cancelled) {
-            setBackupResult(tr("Verifica annullata."), canonical, QStringLiteral("cancelled"));
-            return;
-        }
-        if (status == QProcess::NormalExit && exitCode == 0) {
-            setBackupResult(tr("Archivio verificato correttamente."), canonical, QStringLiteral("success"));
+        const QString details = QString::fromUtf8(stderrData).trimmed();
+        if (outcome == ProcessRunner::Success) {
+            setBackupResult(tr("Archivio verificato correttamente."), canonical,
+                            QStringLiteral("success"));
             OperationLog::append(QStringLiteral("Backup"), QStringLiteral("verify"),
                                  QStringLiteral("success"), QFileInfo(canonical).fileName());
             return;
         }
-        setBackupResult(details.isEmpty() ? tr("Archivio non valido o danneggiato.") : details,
-                        canonical, QStringLiteral("error"));
+
+        QString message;
+        QString state = QStringLiteral("error");
+        if (outcome == ProcessRunner::Cancelled) {
+            message = tr("Verifica annullata.");
+            state = QStringLiteral("cancelled");
+        } else if (outcome == ProcessRunner::TimedOut) {
+            message = tr("Tempo massimo superato durante la verifica dell'archivio.");
+        } else if (outcome == ProcessRunner::FailedToStart) {
+            message = tr("Impossibile avviare la verifica: %1").arg(errorString);
+        } else {
+            message = details.isEmpty() ? tr("Archivio non valido o danneggiato.") : details;
+        }
+        setBackupResult(message, canonical, state);
         OperationLog::append(QStringLiteral("Backup"), QStringLiteral("verify"),
-                             QStringLiteral("error"), QFileInfo(canonical).fileName());
+                             state, QFileInfo(canonical).fileName());
     });
 
-    connect(process, &QProcess::errorOccurred, this,
-            [this, guarded, canonical](QProcess::ProcessError error) {
-        if (!guarded || guarded != m_backupProcess || error != QProcess::FailedToStart)
-            return;
-        const QString message = guarded->errorString();
-        m_backupProcess = nullptr;
-        guarded->deleteLater();
-        m_backupCancelled = false;
+    ProcessRunner::Options options;
+    options.program = tar;
+    options.arguments = {QStringLiteral("-tzf"), canonical};
+    options.timeoutMs = kBackupVerifyTimeoutMs;
+    options.maxOutputBytes = 64 * 1024;
+    options.mergedChannels = false;
+    options.processGroup = true;
+    if (!runner->start(options)) {
+        m_backupRunner = nullptr;
+        runner->deleteLater();
         setBackupBusy(false);
-        setBackupResult(tr("Impossibile avviare la verifica: %1").arg(message),
+        setBackupResult(tr("Impossibile inizializzare la verifica dell'archivio."),
                         canonical, QStringLiteral("error"));
-        OperationLog::append(QStringLiteral("Backup"), QStringLiteral("verify"),
-                             QStringLiteral("error"), QFileInfo(canonical).fileName());
-    });
-
-    process->start(tar, {QStringLiteral("-tzf"), canonical});
+        return false;
+    }
     return true;
 }
 
@@ -1059,64 +1211,137 @@ bool SystemBackend::restoreSnapshot(const QString &path)
         return false;
     }
 
-    auto *process = new QProcess(this);
-    const QPointer<QProcess> guarded(process);
-    m_backupProcess = process;
-    m_backupCancelled = false;
-    process->setProcessChannelMode(QProcess::MergedChannels);
     setBackupBusy(true);
-    setBackupResult(tr("Ripristino in corso…"), canonical, QStringLiteral("running"));
+    setBackupResult(tr("Verifica preventiva archivio in corso…"), canonical,
+                    QStringLiteral("running"));
 
-    connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-            [this, guarded, canonical](int exitCode, QProcess::ExitStatus status) {
-        if (!guarded || guarded != m_backupProcess)
-            return;
-        const QString details = QString::fromUtf8(guarded->readAllStandardOutput()).trimmed();
-        const bool cancelled = m_backupCancelled;
-        m_backupProcess = nullptr;
-        guarded->deleteLater();
-        setBackupBusy(false);
-        m_backupCancelled = false;
+    const auto startRestore = [this, canonical, tar]() {
+        auto *runner = new ProcessRunner(this);
+        m_backupRunner = runner;
+        setBackupResult(tr("Ripristino in corso…"), canonical, QStringLiteral("running"));
 
-        if (cancelled) {
-            setBackupResult(tr("Ripristino annullato. Alcuni file potrebbero essere già stati ripristinati."),
-                            canonical, QStringLiteral("warning"));
+        connect(runner, &ProcessRunner::finished, this,
+                [this, runner, canonical](ProcessRunner::Outcome outcome, int exitCode,
+                                          const QByteArray &stdoutData,
+                                          const QByteArray &stderrData,
+                                          const QString &errorString) {
+            if (runner != m_backupRunner)
+                return;
+            m_backupRunner = nullptr;
+            runner->deleteLater();
+            setBackupBusy(false);
+
+            QByteArray combined = stdoutData;
+            if (!combined.isEmpty() && !stderrData.isEmpty() && !combined.endsWith('\n'))
+                combined.append('\n');
+            combined.append(stderrData);
+            const QString details = QString::fromUtf8(combined).trimmed();
+
+            if (outcome == ProcessRunner::Success) {
+                setBackupResult(tr("Backup ripristinato. Disconnettersi o riavviare le applicazioni interessate per applicare tutte le configurazioni."),
+                                canonical, QStringLiteral("success"));
+                OperationLog::append(QStringLiteral("Backup"), QStringLiteral("restore"),
+                                     QStringLiteral("success"), QFileInfo(canonical).fileName());
+                notify(tr("Ripristino completato"), QFileInfo(canonical).fileName());
+                return;
+            }
+
+            QString message;
+            QString state = QStringLiteral("error");
+            if (outcome == ProcessRunner::Cancelled) {
+                message = tr("Ripristino annullato. Alcuni file potrebbero essere già stati ripristinati.");
+                state = QStringLiteral("warning");
+            } else if (outcome == ProcessRunner::TimedOut) {
+                message = tr("Ripristino interrotto per timeout. Alcuni file potrebbero essere già stati ripristinati.");
+                state = QStringLiteral("warning");
+            } else if (outcome == ProcessRunner::FailedToStart) {
+                message = tr("Impossibile avviare il ripristino: %1").arg(errorString);
+            } else {
+                message = details.isEmpty()
+                    ? tr("Ripristino non riuscito (codice %1).").arg(exitCode)
+                    : details;
+            }
+            setBackupResult(message, canonical, state);
             OperationLog::append(QStringLiteral("Backup"), QStringLiteral("restore"),
-                                 QStringLiteral("cancelled"), QFileInfo(canonical).fileName());
+                                 outcome == ProcessRunner::TimedOut ? QStringLiteral("timeout")
+                                                                   : state,
+                                 QFileInfo(canonical).fileName());
+        });
+
+        ProcessRunner::Options options;
+        options.program = tar;
+        options.arguments = {QStringLiteral("-xzf"), canonical,
+                             QStringLiteral("--no-same-owner"),
+                             QStringLiteral("--no-same-permissions"),
+                             QStringLiteral("-C"), QDir::homePath()};
+        options.timeoutMs = kBackupOperationTimeoutMs;
+        options.maxOutputBytes = 256 * 1024;
+        options.mergedChannels = false;
+        options.processGroup = true;
+        if (!runner->start(options)) {
+            m_backupRunner = nullptr;
+            runner->deleteLater();
+            setBackupBusy(false);
+            setBackupResult(tr("Impossibile inizializzare il ripristino."),
+                            canonical, QStringLiteral("error"));
+            OperationLog::append(QStringLiteral("Backup"), QStringLiteral("restore"),
+                                 QStringLiteral("error"), QFileInfo(canonical).fileName());
+        }
+    };
+
+    auto *preflight = new ProcessRunner(this);
+    m_backupRunner = preflight;
+    connect(preflight, &ProcessRunner::finished, this,
+            [this, preflight, canonical, startRestore](ProcessRunner::Outcome outcome, int,
+                                                       const QByteArray &,
+                                                       const QByteArray &stderrData,
+                                                       const QString &errorString) {
+        if (preflight != m_backupRunner)
+            return;
+        m_backupRunner = nullptr;
+        preflight->deleteLater();
+
+        if (outcome == ProcessRunner::Success) {
+            startRestore();
             return;
         }
-        if (status == QProcess::NormalExit && exitCode == 0) {
-            setBackupResult(tr("Backup ripristinato. Disconnettersi o riavviare le applicazioni interessate per applicare tutte le configurazioni."),
-                            canonical, QStringLiteral("success"));
-            OperationLog::append(QStringLiteral("Backup"), QStringLiteral("restore"),
-                                 QStringLiteral("success"), QFileInfo(canonical).fileName());
-            notify(tr("Ripristino completato"), QFileInfo(canonical).fileName());
-            return;
-        }
-        setBackupResult(details.isEmpty() ? tr("Ripristino non riuscito.") : details,
-                        canonical, QStringLiteral("error"));
-        OperationLog::append(QStringLiteral("Backup"), QStringLiteral("restore"),
-                             QStringLiteral("error"), QFileInfo(canonical).fileName());
-    });
 
-    connect(process, &QProcess::errorOccurred, this,
-            [this, guarded, canonical](QProcess::ProcessError error) {
-        if (!guarded || guarded != m_backupProcess || error != QProcess::FailedToStart)
-            return;
-        const QString message = guarded->errorString();
-        m_backupProcess = nullptr;
-        guarded->deleteLater();
-        m_backupCancelled = false;
         setBackupBusy(false);
-        setBackupResult(tr("Impossibile avviare il ripristino: %1").arg(message),
-                        canonical, QStringLiteral("error"));
+        const QString details = QString::fromUtf8(stderrData).trimmed();
+        QString message;
+        QString state = QStringLiteral("error");
+        if (outcome == ProcessRunner::Cancelled) {
+            message = tr("Ripristino annullato durante la verifica preventiva.");
+            state = QStringLiteral("cancelled");
+        } else if (outcome == ProcessRunner::TimedOut) {
+            message = tr("Tempo massimo superato durante la verifica preventiva dell'archivio.");
+        } else if (outcome == ProcessRunner::FailedToStart) {
+            message = tr("Impossibile avviare la verifica preventiva: %1").arg(errorString);
+        } else {
+            message = details.isEmpty()
+                ? tr("Ripristino bloccato: l'archivio non supera la verifica preventiva.")
+                : details;
+        }
+        setBackupResult(message, canonical, state);
         OperationLog::append(QStringLiteral("Backup"), QStringLiteral("restore"),
-                             QStringLiteral("error"), QFileInfo(canonical).fileName());
+                             state, QFileInfo(canonical).fileName());
     });
 
-    process->start(tar, {QStringLiteral("-xzf"), canonical,
-                         QStringLiteral("--no-same-owner"), QStringLiteral("--no-same-permissions"),
-                         QStringLiteral("-C"), QDir::homePath()});
+    ProcessRunner::Options preflightOptions;
+    preflightOptions.program = tar;
+    preflightOptions.arguments = {QStringLiteral("-tzf"), canonical};
+    preflightOptions.timeoutMs = kBackupVerifyTimeoutMs;
+    preflightOptions.maxOutputBytes = 64 * 1024;
+    preflightOptions.mergedChannels = false;
+    preflightOptions.processGroup = true;
+    if (!preflight->start(preflightOptions)) {
+        m_backupRunner = nullptr;
+        preflight->deleteLater();
+        setBackupBusy(false);
+        setBackupResult(tr("Impossibile inizializzare la verifica preventiva."),
+                        canonical, QStringLiteral("error"));
+        return false;
+    }
     return true;
 }
 
@@ -1259,38 +1484,31 @@ bool SystemBackend::createSnapshot(const QString &kind)
         args << entries;
     }
 
-    auto *process = new QProcess(this);
-    const QPointer<QProcess> guarded(process);
-    m_backupProcess = process;
+    auto *runner = new ProcessRunner(this);
+    m_backupRunner = runner;
     m_backupPartialPath = partial;
-    m_backupCancelled = false;
-    process->setProcessChannelMode(QProcess::MergedChannels);
     setBackupBusy(true);
     setBackupResult(tr("Creazione snapshot in corso…"), output, QStringLiteral("running"));
 
-    connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-            [this, guarded, output, partial](int exitCode, QProcess::ExitStatus status) {
-        if (!guarded || guarded != m_backupProcess)
+    connect(runner, &ProcessRunner::finished, this,
+            [this, runner, output, partial](ProcessRunner::Outcome outcome, int exitCode,
+                                            const QByteArray &stdoutData,
+                                            const QByteArray &stderrData,
+                                            const QString &errorString) {
+        if (runner != m_backupRunner)
             return;
-        const QString details = QString::fromUtf8(guarded->readAllStandardOutput()).trimmed();
-        const bool cancelled = m_backupCancelled;
-        m_backupProcess = nullptr;
-        guarded->deleteLater();
+        m_backupRunner = nullptr;
+        runner->deleteLater();
         setBackupBusy(false);
 
-        if (cancelled) {
-            QFile::remove(partial);
-            m_backupPartialPath.clear();
-            m_backupCancelled = false;
-            setBackupResult(tr("Backup annullato; il file parziale è stato rimosso."), QString(), QStringLiteral("cancelled"));
-            OperationLog::append(QStringLiteral("Backup"), QStringLiteral("create"),
-                                 QStringLiteral("cancelled"), QFileInfo(output).fileName());
-            return;
-        }
+        QByteArray combined = stdoutData;
+        if (!combined.isEmpty() && !stderrData.isEmpty() && !combined.endsWith('\n'))
+            combined.append('\n');
+        combined.append(stderrData);
+        const QString details = QString::fromUtf8(combined).trimmed();
 
         const bool archiveProduced = QFileInfo(partial).exists() && QFileInfo(partial).size() > 0;
-        const bool completed = status == QProcess::NormalExit && (exitCode == 0 || exitCode == 1) && archiveProduced;
-        if (completed) {
+        if (outcome == ProcessRunner::Success && archiveProduced) {
             QFile::remove(output);
             if (!QFile::rename(partial, output)) {
                 m_backupPartialPath = partial;
@@ -1300,63 +1518,61 @@ bool SystemBackend::createSnapshot(const QString &kind)
             }
             m_backupPartialPath.clear();
             QFile::setPermissions(output, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
-            if (exitCode == 0) {
-                setBackupResult(tr("Snapshot creato correttamente."), output, QStringLiteral("success"));
-                OperationLog::append(QStringLiteral("Backup"), QStringLiteral("create"),
-                                     QStringLiteral("success"), QFileInfo(output).fileName());
-                notify(tr("Backup completato"), output);
-            } else {
-                const QString warning = details.isEmpty()
-                    ? tr("Snapshot creato con avvisi da tar. Verificare l'archivio prima di usarlo per un ripristino.")
-                    : tr("Snapshot creato con avvisi da tar. Verificare l'archivio prima di usarlo per un ripristino.\n%1").arg(details);
-                setBackupResult(warning, output, QStringLiteral("warning"));
-                OperationLog::append(QStringLiteral("Backup"), QStringLiteral("create"),
-                                     QStringLiteral("warning"), QFileInfo(output).fileName());
-                notify(tr("Backup completato con avvisi"), output);
-            }
+            setBackupResult(tr("Snapshot creato correttamente."), output, QStringLiteral("success"));
+            OperationLog::append(QStringLiteral("Backup"), QStringLiteral("create"),
+                                 QStringLiteral("success"), QFileInfo(output).fileName());
+            notify(tr("Backup completato"), output);
             return;
         }
 
         QFile::remove(partial);
         m_backupPartialPath.clear();
-        const QString message = details.isEmpty()
-            ? tr("Snapshot non riuscito (codice %1).").arg(exitCode)
-            : details;
-        setBackupResult(message, QString(), QStringLiteral("error"));
+        QString message;
+        QString state = QStringLiteral("error");
+        if (outcome == ProcessRunner::Cancelled) {
+            message = tr("Backup annullato; il file parziale è stato rimosso.");
+            state = QStringLiteral("cancelled");
+        } else if (outcome == ProcessRunner::TimedOut) {
+            message = tr("Tempo massimo superato durante il backup; il file parziale è stato rimosso.");
+        } else if (outcome == ProcessRunner::FailedToStart) {
+            message = tr("Impossibile avviare il backup: %1").arg(errorString);
+        } else if (!archiveProduced && outcome == ProcessRunner::Success) {
+            message = tr("Snapshot terminato senza produrre un archivio utilizzabile.");
+        } else {
+            message = details.isEmpty()
+                ? tr("Snapshot non riuscito (codice %1).").arg(exitCode)
+                : details;
+        }
+        setBackupResult(message, QString(), state);
         OperationLog::append(QStringLiteral("Backup"), QStringLiteral("create"),
-                             QStringLiteral("error"), QFileInfo(output).fileName());
+                             outcome == ProcessRunner::TimedOut ? QStringLiteral("timeout")
+                                                               : state,
+                             QFileInfo(output).fileName());
     });
 
-    connect(process, &QProcess::errorOccurred, this,
-            [this, guarded, partial](QProcess::ProcessError error) {
-        if (!guarded || guarded != m_backupProcess || error != QProcess::FailedToStart)
-            return;
-        const QString message = guarded->errorString();
-        m_backupProcess = nullptr;
-        guarded->deleteLater();
+    ProcessRunner::Options options;
+    options.program = tar;
+    options.arguments = args;
+    options.timeoutMs = kBackupOperationTimeoutMs;
+    options.maxOutputBytes = 256 * 1024;
+    options.mergedChannels = false;
+    options.processGroup = true;
+    if (!runner->start(options)) {
+        m_backupRunner = nullptr;
+        runner->deleteLater();
         QFile::remove(partial);
         m_backupPartialPath.clear();
-        m_backupCancelled = false;
         setBackupBusy(false);
-        setBackupResult(tr("Impossibile avviare il backup: %1").arg(message), QString(), QStringLiteral("error"));
-    });
-
-    process->start(tar, args);
+        setBackupResult(tr("Impossibile inizializzare il backup."), QString(),
+                        QStringLiteral("error"));
+        return false;
+    }
     return true;
 }
 
 bool SystemBackend::cancelSnapshot()
 {
-    if (!m_backupProcess || !m_backupBusy)
-        return false;
-    m_backupCancelled = true;
-    m_backupProcess->terminate();
-    const QPointer<QProcess> guarded = m_backupProcess;
-    QTimer::singleShot(2000, guarded, [guarded] {
-        if (guarded && guarded->state() != QProcess::NotRunning)
-            guarded->kill();
-    });
-    return true;
+    return m_backupRunner && m_backupBusy && m_backupRunner->cancel();
 }
 
 bool SystemBackend::deleteSnapshot(const QString &path)

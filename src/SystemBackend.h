@@ -8,8 +8,10 @@
 #include <QVariantMap>
 
 class QTimer;
+class QNetworkAccessManager;
 
 class PolkitHelper;
+class ProcessRunner;
 
 class SystemBackend : public QObject
 {
@@ -48,6 +50,10 @@ class SystemBackend : public QObject
     Q_PROPERTY(QString backupState READ backupState NOTIFY backupStatusChanged)
     Q_PROPERTY(QString backupDirectory READ backupDirectory NOTIFY backupDirectoryChanged)
     Q_PROPERTY(bool backupIsLocalSnapshot READ backupIsLocalSnapshot NOTIFY backupDirectoryChanged)
+    Q_PROPERTY(bool controlCenterUpdateBusy READ controlCenterUpdateBusy NOTIFY controlCenterUpdateChanged)
+    Q_PROPERTY(bool controlCenterUpdateAvailable READ controlCenterUpdateAvailable NOTIFY controlCenterUpdateChanged)
+    Q_PROPERTY(QString controlCenterLatestVersion READ controlCenterLatestVersion NOTIFY controlCenterUpdateChanged)
+    Q_PROPERTY(QString controlCenterUpdateStatus READ controlCenterUpdateStatus NOTIFY controlCenterUpdateChanged)
 
 public:
     explicit SystemBackend(PolkitHelper *polkit, QObject *parent = nullptr);
@@ -88,6 +94,10 @@ public:
     const QString &backupState() const { return m_backupState; }
     const QString &backupDirectory() const { return m_backupDirectory; }
     bool backupIsLocalSnapshot() const;
+    bool controlCenterUpdateBusy() const { return m_controlCenterUpdateBusy; }
+    bool controlCenterUpdateAvailable() const { return m_controlCenterUpdateAvailable; }
+    const QString &controlCenterLatestVersion() const { return m_controlCenterLatestVersion; }
+    const QString &controlCenterUpdateStatus() const { return m_controlCenterUpdateStatus; }
 
     Q_INVOKABLE QString quickSystemInfo() const;
     Q_INVOKABLE void copyToClipboard(const QString &text) const;
@@ -96,7 +106,11 @@ public:
     Q_INVOKABLE void refreshDashboardState();
     Q_INVOKABLE bool toolAvailable(const QString &toolId) const;
     Q_INVOKABLE bool launchTool(const QString &toolId) const;
+    Q_INVOKABLE bool openTemporaryFolder() const;
+    Q_INVOKABLE bool openHomeFolder() const;
+    Q_INVOKABLE bool openRootFolder() const;
     Q_INVOKABLE bool programAvailable(const QString &program) const;
+    Q_INVOKABLE void checkControlCenterUpdate();
     Q_INVOKABLE void refreshServiceStates();
     Q_INVOKABLE bool restartService(const QString &service);
     Q_INVOKABLE void requestReboot();
@@ -134,6 +148,7 @@ signals:
     void storageSummaryChanged();
     void topMemoryProcessesChanged();
     void networkChanged();
+    void controlCenterUpdateChanged();
 
 private:
     QString readOsName() const;
@@ -152,6 +167,7 @@ private:
     double readCpuTemperature() const;
 
     PolkitHelper *m_polkit = nullptr;
+    QNetworkAccessManager *m_networkAccess = nullptr;
     bool m_bootSelectionOwned = false;
     bool m_bootSelectionRunning = false;
     QString m_bootSelectionKind;
@@ -177,12 +193,15 @@ private:
     QString m_networkState = QStringLiteral("down");
     QString m_networkKind = QStringLiteral("ethernet");
     quint64 m_serviceRefreshGeneration = 0;
-    QPointer<QProcess> m_backupProcess;
+    bool m_controlCenterUpdateBusy = false;
+    bool m_controlCenterUpdateAvailable = false;
+    QString m_controlCenterLatestVersion;
+    QString m_controlCenterUpdateStatus;
+    QPointer<ProcessRunner> m_backupRunner;
     bool m_backupBusy = false;
     QString m_backupStatus;
     QString m_backupPath;
     QString m_backupState = QStringLiteral("idle");
     QString m_backupDirectory;
     QString m_backupPartialPath;
-    bool m_backupCancelled = false;
 };

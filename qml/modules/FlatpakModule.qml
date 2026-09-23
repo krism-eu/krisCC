@@ -11,6 +11,7 @@ Kirigami.Page {
 
     UtilityBackend { id: utilityBackend }
     UtilityBackend { id: systemScopeBackend }
+    UtilityBackend { id: detailBackend }
     property string mode: "search"
     property string lastQuery: ""
     property bool refreshUpdatesAfterAction: false
@@ -18,6 +19,7 @@ Kirigami.Page {
     property bool refreshRemotesAfterAdd: false
     property bool refreshInstalledAfterAction: false
     property bool systemScopeChecked: false
+    property string detailName: ""
 
     function refreshSystemScope() {
         if (!SystemBackend.programAvailable("flatpak") || systemScopeBackend.busy)
@@ -60,6 +62,13 @@ Kirigami.Page {
     function removeFlatpak(appId) {
         root.refreshInstalledAfterAction = true
         utilityBackend.runFlatpak("remove", appId)
+    }
+
+    function showFlatpakInfo(name, appId, remote) {
+        root.detailName = name || appId
+        detailBackend.clearResult()
+        flatpakInfoDialog.open()
+        detailBackend.runFlatpak("info", appId, root.preferredRemote(remote))
     }
 
     onVisibleChanged: if (visible && !root.systemScopeChecked) root.refreshSystemScope()
@@ -233,7 +242,7 @@ Kirigami.Page {
                         Kirigami.Icon {
                             Layout.preferredWidth: Kirigami.Units.iconSizes.large
                             Layout.preferredHeight: Kirigami.Units.iconSizes.large
-                            Layout.alignment: Qt.AlignTop
+                            Layout.alignment: Qt.AlignVCenter
                             source: {
                                 if (root.mode === "remotes")
                                     return "network-server"
@@ -274,6 +283,15 @@ Kirigami.Page {
                                     return [modelData[1], modelData[2], modelData[3]].filter(function(x) { return !!x }).join(" · ")
                                 }
                             }
+                        }
+
+                        Controls.Button {
+                            visible: root.mode === "search" && modelData.length >= 3
+                            text: qsTr("Info")
+                            icon.name: "documentinfo"
+                            enabled: !detailBackend.busy
+                            onClicked: root.showFlatpakInfo(modelData[0] || modelData[2],
+                                                           modelData[2], modelData[5] || "")
                         }
 
                         Controls.Button {
@@ -357,6 +375,46 @@ Kirigami.Page {
             root.mode = "remotes"
             flatpakTabs.currentIndex = 3
             utilityBackend.addFlathubUser()
+        }
+    }
+
+    Controls.Dialog {
+        id: flatpakInfoDialog
+        modal: true
+        parent: Controls.Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 36,
+                        parent ? parent.width - Kirigami.Units.largeSpacing * 2
+                               : Kirigami.Units.gridUnit * 36)
+        title: qsTr("Informazioni · %1").arg(root.detailName)
+        standardButtons: Controls.Dialog.Close
+        contentItem: ColumnLayout {
+            spacing: Kirigami.Units.smallSpacing
+            Controls.BusyIndicator {
+                visible: detailBackend.busy
+                running: visible
+                Layout.alignment: Qt.AlignHCenter
+            }
+            Controls.Label {
+                Layout.fillWidth: true
+                visible: detailBackend.busy
+                text: qsTr("Recupero informazioni dal remote…")
+                opacity: UiMetrics.secondaryOpacity
+            }
+            Kirigami.InlineMessage {
+                Layout.fillWidth: true
+                visible: !detailBackend.busy && detailBackend.resultState === "error"
+                type: Kirigami.MessageType.Error
+                text: detailBackend.output
+            }
+            OutputCard {
+                Layout.fillWidth: true
+                visible: !detailBackend.busy
+                         && detailBackend.resultState === "success"
+                         && detailBackend.output.length > 0
+                embedded: true
+                outputText: detailBackend.output
+            }
         }
     }
 

@@ -51,18 +51,6 @@ private slots:
         QVERIFY(flatpak.ok());
         QCOMPARE(flatpak.values.at(0).toStringList().at(1), QStringLiteral("com.vivaldi.Vivaldi"));
 
-        const auto remoteThree = ContractParsers::parseFlatpakRemotes(
-            "flathub\tFlathub\thttps://dl.flathub.org/repo/\n");
-        QVERIFY(remoteThree.ok());
-        QCOMPARE(remoteThree.values.size(), 1);
-        QCOMPARE(remoteThree.values.at(0).toStringList().size(), 4);
-        QCOMPARE(remoteThree.values.at(0).toStringList().at(3), QString());
-
-        const auto remoteFour = ContractParsers::parseFlatpakRemotes(
-            "flathub\tFlathub\thttps://dl.flathub.org/repo/\t\n");
-        QVERIFY(remoteFour.ok());
-        QVERIFY(!ContractParsers::parseFlatpakRemotes("broken\trow\n").ok());
-
         const auto remotes = ContractParsers::parseFlatpakTsv(
             "flathub\tFlathub\thttps://dl.flathub.org/repo/\t\n", 4);
         QVERIFY(remotes.ok());

@@ -37,6 +37,12 @@ system_cpp = read("src/SystemBackend.cpp")
 software_qml = read("qml/modules/SoftwareModule.qml")
 flatpak_qml = read("qml/modules/FlatpakModule.qml")
 system_qml = read("qml/modules/SystemModule.qml")
+dashboard_qml = read("qml/modules/DashboardModule.qml")
+commands_qml = read("qml/modules/CommandsModule.qml")
+recovery_qml = read("qml/modules/RecoveryModule.qml")
+contract_parsers_h = read("src/ContractParsers.h")
+contract_parsers_cpp = read("src/ContractParsers.cpp")
+contract_parsers_test = read("tests/test_contract_parsers.cpp")
 
 require(f'Version:        {VERSION}' in spec, "RPM Version differs from canonical version")
 require('Release:        1%{?dist}' in spec,
@@ -102,6 +108,8 @@ require('QStringLiteral("/usr/bin/rk")' in admin_policy
         "AdminPolicy lost fixed executable mapping")
 require("/usr/bin/bash" not in admin_policy and "/usr/bin/sh" not in admin_policy,
         "AdminPolicy must never expose a root shell")
+require('QStringLiteral("cc-update")' not in admin_policy,
+        "krisCC is image-owned and must not have a standalone privileged RPM updater")
 require("setStandardInputFile(QProcess::nullDevice())" in admin_cpp,
         "root helper stdin must be closed")
 require("SIGTERM" in admin_cpp and "SIGKILL" in admin_cpp and "return 124" in admin_cpp,
@@ -115,6 +123,15 @@ require("setStandardInputFile(QProcess::nullDevice())" in process_runner,
         "shared user-level ProcessRunner must close stdin")
 require("ProcessRunner" in custom_cpp and "ProcessRunner" in utility_cpp,
         "custom actions and utility commands must use the shared ProcessRunner")
+require("ProcessRunner" in system_cpp
+        and "m_backupRunner" in read("src/SystemBackend.h")
+        and "kBackupVerifyTimeoutMs" in system_cpp
+        and "kBackupOperationTimeoutMs" in system_cpp,
+        "backup operations must use the bounded shared ProcessRunner")
+require("(exitCode == 0 || exitCode == 1)" not in system_cpp,
+        "tar exit code 1 must never be published as a valid backup")
+require('preflightOptions.arguments = {QStringLiteral("-tzf"), canonical};' in system_cpp,
+        "restore must gate extraction behind an archive preflight")
 
 require("options.mergedChannels = !structuredOutput;" in utility_cpp,
         "machine-readable utility output must be isolated from stderr")
@@ -158,6 +175,14 @@ require("Novità repository" not in software_qml,
         "removed repository-news tab returned")
 require('text: qsTr("Dettagli tecnici")' not in system_qml,
         "raw BootC JSON toggle returned")
+require("id: flatpakDialog" not in system_qml
+        and 'text: qsTr("Aggiorna tutto")' not in system_qml,
+        "System updates tab must not duplicate Flatpak updating")
+require('text: qsTr("Plasma")' not in system_qml,
+        "System tools must not duplicate the Plasma launcher block")
+require('launchTool("isoimagewriter")' in system_qml
+        and 'QStringLiteral("isoimagewriter")' in system_cpp,
+        "ISO Image Writer shortcut contract is missing")
 require("entries.size() >= 500" not in package_cpp,
         "installed RPM inventory is silently capped")
 require("entries.size() >= 100" in package_cpp and "m_truncated" in package_cpp,
@@ -168,20 +193,81 @@ require('QStringLiteral("firewalld.service")' in system_cpp,
         "Dashboard firewall state is not sourced from firewalld")
 require("topMemoryProcesses" in read("src/SystemBackend.h"),
         "Dashboard top-memory model is missing")
+require("std::min<qsizetype>(10, entries.size())" in system_cpp,
+        "Dashboard must expose the top ten RAM process groups")
+require('model: ["overlay", "sync", "selinux", "firewall", "storage", "network"]' in dashboard_qml,
+        "Dashboard six-tile status grid order changed")
+require('{ id: "system", title: qsTr("Sistema")' not in dashboard_qml
+        and dashboard_qml.find('{ id: "flatpak", title: qsTr("Flatpak")')
+            < dashboard_qml.find('{ id: "software", title: qsTr("Software")'),
+        "Dashboard top row must start with Flatpak/Software and omit the redundant System tile")
+require('qsTr("CPU")' in dashboard_qml
+        and 'qsTr("Temperatura")' in dashboard_qml
+        and 'Layout.column: 2' in dashboard_qml
+        and 'Layout.row: 0' in dashboard_qml,
+        "Dashboard combined CPU/temperature card is missing from the third top column")
+require("memoryTotalMiB" not in dashboard_qml,
+        "Dashboard RAM card must not show total/swap text")
 require("networkState" in read("src/SystemBackend.h")
-        and '"network"' in read("qml/modules/DashboardModule.qml"),
+        and '"network"' in dashboard_qml,
         "Dashboard network card contract is missing")
+require('SystemBackend.launchTool("kfind")' in dashboard_qml
+        and "SystemBackend.openTemporaryFolder()" in dashboard_qml
+        and "SystemBackend.openHomeFolder()" in dashboard_qml
+        and "SystemBackend.openRootFolder()" in dashboard_qml,
+        "Dashboard quick actions lost KFind, temporary folder, Home or root filesystem")
+require('qsTr("Backup e Recovery")' not in dashboard_qml,
+        "Dashboard quick actions must not duplicate Backup and Recovery")
+require('qsTr("Terminale")' in dashboard_qml
+        and 'columns: width >= 900 ? 6' in dashboard_qml
+        and 'uniformCellWidths: true' in dashboard_qml,
+        "Dashboard quick actions must remain six equal-width buttons on wide layouts")
+require('"podman", title: qsTr("Container")' not in dashboard_qml,
+        "Dashboard must not duplicate the Container navigation tile")
+require("Aggiorna Control Center" not in dashboard_qml
+        and "checkControlCenterUpdate()" in commands_qml
+        and 'openRequested("system")' in commands_qml
+        and "updateControlCenter()" not in commands_qml,
+        "Control Center release check must stay in Commands and route updates through KrisOS")
 require('QStringLiteral("--columns=name,url")' in utility_cpp,
         "Flatpak remotes must use the minimal name/url contract")
 require("parseFlatpakTsv(message.toUtf8(), 2)" in utility_cpp,
         "Flatpak remote output is not parsed as the fixed two-column contract")
+require("parseFlatpakRemotes" not in contract_parsers_h
+        and "parseFlatpakRemotes" not in contract_parsers_cpp
+        and "parseFlatpakRemotes" not in contract_parsers_test,
+        "dead legacy Flatpak remote parser returned")
+require('QStringLiteral("flatpak.info")' in utility_cpp
+        and 'QStringLiteral("remote-info")' in utility_cpp
+        and 'text: qsTr("Info")' in flatpak_qml,
+        "Flatpak search results lost on-demand remote information")
+require("Layout.alignment: Qt.AlignVCenter" in flatpak_qml,
+        "Flatpak result icon is not vertically centered")
+require("(?:rpm|i686|x86_64|noarch)" in recovery_qml,
+        "Recovery forget input must reject package suffixes rejected by Validators::packageName")
 require("anchors.right: parent.right" in read("qml/Main.qml")
         and "id: versionLabel" in read("qml/Main.qml"),
         "Version label is not anchored to the physical right edge")
-require("Layout.horizontalStretchFactor: 2" in read("qml/modules/DashboardModule.qml"),
-        "RAM card is not explicitly wider than CPU/temperature cards")
+require('text: qsTr("Info Center")' in read("qml/Main.qml")
+        and read("qml/Main.qml").find('text: qsTr("Info Center")')
+            < read("qml/Main.qml").find('text: qsTr("Impostazioni Plasma")'),
+        "Info Center must stay in the fixed sidebar above Plasma settings")
+require("columns: 3" in dashboard_qml
+        and "Layout.rowSpan: 3" in dashboard_qml
+        and "Layout.column: 2" in dashboard_qml,
+        "Dashboard central area must use one aligned three-column grid")
+require('QStringLiteral("/sysroot")' in system_cpp
+        and 'tr("Home: %1")' in system_cpp
+        and 'tr("Sistema: %1")' in system_cpp,
+        "Dashboard storage tile must report both Home and system filesystem")
 require("Layout.maximumWidth: Layout.preferredWidth" in read("qml/modules/SoftwareModule.qml"),
         "Repository status/action columns are not fixed-width aligned")
+require("else if (tabs.currentIndex === 2) upgradesModel.loadUpgrades()" in software_qml
+        and "Component.onCompleted: upgradesModel.loadUpgrades()" not in software_qml,
+        "Software upgrade inventory must stay lazy until the Aggiornabili tab is opened")
+require(re.search(r'requestAction\(\s*"repo-enable"', software_qml) is not None
+        and 'if (action === "repo-enable")' in software_qml,
+        "repository enable mutation must require the shared confirmation flow")
 require("backupDirectory" in read("src/SystemBackend.h")
         and "setBackupDirectory" in system_cpp,
         "selectable backup destination is missing")
