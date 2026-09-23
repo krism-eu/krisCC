@@ -147,67 +147,44 @@ Kirigami.ScrollablePage {
             text: !BootcBackend.bootcAvailable ? qsTr("bootc non è disponibile in questo ambiente.") : RkBackend.errorText
         }
 
+        GridLayout {
+            Layout.fillWidth: true
+            columns: width > 760 ? 3 : width > 520 ? 2 : 1
+            uniformCellWidths: true
+            columnSpacing: Kirigami.Units.largeSpacing
+            rowSpacing: Kirigami.Units.largeSpacing
+            Repeater {
+                model: [
+                    { id: "system", title: qsTr("Sistema"), icon: "computer" },
+                    { id: "flatpak", title: qsTr("Flatpak"), icon: "applications-all" },
+                    { id: "software", title: qsTr("Software"), icon: "package-x-generic" }
+                ]
+                delegate: Kirigami.AbstractCard {
+                    required property var modelData
+                    Layout.fillWidth: true
+                    onClicked: root.openRequested(modelData.id)
+                    contentItem: ColumnLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        Kirigami.Icon {
+                            source: modelData.icon
+                            Layout.preferredWidth: Kirigami.Units.iconSizes.medium
+                            Layout.preferredHeight: Layout.preferredWidth
+                        }
+                        Kirigami.Heading { level: 2; font.bold: true; text: modelData.title }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            text: root.moduleValue(modelData.id)
+                            font.bold: false
+                            wrapMode: Text.WordWrap
+                        }
+                    }
+                }
+            }
+        }
+
         RowLayout {
             Layout.fillWidth: true
             spacing: Kirigami.Units.largeSpacing
-
-            Kirigami.AbstractCard {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                Layout.horizontalStretchFactor: 1
-                contentItem: ColumnLayout {
-                    spacing: Kirigami.Units.smallSpacing
-                    RowLayout {
-                        Kirigami.Icon {
-                            source: "memory"
-                            Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
-                            Layout.preferredHeight: Layout.preferredWidth
-                        }
-                        Kirigami.Heading {
-                            level: 3
-                            font.bold: true
-                            text: qsTr("RAM usata")
-                        }
-                    }
-                    Controls.Label {
-                        text: SystemBackend.memoryUsedMiB >= 0
-                              ? qsTr("%1 MiB").arg(SystemBackend.memoryUsedMiB)
-                              : qsTr("Non disponibile")
-                    }
-                    Controls.Label {
-                        Layout.fillWidth: true
-                        text: SystemBackend.memoryTotalMiB >= 0
-                              ? qsTr("su %1 MiB · swap esclusa").arg(SystemBackend.memoryTotalMiB)
-                              : qsTr("swap esclusa")
-                        opacity: UiMetrics.secondaryOpacity
-                    }
-                    Kirigami.Separator { Layout.fillWidth: true }
-                    Controls.Label { text: qsTr("Processi con più RAM"); font.bold: true }
-                    Repeater {
-                        model: SystemBackend.topMemoryProcesses
-                        delegate: RowLayout {
-                            required property var modelData
-                            Layout.fillWidth: true
-                            Controls.Label {
-                                Layout.fillWidth: true
-                                text: modelData.name
-                                elide: Text.ElideRight
-                            }
-                            Controls.Label {
-                                text: qsTr("%1 MiB").arg(modelData.memoryMiB)
-                                opacity: UiMetrics.secondaryOpacity
-                            }
-                        }
-                    }
-                    Controls.Label {
-                        Layout.fillWidth: true
-                        visible: SystemBackend.topMemoryProcesses.length === 0
-                        text: qsTr("Dati processo non disponibili")
-                        opacity: UiMetrics.secondaryOpacity
-                    }
-                    Item { Layout.fillHeight: true }
-                }
-            }
 
             GridLayout {
                 Layout.fillWidth: true
@@ -219,8 +196,8 @@ Kirigami.ScrollablePage {
                 rowSpacing: Kirigami.Units.largeSpacing
 
                 Repeater {
-                    model: ["overlay", "selinux", "storage", "firewall",
-                            "cpu", "temperature", "sync", "network"]
+                    model: ["overlay", "sync", "selinux", "firewall",
+                            "cpu", "temperature", "storage", "network"]
                     delegate: Kirigami.AbstractCard {
                         required property string modelData
                         Layout.fillWidth: true
@@ -282,30 +259,55 @@ Kirigami.ScrollablePage {
                     }
                 }
             }
-        }
 
-        GridLayout {
-            Layout.fillWidth: true
-            columns: width > 760 ? 3 : width > 520 ? 2 : 1
-            uniformCellWidths: true
-            columnSpacing: Kirigami.Units.largeSpacing
-            rowSpacing: Kirigami.Units.largeSpacing
-            Repeater {
-                model: [
-                    { id: "software", title: qsTr("Software"), icon: "package-x-generic" },
-                    { id: "flatpak", title: qsTr("Flatpak"), icon: "applications-all" },
-                    { id: "system", title: qsTr("Sistema"), icon: "computer" }
-                ]
-                delegate: Kirigami.AbstractCard {
-                    required property var modelData
-                    Layout.fillWidth: true
-                    onClicked: root.openRequested(modelData.id)
-                    contentItem: ColumnLayout {
-                        spacing: Kirigami.Units.smallSpacing
-                        Kirigami.Icon { source: modelData.icon; Layout.preferredWidth: Kirigami.Units.iconSizes.medium; Layout.preferredHeight: Layout.preferredWidth }
-                        Kirigami.Heading { level: 2; font.bold: true; text: modelData.title }
-                        Controls.Label { Layout.fillWidth: true; text: root.moduleValue(modelData.id); font.bold: false; wrapMode: Text.WordWrap }
+            Kirigami.AbstractCard {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                Layout.horizontalStretchFactor: 1
+                contentItem: ColumnLayout {
+                    spacing: Kirigami.Units.smallSpacing
+                    RowLayout {
+                        Kirigami.Icon {
+                            source: "memory"
+                            Layout.preferredWidth: Kirigami.Units.iconSizes.smallMedium
+                            Layout.preferredHeight: Layout.preferredWidth
+                        }
+                        Kirigami.Heading {
+                            level: 3
+                            font.bold: true
+                            text: qsTr("RAM usata")
+                        }
                     }
+                    Controls.Label {
+                        text: SystemBackend.memoryUsedMiB >= 0
+                              ? qsTr("%1 MiB").arg(SystemBackend.memoryUsedMiB)
+                              : qsTr("Non disponibile")
+                    }
+                    Kirigami.Separator { Layout.fillWidth: true }
+                    Controls.Label { text: qsTr("Processi con più RAM"); font.bold: true }
+                    Repeater {
+                        model: SystemBackend.topMemoryProcesses
+                        delegate: RowLayout {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            Controls.Label {
+                                Layout.fillWidth: true
+                                text: modelData.name
+                                elide: Text.ElideRight
+                            }
+                            Controls.Label {
+                                text: qsTr("%1 MiB").arg(modelData.memoryMiB)
+                                opacity: UiMetrics.secondaryOpacity
+                            }
+                        }
+                    }
+                    Controls.Label {
+                        Layout.fillWidth: true
+                        visible: SystemBackend.topMemoryProcesses.length === 0
+                        text: qsTr("Dati processo non disponibili")
+                        opacity: UiMetrics.secondaryOpacity
+                    }
+                    Item { Layout.fillHeight: true }
                 }
             }
         }
@@ -315,14 +317,37 @@ Kirigami.ScrollablePage {
             contentItem: ColumnLayout {
                 spacing: Kirigami.Units.smallSpacing
                 Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Azioni rapide") }
-                Flow {
+                RowLayout {
                     Layout.fillWidth: true
                     spacing: Kirigami.Units.smallSpacing
-                    Controls.Button { text: qsTr("Svuota cestini"); icon.name: "user-trash"; enabled: MaintenanceBackend.available && !MaintenanceBackend.running; onClicked: quickTrashDialog.open() }
-                    Controls.Button { text: qsTr("Backup e Recovery"); icon.name: "document-save-all"; onClicked: root.openRequested("recovery") }
-                    Controls.Button { text: qsTr("Terminale"); icon.name: "utilities-terminal"; onClicked: SystemBackend.launchTool("konsole") }
-                    Controls.Button { text: qsTr("Cerca"); icon.name: "edit-find"; enabled: SystemBackend.toolAvailable("kfind"); onClicked: SystemBackend.launchTool("kfind") }
-                    Controls.Button { text: qsTr("Cartella temporanea"); icon.name: "folder"; onClicked: SystemBackend.openTemporaryFolder() }
+                    Controls.Button {
+                        text: qsTr("Svuota cestini")
+                        icon.name: "user-trash"
+                        enabled: MaintenanceBackend.available && !MaintenanceBackend.running
+                        onClicked: quickTrashDialog.open()
+                    }
+                    Controls.Button {
+                        text: qsTr("Cerca")
+                        icon.name: "edit-find"
+                        enabled: SystemBackend.toolAvailable("kfind")
+                        onClicked: SystemBackend.launchTool("kfind")
+                    }
+                    Controls.Button {
+                        text: qsTr("Cartella temporanea")
+                        icon.name: "folder"
+                        onClicked: SystemBackend.openTemporaryFolder()
+                    }
+                    Controls.Button {
+                        text: qsTr("Home")
+                        icon.name: "user-home"
+                        onClicked: SystemBackend.openHomeFolder()
+                    }
+                    Item { Layout.fillWidth: true }
+                    Controls.Button {
+                        text: qsTr("Terminale")
+                        icon.name: "utilities-terminal"
+                        onClicked: SystemBackend.launchTool("konsole")
+                    }
                 }
                 Kirigami.InlineMessage {
                     Layout.fillWidth: true

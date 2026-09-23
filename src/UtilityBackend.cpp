@@ -328,6 +328,19 @@ bool UtilityBackend::runFlatpak(const QString &mode, const QString &query, const
                      {QStringLiteral("search"), QStringLiteral("--user"),
                       QStringLiteral("--columns=name,description,application,version,branch,remotes"), query.trimmed()},
                      tr("Ricerca Flatpak: %1").arg(query.trimmed()), QStringLiteral("flatpak.search"), kRepositoryQueryTimeoutMs, true);
+    if (mode == QStringLiteral("info") && validPackageName(query.trimmed())) {
+        const QString selectedRemote = remote.trimmed().isEmpty() ? QStringLiteral("flathub") : remote.trimmed();
+        if (!validPackageName(selectedRemote)) {
+            setImmediateError(tr("Informazioni Flatpak"), QStringLiteral("flatpak.info"),
+                              tr("Remote Flatpak non valido."));
+            return false;
+        }
+        return start(QStringLiteral("/usr/bin/flatpak"),
+                     {QStringLiteral("remote-info"), QStringLiteral("--user"), QStringLiteral("--app"),
+                      selectedRemote, query.trimmed()},
+                     tr("Informazioni Flatpak: %1").arg(query.trimmed()),
+                     QStringLiteral("flatpak.info"), kRepositoryQueryTimeoutMs);
+    }
     if (mode == QStringLiteral("install") && validPackageName(query.trimmed())) {
         const QString selectedRemote = remote.trimmed().isEmpty() ? QStringLiteral("flathub") : remote.trimmed();
         if (!validPackageName(selectedRemote)) {

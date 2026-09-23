@@ -174,6 +174,15 @@ Kirigami.ApplicationWindow {
                     Controls.ItemDelegate {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 42
+                        text: qsTr("Info Center")
+                        icon.name: "hwinfo"
+                        enabled: SystemBackend.toolAvailable("kinfocenter")
+                        onClicked: SystemBackend.launchTool("kinfocenter")
+                    }
+
+                    Controls.ItemDelegate {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 42
                         text: qsTr("Impostazioni Plasma")
                         icon.name: "settings-configure"
                         onClicked: SystemBackend.launchTool("systemsettings")

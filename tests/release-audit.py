@@ -175,6 +175,14 @@ require("Novità repository" not in software_qml,
         "removed repository-news tab returned")
 require('text: qsTr("Dettagli tecnici")' not in system_qml,
         "raw BootC JSON toggle returned")
+require("id: flatpakDialog" not in system_qml
+        and 'text: qsTr("Aggiorna tutto")' not in system_qml,
+        "System updates tab must not duplicate Flatpak updating")
+require('text: qsTr("Plasma")' not in system_qml,
+        "System tools must not duplicate the Plasma launcher block")
+require('launchTool("isoimagewriter")' in system_qml
+        and 'QStringLiteral("isoimagewriter")' in system_cpp,
+        "ISO Image Writer shortcut contract is missing")
 require("entries.size() >= 500" not in package_cpp,
         "installed RPM inventory is silently capped")
 require("entries.size() >= 100" in package_cpp and "m_truncated" in package_cpp,
@@ -187,12 +195,29 @@ require("topMemoryProcesses" in read("src/SystemBackend.h"),
         "Dashboard top-memory model is missing")
 require("std::min<qsizetype>(10, entries.size())" in system_cpp,
         "Dashboard must expose the top ten RAM process groups")
+require('model: ["overlay", "sync", "selinux", "firewall",' in dashboard_qml
+        and '"cpu", "temperature", "storage", "network"]' in dashboard_qml,
+        "Dashboard status grid order changed")
+require('{ id: "system", title: qsTr("Sistema")' in dashboard_qml
+        and dashboard_qml.find('{ id: "system", title: qsTr("Sistema")')
+            < dashboard_qml.find('{ id: "flatpak", title: qsTr("Flatpak")')
+            < dashboard_qml.find('{ id: "software", title: qsTr("Software")'),
+        "Dashboard top module order must remain System/Flatpak/Software")
+require("memoryTotalMiB" not in dashboard_qml,
+        "Dashboard RAM card must not show total/swap text")
 require("networkState" in read("src/SystemBackend.h")
         and '"network"' in dashboard_qml,
         "Dashboard network card contract is missing")
 require('SystemBackend.launchTool("kfind")' in dashboard_qml
-        and "SystemBackend.openTemporaryFolder()" in dashboard_qml,
-        "Dashboard quick actions lost KFind or the temporary folder shortcut")
+        and "SystemBackend.openTemporaryFolder()" in dashboard_qml
+        and "SystemBackend.openHomeFolder()" in dashboard_qml,
+        "Dashboard quick actions lost KFind, temporary folder or Home")
+require('qsTr("Backup e Recovery")' not in dashboard_qml,
+        "Dashboard quick actions must not duplicate Backup and Recovery")
+require('qsTr("Terminale")' in dashboard_qml
+        and dashboard_qml.find('Item { Layout.fillWidth: true }')
+            < dashboard_qml.rfind('qsTr("Terminale")'),
+        "Dashboard terminal shortcut must stay right-aligned")
 require('"podman", title: qsTr("Container")' not in dashboard_qml,
         "Dashboard lower module row must remain the three-column Software/Flatpak/System layout")
 require("Aggiorna Control Center" not in dashboard_qml
@@ -208,15 +233,29 @@ require("parseFlatpakRemotes" not in contract_parsers_h
         and "parseFlatpakRemotes" not in contract_parsers_cpp
         and "parseFlatpakRemotes" not in contract_parsers_test,
         "dead legacy Flatpak remote parser returned")
+require('QStringLiteral("flatpak.info")' in utility_cpp
+        and 'QStringLiteral("remote-info")' in utility_cpp
+        and 'text: qsTr("Info")' in flatpak_qml,
+        "Flatpak search results lost on-demand remote information")
+require("Layout.alignment: Qt.AlignVCenter" in flatpak_qml,
+        "Flatpak result icon is not vertically centered")
 require("(?:rpm|i686|x86_64|noarch)" in recovery_qml,
         "Recovery forget input must reject package suffixes rejected by Validators::packageName")
 require("anchors.right: parent.right" in read("qml/Main.qml")
         and "id: versionLabel" in read("qml/Main.qml"),
         "Version label is not anchored to the physical right edge")
-require("Layout.horizontalStretchFactor: 2" in read("qml/modules/DashboardModule.qml"),
-        "RAM card is not explicitly wider than CPU/temperature cards")
+require('text: qsTr("Info Center")' in read("qml/Main.qml")
+        and read("qml/Main.qml").find('text: qsTr("Info Center")')
+            < read("qml/Main.qml").find('text: qsTr("Impostazioni Plasma")'),
+        "Info Center must stay in the fixed sidebar above Plasma settings")
+require("Layout.horizontalStretchFactor: 2" in dashboard_qml
+        and "Layout.horizontalStretchFactor: 1" in dashboard_qml,
+        "Dashboard status/RAM one-third layout contract is missing")
 require("Layout.maximumWidth: Layout.preferredWidth" in read("qml/modules/SoftwareModule.qml"),
         "Repository status/action columns are not fixed-width aligned")
+require("else if (tabs.currentIndex === 2) upgradesModel.loadUpgrades()" in software_qml
+        and "Component.onCompleted: upgradesModel.loadUpgrades()" not in software_qml,
+        "Software upgrade inventory must stay lazy until the Aggiornabili tab is opened")
 require(re.search(r'requestAction\(\s*"repo-enable"', software_qml) is not None
         and 'if (action === "repo-enable")' in software_qml,
         "repository enable mutation must require the shared confirmation flow")

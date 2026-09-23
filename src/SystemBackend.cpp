@@ -708,7 +708,8 @@ QString SystemBackend::toolProgram(const QString &toolId) const
         {QStringLiteral("systemmonitor"), QStringLiteral("plasma-systemmonitor")},
         {QStringLiteral("qdirstat"), QStringLiteral("qdirstat")},
         {QStringLiteral("konsole"), QStringLiteral("konsole")},
-        {QStringLiteral("kfind"), QStringLiteral("kfind")}
+        {QStringLiteral("kfind"), QStringLiteral("kfind")},
+        {QStringLiteral("isoimagewriter"), QStringLiteral("isoimagewriter")}
     };
     return resolveExecutable(names.value(toolId));
 }
@@ -730,6 +731,11 @@ bool SystemBackend::launchTool(const QString &toolId) const
 bool SystemBackend::openTemporaryFolder() const
 {
     return QDesktopServices::openUrl(QUrl::fromLocalFile(QDir::tempPath()));
+}
+
+bool SystemBackend::openHomeFolder() const
+{
+    return QDesktopServices::openUrl(QUrl::fromLocalFile(QDir::homePath()));
 }
 
 bool SystemBackend::programAvailable(const QString &program) const

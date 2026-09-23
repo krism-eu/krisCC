@@ -109,14 +109,13 @@ Kirigami.ScrollablePage {
 
                 GridLayout {
                     Layout.fillWidth: true
-                    columns: width > 900 ? 2 : 1
+                    columns: 1
                     columnSpacing: Kirigami.Units.largeSpacing
                     rowSpacing: Kirigami.Units.largeSpacing
 
                     Kirigami.AbstractCard {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        Layout.preferredWidth: root.width * 0.64
                         contentItem: ColumnLayout {
                             spacing: Kirigami.Units.smallSpacing
                             RowLayout {
@@ -231,46 +230,6 @@ Kirigami.ScrollablePage {
 
                         }
                     }
-
-                    Kirigami.AbstractCard {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        Layout.preferredWidth: root.width * 0.34
-                        contentItem: ColumnLayout {
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Kirigami.Heading { Layout.fillWidth: true; level: 2; font.bold: true; text: qsTr("Flatpak") }
-                                Controls.BusyIndicator { visible: utilityBackend.busy; running: visible }
-                            }
-                            Controls.Label {
-                                Layout.fillWidth: true
-                                wrapMode: Text.WordWrap
-                                opacity: UiMetrics.secondaryOpacity
-                                text: qsTr("Controllo e aggiornamento delle applicazioni Flatpak del profilo utente.")
-                            }
-                            Item { Layout.fillHeight: true }
-                            RowLayout {
-                                Controls.Button {
-                                    text: qsTr("Controlla")
-                                    icon.name: "view-refresh"
-                                    enabled: !utilityBackend.busy && SystemBackend.programAvailable("flatpak")
-                                    onClicked: utilityBackend.runFlatpak("updates", "")
-                                }
-                                Controls.Button {
-                                    text: qsTr("Aggiorna tutto")
-                                    icon.name: "system-software-update"
-                                    enabled: !utilityBackend.busy && SystemBackend.programAvailable("flatpak")
-                                    onClicked: flatpakDialog.open()
-                                }
-                            }
-                            OutputCard {
-                    visible: utilityBackend.operationId.indexOf("flatpak.") === 0 && utilityBackend.output.length > 0
-                    embedded: true
-                    outputText: utilityBackend.output
-                }
-                        }
-                    }
-                }
 
                 Kirigami.AbstractCard {
                     Layout.fillWidth: true
@@ -572,19 +531,17 @@ Kirigami.ScrollablePage {
                         Layout.fillWidth: true
                         Layout.alignment: Qt.AlignTop
                         contentItem: ColumnLayout {
-                            Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Plasma") }
-                            Controls.Button { text: qsTr("Impostazioni di sistema"); icon.name: "settings-configure"; enabled: SystemBackend.toolAvailable("systemsettings"); onClicked: SystemBackend.launchTool("systemsettings") }
-                            Controls.Button { text: qsTr("Info Center"); icon.name: "hwinfo"; enabled: SystemBackend.toolAvailable("kinfocenter"); onClicked: SystemBackend.launchTool("kinfocenter") }
-                        }
-                    }
-
-                    Kirigami.AbstractCard {
-                        Layout.fillWidth: true
-                        Layout.alignment: Qt.AlignTop
-                        contentItem: ColumnLayout {
                             Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Diagnostica") }
                             Controls.Button { text: qsTr("KSystemLog"); icon.name: "utilities-log-viewer"; enabled: SystemBackend.toolAvailable("ksystemlog"); onClicked: SystemBackend.launchTool("ksystemlog") }
                             Controls.Button { text: qsTr("Monitor di sistema"); icon.name: "utilities-system-monitor"; enabled: SystemBackend.toolAvailable("systemmonitor"); onClicked: SystemBackend.launchTool("systemmonitor") }
+                            Controls.Button {
+                                text: SystemBackend.toolAvailable("isoimagewriter")
+                                      ? qsTr("ISO Image Writer")
+                                      : qsTr("ISO Image Writer · non installato")
+                                icon.name: "media-optical"
+                                enabled: SystemBackend.toolAvailable("isoimagewriter")
+                                onClicked: SystemBackend.launchTool("isoimagewriter")
+                            }
                         }
                     }
 
@@ -759,21 +716,6 @@ Kirigami.ScrollablePage {
             text: qsTr("Verranno svuotati %1 con i privilegi del tuo utente. L'operazione è irreversibile.").arg(trashDialog.scopeLabel)
         }
         onAccepted: MaintenanceBackend.cleanTrash(scope)
-    }
-
-    Controls.Dialog {
-        id: flatpakDialog
-        modal: true
-        parent: Controls.Overlay.overlay
-        anchors.centerIn: parent
-        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
-        title: qsTr("Aggiornare tutti i Flatpak utente?")
-        standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
-        contentItem: Controls.Label {
-            text: qsTr("Aggiornare le applicazioni e i runtime Flatpak del tuo utente?")
-            wrapMode: Text.WordWrap
-        }
-        onAccepted: utilityBackend.runFlatpak("update-all", "")
     }
 
     Controls.Dialog {
