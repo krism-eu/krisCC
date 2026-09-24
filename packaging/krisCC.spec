@@ -1,5 +1,5 @@
 Name:           krisCC
-Version:        0.7.5
+Version:        0.7.9
 Release:        1%{?dist}
 Summary:        krisCC personal control center for KrisOS and Fedora bootc
 License:        MIT
@@ -20,16 +20,18 @@ Requires:       polkit
 Requires:       rpm
 Requires:       dnf5
 Requires:       dnf5-plugins
+Requires:       NetworkManager
 Requires:       bootc
 Requires:       tar
 Requires:       bash
 
 %description
 krisCC is a compact personal Kirigami control center for KrisOS and Fedora bootc
-systems. It focuses on persistent software management, Flatpak applications,
-Podman containers, bootc updates, practical maintenance tools, diagnostics,
-recovery and local configuration/home backups without duplicating Plasma System
-Settings.
+systems. It focuses on persistent KrisOS software management, operational repair
+tools, services/network controls, bootc updates, diagnostics, recovery and local
+configuration/home backups without duplicating dedicated application managers.
+Flatpak application management is delegated to KDE Discover and containers are
+delegated to a dedicated external application.
 
 %prep
 %autosetup -n %{name}-%{version}
@@ -54,6 +56,36 @@ Settings.
 %{_datadir}/icons/hicolor/scalable/apps/krisCC.svg
 
 %changelog
+* Thu Sep 24 2026 krism-eu - 0.7.9-1
+- Final dashboard top status strip with EFI, Cockpit state and refresh tiles
+- Make Wi-Fi radio controllable through NetworkManager even when disabled
+- Manage cockpit.socket explicitly from Services & Network without opening a browser
+- Compact diagnostics/tools layout and extend fixed read-only command bookmarks
+- Keep six Dashboard quick-action slots with one reserved placeholder
+
+* Thu Sep 24 2026 krism-eu - 0.7.8-1
+- Finalize dashboard/sidebar and System & Boot layout without changing Avvio e dischi
+- Consolidate repair, cleanup and diagnostics under Strumenti & Fix
+- Simplify Services & Network and expose public IP / active DNS inspection
+- Add informative next-EFI-boot tile and bounded operation history
+- Harden Cockpit on-demand activation, service feedback and backup/restore contracts
+- Reduce archived journal vacuum target to 16 MiB
+
+* Thu Sep 24 2026 krism-eu - 0.7.7-1
+- Recast krisCC as an operational Swiss Army control center with Tools & Fix and Services & Network
+- Remove internal Podman/container management completely
+- Add audio repair, DNS flush/presets, active-network reapply and NetworkManager handoff
+- Add unified sequential cleanup for trash, journal, DNF cache and unused Flatpak runtimes with estimates
+- Add allowlisted service start/stop/restart/reset controls and failed-unit diagnostics
+- Add firmware-setup reboot, read-only kernel arguments, VA-API/GPU diagnostics and Cockpit shortcut
+
+* Thu Sep 24 2026 krism-eu - 0.7.6-1
+- Delegate Flatpak application management to KDE Discover and remove the duplicate engine/page
+- Fix Podman image deletion, empty DNF5 upgrade lists and rk authentication error feedback
+- Serialize rk plan previews so stale solver output cannot cross package dialogs
+- Exclude the active backup archive when the selected backup directory is Home
+- Keep the Dashboard Flatpak tile as the Discover entry point and simplify the stable release check
+
 * Wed Sep 23 2026 krism-eu - 0.7.5-1
 - Preserve KrisOS image-owned krisCC semantics and route updates through the OS image
 - Remove the dead Flatpak remote parser and align recovery input validation

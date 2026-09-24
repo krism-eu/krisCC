@@ -7,19 +7,12 @@ import org.kriscc
 Kirigami.ScrollablePage {
     id: root
     padding: UiMetrics.pageMargin
-    title: qsTr("Sistema")
+    title: qsTr("Sistema & Boot")
 
     UtilityBackend { id: utilityBackend }
 
-    property string pendingService: ""
-    property string pendingServiceTitle: ""
     property var historyEntries: []
     property bool rebootAfterDownloadedApply: false
-    property var services: [
-        { id: "NetworkManager.service", title: qsTr("NetworkManager") },
-        { id: "cups.service", title: qsTr("Stampa (CUPS)") },
-        { id: "bluetooth.service", title: qsTr("Bluetooth") }
-    ]
 
     function bootedDeployment() {
         var entries = BootcBackend.deployments
@@ -57,7 +50,6 @@ Kirigami.ScrollablePage {
             SystemBackend.refreshUefiEntries()
         if (SystemBackend.grubEntriesAvailable)
             SystemBackend.refreshGrubEntries()
-        SystemBackend.refreshServiceStates()
     }
 
     onVisibleChanged: if (visible) root.refreshPage()
@@ -95,9 +87,7 @@ Kirigami.ScrollablePage {
             Layout.fillWidth: true
             palette.highlight: Kirigami.Theme.highlightColor
             Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: true; text: qsTr("Aggiornamenti") }
-            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: true; text: qsTr("Salute") }
             Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: true; text: qsTr("Avvio e dischi") }
-            Controls.TabButton { implicitHeight: Kirigami.Units.gridUnit * 2.1; font.bold: true; text: qsTr("Strumenti") }
         }
 
         StackLayout {
@@ -115,7 +105,6 @@ Kirigami.ScrollablePage {
 
                     Kirigami.AbstractCard {
                         Layout.fillWidth: true
-                        Layout.fillHeight: true
                         contentItem: ColumnLayout {
                             spacing: Kirigami.Units.smallSpacing
                             RowLayout {
@@ -148,6 +137,16 @@ Kirigami.ScrollablePage {
                                 Layout.fillWidth: true
                                 opacity: UiMetrics.secondaryOpacity
                                 text: qsTr("%1 pacchetti RPM persistenti richiesti").arg(BootcBackend.persistentPackageCount)
+                            }
+                            Flow {
+                                Layout.fillWidth: true
+                                spacing: Kirigami.Units.smallSpacing
+                                Controls.Button {
+                                    text: qsTr("Firmware UEFI")
+                                    icon.name: "system-reboot"
+                                    enabled: SystemBackend.uefiBootAvailable
+                                    onClicked: firmwareRebootDialog.open()
+                                }
                             }
 
                             Kirigami.InlineMessage {
@@ -235,6 +234,52 @@ Kirigami.ScrollablePage {
                 Kirigami.AbstractCard {
                     Layout.fillWidth: true
                     contentItem: ColumnLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        RowLayout {
+                            Layout.fillWidth: true
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 0
+                                Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Control Center") }
+                                Controls.Label {
+                                    text: qsTr("Versione installata: %1").arg(Qt.application.version)
+                                    opacity: UiMetrics.secondaryOpacity
+                                }
+                            }
+                            Controls.BusyIndicator {
+                                visible: SystemBackend.controlCenterUpdateBusy
+                                running: visible
+                            }
+                        }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            text: SystemBackend.controlCenterUpdateStatus.length > 0
+                                  ? SystemBackend.controlCenterUpdateStatus
+                                  : qsTr("Controlla la release stable ufficiale di krisCC. Gli aggiornamenti vengono applicati insieme all'immagine KrisOS dal riquadro BootC qui sopra.")
+                            opacity: UiMetrics.secondaryOpacity
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Controls.Button {
+                                text: qsTr("Verifica aggiornamenti")
+                                icon.name: "view-refresh"
+                                enabled: !SystemBackend.controlCenterUpdateBusy
+                                onClicked: SystemBackend.checkControlCenterUpdate()
+                            }
+                            Item { Layout.fillWidth: true }
+                            Controls.Label {
+                                visible: SystemBackend.controlCenterLatestVersion.length > 0
+                                text: qsTr("Stable: %1").arg(SystemBackend.controlCenterLatestVersion)
+                                opacity: UiMetrics.secondaryOpacity
+                            }
+                        }
+                    }
+                }
+
+                Kirigami.AbstractCard {
+                    Layout.fillWidth: true
+                    contentItem: ColumnLayout {
                         RowLayout {
                             Layout.fillWidth: true
                             Kirigami.Heading { Layout.fillWidth: true; level: 2; font.bold: true; text: qsTr("Cronologia") }
@@ -301,100 +346,42 @@ Kirigami.ScrollablePage {
             ColumnLayout {
                 spacing: Kirigami.Units.largeSpacing
 
-                Kirigami.AbstractCard {
-                    Layout.fillWidth: true
-                    contentItem: ColumnLayout {
-                        Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Salute del sistema") }
-                        Controls.Label {
-                            Layout.fillWidth: true
-                            wrapMode: Text.WordWrap
-                            opacity: UiMetrics.secondaryOpacity
-                            text: qsTr("Controlli leggibili e non distruttivi su unità fallite, overlay /usr, spazio, rk e stato BootC.")
-                        }
-                        Flow {
-                            Layout.fillWidth: true
-                            spacing: Kirigami.Units.smallSpacing
-                            Controls.Button { text: qsTr("Controlla salute"); icon.name: "tools-report-bug"; enabled: !utilityBackend.busy; onClicked: utilityBackend.runBookmark("health") }
-                            Controls.Button { text: qsTr("Sicurezza"); icon.name: "security-high"; enabled: !utilityBackend.busy; onClicked: utilityBackend.runBookmark("security") }
-                            Controls.Button { text: qsTr("Unità fallite"); icon.name: "dialog-warning"; enabled: !utilityBackend.busy; onClicked: utilityBackend.runBookmark("failed-units") }
-                            Controls.Button { text: qsTr("Errori ultimo avvio"); icon.name: "view-list-text"; enabled: !utilityBackend.busy; onClicked: utilityBackend.runBookmark("journal-errors") }
-                        }
-                    }
-                }
-
-                Kirigami.AbstractCard {
-                    Layout.fillWidth: true
-                    contentItem: ColumnLayout {
-                        Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Servizi") }
-                        Controls.Label {
-                            Layout.fillWidth: true
-                            wrapMode: Text.WordWrap
-                            opacity: UiMetrics.secondaryOpacity
-                            text: qsTr("Stato rapido dei servizi principali e vista completa dei servizi attivi.")
-                        }
-                        Repeater {
-                            model: root.services
-                            delegate: RowLayout {
-                                required property var modelData
-                                Layout.fillWidth: true
-                                Controls.Label { Layout.fillWidth: true; font.bold: false; text: modelData.title }
-                                Controls.Label {
-                                    Layout.preferredWidth: 120
-                                    horizontalAlignment: Text.AlignHCenter
-                                    text: SystemBackend.serviceStates[modelData.id] || qsTr("non disponibile")
-                                }
-                                Controls.Button { icon.name: "view-refresh";
-                                    Layout.preferredWidth: 110
-                                    text: qsTr("Riavvia")
-                                    onClicked: {
-                                        root.pendingService = modelData.id
-                                        root.pendingServiceTitle = modelData.title
-                                        restartServiceDialog.open()
-                                    }
-                                }
-                            }
-                        }
-                        RowLayout {
-                            Controls.Button { text: qsTr("Aggiorna stati"); icon.name: "view-refresh"; onClicked: SystemBackend.refreshServiceStates() }
-                            Controls.Button { text: qsTr("Mostra tutti gli attivi"); icon.name: "view-list-details"; enabled: !utilityBackend.busy; onClicked: utilityBackend.runBookmark("services-active") }
-                        }
-                    }
-                }
-
-                Kirigami.InlineMessage {
-                    Layout.fillWidth: true
-                    type: Kirigami.MessageType.Information
-                    text: qsTr("krisCC mostra lo stato disponibile ma non modifica Secure Boot, SELinux o firewall da questa pagina.")
-                }
-
-                Kirigami.AbstractCard {
-                    Layout.fillWidth: true
-                    visible: utilityBackend.operationId === "bookmark.health"
-                          || utilityBackend.operationId === "bookmark.security"
-                          || utilityBackend.operationId === "bookmark.failed-units"
-                          || utilityBackend.operationId === "bookmark.journal-errors"
-                          || utilityBackend.operationId === "bookmark.services-active"
-                    contentItem: ColumnLayout {
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Kirigami.Heading { Layout.fillWidth: true; level: 3; font.bold: true; text: utilityBackend.title }
-                        }
-                        OutputCard {
-                    embedded: true
-                    outputText: utilityBackend.output
-                }
-                    }
-                }
-            }
-
-            ColumnLayout {
-                spacing: Kirigami.Units.largeSpacing
-
                 Kirigami.InlineMessage {
                     Layout.fillWidth: true
                     visible: SystemBackend.bootEntriesError.length > 0
                     type: Kirigami.MessageType.Warning
                     text: SystemBackend.bootEntriesError
+                }
+
+                Kirigami.AbstractCard {
+                    Layout.fillWidth: true
+                    contentItem: ColumnLayout {
+                        Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Parametri kernel attivi") }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            opacity: UiMetrics.secondaryOpacity
+                            text: qsTr("Vista read-only di /proc/cmdline. krisCC non modifica i kernel arguments.")
+                        }
+                        Flow {
+                            Layout.fillWidth: true
+                            spacing: Kirigami.Units.smallSpacing
+                            Repeater {
+                                model: SystemBackend.kernelArguments()
+                                delegate: Controls.Label {
+                                    required property string modelData
+                                    text: modelData
+                                    padding: Kirigami.Units.smallSpacing
+                                    background: Rectangle {
+                                        radius: 6
+                                        color: Qt.rgba(Kirigami.Theme.textColor.r,
+                                                       Kirigami.Theme.textColor.g,
+                                                       Kirigami.Theme.textColor.b, 0.06)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
 
                 Kirigami.AbstractCard {
@@ -518,158 +505,22 @@ Kirigami.ScrollablePage {
                 }
             }
 
-            ColumnLayout {
-                spacing: Kirigami.Units.largeSpacing
-
-                GridLayout {
-                    id: toolsGrid
-                    Layout.fillWidth: true
-                    columns: width > 760 ? 2 : 1
-                    uniformCellWidths: true
-                    columnSpacing: Kirigami.Units.largeSpacing
-                    rowSpacing: Kirigami.Units.largeSpacing
-
-                    Kirigami.AbstractCard {
-                        Layout.fillWidth: true
-                        Layout.alignment: Qt.AlignTop
-                        contentItem: ColumnLayout {
-                            Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Diagnostica") }
-                            Controls.Button { text: qsTr("KSystemLog"); icon.name: "utilities-log-viewer"; enabled: SystemBackend.toolAvailable("ksystemlog"); onClicked: SystemBackend.launchTool("ksystemlog") }
-                            Controls.Button { text: qsTr("Monitor di sistema"); icon.name: "utilities-system-monitor"; enabled: SystemBackend.toolAvailable("systemmonitor"); onClicked: SystemBackend.launchTool("systemmonitor") }
-                            Controls.Button {
-                                text: SystemBackend.toolAvailable("isoimagewriter")
-                                      ? qsTr("ISO Image Writer")
-                                      : qsTr("ISO Image Writer · non installato")
-                                icon.name: "media-optical"
-                                enabled: SystemBackend.toolAvailable("isoimagewriter")
-                                onClicked: SystemBackend.launchTool("isoimagewriter")
-                            }
-                        }
-                    }
-
-                    Kirigami.AbstractCard {
-                        Layout.fillWidth: true
-                        Layout.alignment: Qt.AlignTop
-                        contentItem: ColumnLayout {
-                            Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Pulizia") }
-                            Controls.Label {
-                                Layout.fillWidth: true
-                                wrapMode: Text.WordWrap
-                                opacity: UiMetrics.secondaryOpacity
-                                text: qsTr("Le pulizie dei cestini usano solo i privilegi del tuo utente e operano soltanto sugli scope predefiniti.")
-                            }
-                            Controls.Button {
-                                text: qsTr("Svuota cestino home")
-                                icon.name: "user-trash"
-                                enabled: MaintenanceBackend.available
-                                onClicked: {
-                                    trashDialog.scope = "home"
-                                    trashDialog.scopeLabel = qsTr("il cestino della home")
-                                    trashDialog.open()
-                                }
-                            }
-                            Controls.Button {
-                                text: qsTr("Svuota cestini altre partizioni")
-                                icon.name: "drive-harddisk"
-                                enabled: MaintenanceBackend.available
-                                onClicked: {
-                                    trashDialog.scope = "system"
-                                    trashDialog.scopeLabel = qsTr("i cestini delle partizioni montate")
-                                    trashDialog.open()
-                                }
-                            }
-                            Controls.Button {
-                                text: qsTr("Svuota tutti i cestini")
-                                icon.name: "edit-delete"
-                                enabled: MaintenanceBackend.available
-                                onClicked: {
-                                    trashDialog.scope = "all"
-                                    trashDialog.scopeLabel = qsTr("tutti i cestini dell'utente")
-                                    trashDialog.open()
-                                }
-                            }
-                            Kirigami.InlineMessage {
-                                Layout.fillWidth: true
-                                visible: MaintenanceBackend.resultState !== "idle"
-                                type: MaintenanceBackend.resultState === "success" ? Kirigami.MessageType.Positive
-                                      : MaintenanceBackend.resultState === "error" ? Kirigami.MessageType.Error
-                                      : Kirigami.MessageType.Information
-                                text: MaintenanceBackend.running
-                                      ? qsTr("Pulizia in corso…")
-                                      : MaintenanceBackend.output
-                            }
-                            Controls.Button { icon.name: "edit-clear";
-                                text: qsTr("Flatpak inutilizzati")
-                                enabled: SystemBackend.programAvailable("flatpak") && !utilityBackend.busy
-                                onClicked: unusedFlatpakDialog.open()
-                            }
-                            Controls.Button { icon.name: "edit-find";
-                                text: qsTr("RPM non necessari")
-                                enabled: SystemBackend.programAvailable("dnf5") && !utilityBackend.busy
-                                onClicked: utilityBackend.runBookmark("unneeded-rpms")
-                            }
-                        }
-                    }
-
-                    Kirigami.AbstractCard {
-                        Layout.fillWidth: true
-                        Layout.columnSpan: toolsGrid.columns
-                        Layout.alignment: Qt.AlignTop
-                        contentItem: ColumnLayout {
-                            Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Storage") }
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Controls.Button {
-                                    Layout.fillWidth: true
-                                    text: SystemBackend.toolAvailable("qdirstat") ? qsTr("QDirStat") : qsTr("QDirStat · non installato")
-                                    icon.name: "folder-chart"
-                                    enabled: SystemBackend.toolAvailable("qdirstat")
-                                    onClicked: SystemBackend.launchTool("qdirstat")
-                                }
-                                Controls.Button {
-                                    Layout.fillWidth: true
-                                    icon.name: "partitionmanager"
-                                    text: qsTr("Partition Manager")
-                                    enabled: SystemBackend.toolAvailable("partitionmanager")
-                                    onClicked: SystemBackend.launchTool("partitionmanager")
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Kirigami.AbstractCard {
-                    Layout.fillWidth: true
-                    visible: utilityBackend.operationId === "bookmark.unneeded-rpms"
-                          || utilityBackend.operationId === "flatpak.remove-unused"
-                    contentItem: ColumnLayout {
-                        Kirigami.Heading { level: 3; font.bold: true; text: utilityBackend.title }
-                        OutputCard {
-                    embedded: true
-                    outputText: utilityBackend.output
-                }
-                    }
-                }
-            }
         }
     }
 
     Controls.Dialog {
-        id: restartServiceDialog
+        id: firmwareRebootDialog
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
         width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
-        title: qsTr("Riavviare %1?").arg(root.pendingServiceTitle)
+        title: qsTr("Riavviare nel setup UEFI?")
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label {
             wrapMode: Text.WordWrap
-            text: qsTr("Il servizio verrà interrotto e riavviato. Per NetworkManager la rete può cadere per alcuni secondi.")
+            text: qsTr("Il prossimo riavvio entrerà direttamente nel firmware UEFI, se supportato dal sistema.")
         }
-        onAccepted: {
-            if (root.pendingService.length > 0)
-                SystemBackend.restartService(root.pendingService)
-        }
+        onAccepted: SystemBackend.requestFirmwareReboot()
     }
 
     Controls.Dialog {
@@ -714,37 +565,6 @@ Kirigami.ScrollablePage {
         onAccepted: RkBackend.sync()
     }
 
-    Controls.Dialog {
-        id: trashDialog
-        property string scope: ""
-        property string scopeLabel: ""
-        modal: true
-        parent: Controls.Overlay.overlay
-        anchors.centerIn: parent
-        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
-        title: qsTr("Confermare la pulizia?")
-        standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
-        contentItem: Controls.Label {
-            wrapMode: Text.WordWrap
-            text: qsTr("Verranno svuotati %1 con i privilegi del tuo utente. L'operazione è irreversibile.").arg(trashDialog.scopeLabel)
-        }
-        onAccepted: MaintenanceBackend.cleanTrash(scope)
-    }
-
-    Controls.Dialog {
-        id: unusedFlatpakDialog
-        modal: true
-        parent: Controls.Overlay.overlay
-        anchors.centerIn: parent
-        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
-        title: qsTr("Rimuovere i Flatpak inutilizzati?")
-        standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
-        contentItem: Controls.Label {
-            wrapMode: Text.WordWrap
-            text: qsTr("Rimuove dal profilo utente i runtime e le dipendenze Flatpak non più necessari.")
-        }
-        onAccepted: utilityBackend.runFlatpak("remove-unused", "")
-    }
 
     Controls.Dialog {
         id: clearHistoryDialog

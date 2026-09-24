@@ -29,10 +29,6 @@ public:
 
     Q_INVOKABLE bool runBookmark(const QString &id);
     Q_INVOKABLE bool previewRpmInstall(const QString &packageName);
-    Q_INVOKABLE bool runFlatpak(const QString &mode, const QString &query = QString(),
-                                 const QString &remote = QString());
-    Q_INVOKABLE bool addFlathubUser();
-    Q_INVOKABLE bool runPodman(const QString &mode, const QString &container = QString(), const QString &value = QString());
     Q_INVOKABLE bool cancel();
     Q_INVOKABLE void clearResult();
 
@@ -44,7 +40,6 @@ private:
                const QString &operationId, int timeoutMs = 0,
                bool structuredOutput = false);
     bool validPackageName(const QString &name) const;
-    bool validContainerName(const QString &name) const;
     void finish(const QString &message, const QString &state);
     void setImmediateError(const QString &title, const QString &operationId, const QString &message);
 

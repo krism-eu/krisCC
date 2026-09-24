@@ -28,6 +28,7 @@ qt_add_executable(krisCC
     src/RkBackend.cpp src/RkBackend.h
     src/MaintenanceBackend.cpp src/MaintenanceBackend.h
     src/UtilityBackend.cpp src/UtilityBackend.h
+    src/RepairBackend.cpp src/RepairBackend.h
     src/InstanceController.cpp src/InstanceController.h
     src/OperationLog.cpp src/OperationLog.h
     src/Validators.cpp src/Validators.h
@@ -45,8 +46,8 @@ set(KRISCC_QML_FILES
     qml/Main.qml
     qml/modules/DashboardModule.qml
     qml/modules/SoftwareModule.qml
-    qml/modules/FlatpakModule.qml
-    qml/modules/PodmanModule.qml
+    qml/modules/ToolsModule.qml
+    qml/modules/ServicesNetworkModule.qml
     qml/modules/SystemModule.qml
     qml/modules/CommandsModule.qml
     qml/modules/RecoveryModule.qml

@@ -35,8 +35,6 @@ RkStatus parseRkStatus(const QByteArray &data);
 BootcStatus parseBootcStatus(const QByteArray &data);
 Rows parseDnfRepoquery(const QByteArray &data);
 Rows parseDnfListJson(const QByteArray &data);
-Rows parseFlatpakTsv(const QByteArray &data, int expectedColumns);
-Rows parsePodmanJson(const QByteArray &data);
 Rows parseUefiEntries(const QByteArray &data);
 Rows parseGrubbyEntries(const QByteArray &data);
 }

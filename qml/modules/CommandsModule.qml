@@ -10,8 +10,6 @@ Kirigami.ScrollablePage {
     padding: UiMetrics.pageMargin
     title: qsTr("Comandi")
 
-    signal openRequested(string pageId)
-
     UtilityBackend { id: utilityBackend }
 
     property string pendingCustomId: ""
@@ -20,8 +18,7 @@ Kirigami.ScrollablePage {
     property string deleteCustomName: ""
 
     property var commands: [
-        { id: "pipewire-restart", title: qsTr("Riavvia Audio (PipeWire)"), command: "systemctl --user restart pipewire pipewire-pulse wireplumber", note: qsTr("Riavvia il motore audio senza permessi root quando l'audio sparisce.") },
-        { id: "journal-vacuum", title: qsTr("Pulisci Journal (max 150M)"), command: "journalctl --vacuum-size=150M", note: qsTr("Tronca i log persistenti a 150 MiB liberando spazio su disco.") },
+        { id: "services-all", title: qsTr("Tutti i servizi"), command: "systemctl list-units --type=service --all --no-pager --plain", note: qsTr("Elenco completo dei servizi systemd, inclusi quelli inattivi.") },
         { id: "gpu-driver", title: qsTr("Driver GPU e OpenGL"), command: "glxinfo -B", note: qsTr("Verifica quale scheda video è attiva e quale driver grafico (Mesa/NVIDIA) è in uso.") },
         { id: "vulkan-info", title: qsTr("Riepilogo Vulkan"), command: "vulkaninfo --summary", note: qsTr("Verifica supporto e runtime Vulkan installati per 3D e gaming.") },
         { id: "failed-units", title: qsTr("Unità di sistema fallite"), command: "systemctl --failed --no-pager --plain", note: qsTr("Servizi e unità systemd in errore.") },
@@ -42,7 +39,12 @@ Kirigami.ScrollablePage {
         { id: "partitions", title: qsTr("Dischi e partizioni"), command: "lsblk -e 7 -o NAME,PARTN,SIZE,FSTYPE,FSVER,LABEL,UUID,MOUNTPOINTS", note: qsTr("Dischi, partizioni, UUID e mount.") },
         { id: "selinux", title: qsTr("SELinux"), command: "getenforce", note: qsTr("Modalità SELinux attuale.") },
         { id: "boot-time", title: qsTr("Tempo di avvio"), command: "systemd-analyze time", note: qsTr("Tempo complessivo di avvio, utile per diagnosi occasionali.") },
-        { id: "blame", title: qsTr("Servizi lenti"), command: "systemd-analyze blame", note: qsTr("Unità ordinate per tempo di avvio.") }
+        { id: "blame", title: qsTr("Servizi lenti"), command: "systemd-analyze blame", note: qsTr("Unità ordinate per tempo di avvio.") },
+        { id: "critical-chain", title: qsTr("Catena critica avvio"), command: "systemd-analyze critical-chain", note: qsTr("Dipendenze che incidono sul percorso critico dell'avvio.") },
+        { id: "git-config-origins", title: qsTr("Configurazione Git"), command: "git config --list --show-origin", note: qsTr("Mostra valori Git e il file da cui provengono.") },
+        { id: "podman-storage", title: qsTr("Cartella storage Podman"), command: "podman info --format {{.Store.GraphRoot}}", note: qsTr("Mostra il percorso dello storage container senza gestire i container.") },
+        { id: "podman-connections", title: qsTr("Connessioni Podman"), command: "podman system connection list", note: qsTr("Elenca endpoint e connessioni Podman configurate.") },
+        { id: "shell-path", title: qsTr("PATH della sessione"), command: "printenv PATH", note: qsTr("Mostra l'ordine corrente dei percorsi usati per trovare i comandi.") }
     ]
 
     function filteredCommands(filterText) {
@@ -103,7 +105,7 @@ Kirigami.ScrollablePage {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
                         opacity: UiMetrics.secondaryOpacity
-                        text: qsTr("Comandi read-only e manutenzioni rapide utili nella diagnosi quotidiana. Le funzioni già coperte bene dalle pagine Flatpak, Container e dal Monitor di sistema non vengono duplicate qui.")
+                        text: qsTr("Comandi diagnostici read-only e script personali. Le riparazioni operative sono raccolte in Strumenti & Fix.")
                     }
                     RowLayout {
                         Layout.fillWidth: true
@@ -117,63 +119,6 @@ Kirigami.ScrollablePage {
                             icon.name: "edit-clear"
                             enabled: commandFilter.text.length > 0
                             onClicked: commandFilter.clear()
-                        }
-                    }
-                }
-
-                Kirigami.AbstractCard {
-                    Layout.fillWidth: true
-                    contentItem: ColumnLayout {
-                        spacing: Kirigami.Units.smallSpacing
-                        RowLayout {
-                            Layout.fillWidth: true
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 0
-                                Kirigami.Heading {
-                                    level: 3
-                                    font.bold: true
-                                    text: qsTr("Control Center")
-                                }
-                                Controls.Label {
-                                    text: qsTr("Versione installata: %1").arg(Qt.application.version)
-                                    opacity: UiMetrics.secondaryOpacity
-                                }
-                            }
-                            Controls.BusyIndicator {
-                                visible: SystemBackend.controlCenterUpdateBusy
-                                running: visible
-                            }
-                        }
-                        Controls.Label {
-                            Layout.fillWidth: true
-                            wrapMode: Text.WordWrap
-                            text: SystemBackend.controlCenterUpdateStatus.length > 0
-                                  ? SystemBackend.controlCenterUpdateStatus
-                                  : qsTr("Controlla la release stable ufficiale di krisCC. Gli aggiornamenti del Control Center vengono applicati insieme all'immagine KrisOS.")
-                            opacity: UiMetrics.secondaryOpacity
-                        }
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Controls.Button {
-                                text: qsTr("Verifica aggiornamenti")
-                                icon.name: "view-refresh"
-                                enabled: !SystemBackend.controlCenterUpdateBusy
-                                onClicked: SystemBackend.checkControlCenterUpdate()
-                            }
-                            Controls.Button {
-                                text: qsTr("Aggiorna tramite KrisOS")
-                                icon.name: "system-software-update"
-                                enabled: SystemBackend.controlCenterUpdateAvailable
-                                         && !SystemBackend.controlCenterUpdateBusy
-                                onClicked: root.openRequested("system")
-                            }
-                            Item { Layout.fillWidth: true }
-                            Controls.Label {
-                                visible: SystemBackend.controlCenterLatestVersion.length > 0
-                                text: qsTr("Stable: %1").arg(SystemBackend.controlCenterLatestVersion)
-                                opacity: UiMetrics.secondaryOpacity
-                            }
                         }
                     }
                 }

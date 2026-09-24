@@ -49,7 +49,7 @@ Regole:
 - Le mutazioni root passano esclusivamente da `rk` oppure dal piccolo helper `/usr/libexec/kriscc/admin`.
 - Polkit autorizza l'entry point; la validazione completa degli argomenti avviene anche nel processo privilegiato, non solo nella policy.
 - Nessun helper privilegiato accetta shell libera, pipeline o path arbitrari forniti dalla UI.
-- Operazioni che non richiedono davvero root, come la pulizia dei cestini dell'utente, restano fuori da Polkit.
+- Operazioni che non richiedono davvero root, come la pulizia dei cestini, il reset PipeWire, il flush DNS e le riparazioni NetworkManager autorizzate dalla sessione, restano fuori dall'helper root.
 
 ## 3. Fonte della verità
 
@@ -61,7 +61,8 @@ Sono fonti della verità i componenti proprietari del dominio, per esempio:
 - `bootc` per lo stato e gli aggiornamenti image-based;
 - systemd per unità, timer e sessioni;
 - DNF5 per informazioni repository;
-- Flatpak e Podman per i rispettivi profili utente.
+- un'applicazione container dedicata per Podman; krisCC non possiede il dominio container;
+- KDE Discover/Flatpak per la gestione applicativa Flatpak, delegata fuori da krisCC.
 
 krisCC legge e presenta lo stato; non reimplementa solver, recovery, deployment o policy.
 

@@ -42,36 +42,12 @@ private slots:
         const auto list = ContractParsers::parseDnfListJson("{\"installed\":[{\"name\":\"bash\",\"arch\":\"x86_64\",\"evr\":\"5.3-1.fc44\",\"repository\":\"@System\"}]}");
         QVERIFY(list.ok());
         QCOMPARE(list.values.size(), 1);
+        const auto emptyList = ContractParsers::parseDnfListJson("{}");
+        QVERIFY(emptyList.ok());
+        QVERIFY(emptyList.values.isEmpty());
         QVERIFY(!ContractParsers::parseDnfListJson("{\"installed\":[{\"name\":\"bash\"}]}").ok());
     }
 
-    void flatpakAndPodman()
-    {
-        const auto flatpak = ContractParsers::parseFlatpakTsv("Vivaldi\tcom.vivaldi.Vivaldi\t8.2\tflathub\n", 4);
-        QVERIFY(flatpak.ok());
-        QCOMPARE(flatpak.values.at(0).toStringList().at(1), QStringLiteral("com.vivaldi.Vivaldi"));
-
-        const auto remotes = ContractParsers::parseFlatpakTsv(
-            "flathub\tFlathub\thttps://dl.flathub.org/repo/\t\n", 4);
-        QVERIFY(remotes.ok());
-        QCOMPARE(remotes.values.size(), 1);
-        QCOMPARE(remotes.values.at(0).toStringList().size(), 4);
-        QCOMPARE(remotes.values.at(0).toStringList().at(3), QString());
-
-        const auto minimalRemotes = ContractParsers::parseFlatpakTsv(
-            "flathub\thttps://dl.flathub.org/repo/\n", 2);
-        QVERIFY(minimalRemotes.ok());
-        QCOMPARE(minimalRemotes.values.size(), 1);
-        QCOMPARE(minimalRemotes.values.at(0).toStringList(),
-                 QStringList({QStringLiteral("flathub"),
-                              QStringLiteral("https://dl.flathub.org/repo/")}));
-        QVERIFY(!ContractParsers::parseFlatpakTsv("broken\n", 2).ok());
-
-        const auto podman = ContractParsers::parsePodmanJson("[{\"Names\":[\"demo\"],\"State\":\"running\",\"Size\":{\"rootFsSize\":2048,\"rwSize\":512}}]");
-        QVERIFY(podman.ok());
-        QCOMPARE(podman.values.size(), 1);
-        QVERIFY(!ContractParsers::parsePodmanJson("{\"not\":\"array\"}").ok());
-    }
 
     void bootEntries()
     {
