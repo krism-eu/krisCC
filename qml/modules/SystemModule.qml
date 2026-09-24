@@ -677,6 +677,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: qsTr("Riavviare nel setup UEFI?")
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label {
