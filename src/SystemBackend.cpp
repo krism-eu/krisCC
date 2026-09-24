@@ -73,7 +73,9 @@ const QSet<QString> &allowedServices()
         QStringLiteral("NetworkManager.service"),
         QStringLiteral("cups.service"),
         QStringLiteral("bluetooth.service"),
-        QStringLiteral("firewalld.service")
+        QStringLiteral("firewalld.service"),
+        QStringLiteral("sshd.service"),
+        QStringLiteral("smb.service")
     };
     return services;
 }
@@ -689,6 +691,28 @@ bool SystemBackend::launchTool(const QString &toolId) const
     return info.exists() && info.isExecutable() && QProcess::startDetached(program, {});
 }
 
+bool SystemBackend::openWebConsole() const
+{
+    return QDesktopServices::openUrl(QUrl(QStringLiteral("https://localhost:9090")));
+}
+
+bool SystemBackend::openNetworkSettings() const
+{
+    const QString shell = resolveExecutable(QStringLiteral("kcmshell6"));
+    if (!shell.isEmpty())
+        return QProcess::startDetached(shell, {QStringLiteral("kcm_networkmanagement")});
+    const QString settings = toolProgram(QStringLiteral("systemsettings"));
+    return !settings.isEmpty() && QProcess::startDetached(settings, {});
+}
+
+QStringList SystemBackend::kernelArguments() const
+{
+    QFile file(QStringLiteral("/proc/cmdline"));
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+        return {};
+    return QString::fromUtf8(file.readAll()).trimmed().split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts);
+}
+
 bool SystemBackend::openTemporaryFolder() const
 {
     return QDesktopServices::openUrl(QUrl::fromLocalFile(QDir::tempPath()));
@@ -865,6 +889,45 @@ void SystemBackend::refreshServiceStates()
     }
 }
 
+bool SystemBackend::startService(const QString &service)
+{
+    if (!allowedServices().contains(service))
+        return false;
+    QDBusInterface manager(QStringLiteral("org.freedesktop.systemd1"), QStringLiteral("/org/freedesktop/systemd1"),
+                           QStringLiteral("org.freedesktop.systemd1.Manager"), QDBusConnection::systemBus());
+    if (!manager.isValid()) return false;
+    manager.setInteractiveAuthorizationAllowed(true);
+    manager.asyncCall(QStringLiteral("StartUnit"), service, QStringLiteral("replace"));
+    QTimer::singleShot(500, this, &SystemBackend::refreshServiceStates);
+    return true;
+}
+
+bool SystemBackend::stopService(const QString &service)
+{
+    if (!allowedServices().contains(service))
+        return false;
+    QDBusInterface manager(QStringLiteral("org.freedesktop.systemd1"), QStringLiteral("/org/freedesktop/systemd1"),
+                           QStringLiteral("org.freedesktop.systemd1.Manager"), QDBusConnection::systemBus());
+    if (!manager.isValid()) return false;
+    manager.setInteractiveAuthorizationAllowed(true);
+    manager.asyncCall(QStringLiteral("StopUnit"), service, QStringLiteral("replace"));
+    QTimer::singleShot(500, this, &SystemBackend::refreshServiceStates);
+    return true;
+}
+
+bool SystemBackend::resetFailedService(const QString &service)
+{
+    if (!allowedServices().contains(service))
+        return false;
+    QDBusInterface manager(QStringLiteral("org.freedesktop.systemd1"), QStringLiteral("/org/freedesktop/systemd1"),
+                           QStringLiteral("org.freedesktop.systemd1.Manager"), QDBusConnection::systemBus());
+    if (!manager.isValid()) return false;
+    manager.setInteractiveAuthorizationAllowed(true);
+    manager.asyncCall(QStringLiteral("ResetFailedUnit"), service);
+    QTimer::singleShot(500, this, &SystemBackend::refreshServiceStates);
+    return true;
+}
+
 bool SystemBackend::restartService(const QString &service)
 {
     if (!allowedServices().contains(service))
@@ -914,6 +977,31 @@ void SystemBackend::requestReboot()
         else
             emit rebootFinished(true, QString());
         call->deleteLater();
+    });
+}
+
+void SystemBackend::requestFirmwareReboot()
+{
+    QDBusInterface manager(QStringLiteral("org.freedesktop.login1"),
+                           QStringLiteral("/org/freedesktop/login1"),
+                           QStringLiteral("org.freedesktop.login1.Manager"),
+                           QDBusConnection::systemBus());
+    manager.setInteractiveAuthorizationAllowed(true);
+    if (!manager.isValid()) {
+        emit rebootFinished(false, tr("systemd-logind non disponibile."));
+        return;
+    }
+    auto *watcher = new QDBusPendingCallWatcher(
+        manager.asyncCall(QStringLiteral("SetRebootToFirmwareSetup"), true), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this,
+            [this](QDBusPendingCallWatcher *call) {
+        const QDBusPendingReply<> reply(*call);
+        call->deleteLater();
+        if (reply.isError()) {
+            emit rebootFinished(false, tr("Firmware setup non disponibile: %1").arg(reply.error().message()));
+            return;
+        }
+        requestReboot();
     });
 }
 

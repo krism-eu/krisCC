@@ -17,6 +17,7 @@
 #include "PackageSearch.h"
 #include "PolkitHelper.h"
 #include "RkBackend.h"
+#include "RepairBackend.h"
 #include "MaintenanceBackend.h"
 #include "SoftwareBackend.h"
 #include "SystemBackend.h"
@@ -72,6 +73,7 @@ int main(int argc, char *argv[])
 
     qmlRegisterType<PackageSearch>("org.kriscc", 1, 0, "PackageSearch");
     qmlRegisterType<UtilityBackend>("org.kriscc", 1, 0, "UtilityBackend");
+    qmlRegisterType<RepairBackend>("org.kriscc", 1, 0, "RepairBackend");
 
     PolkitHelper polkitHelper;
     BootcBackend bootcBackend(&polkitHelper);

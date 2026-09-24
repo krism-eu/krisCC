@@ -109,8 +109,6 @@ Kirigami.ScrollablePage {
                 return qsTr("Discover non disponibile")
             return qsTr("Gestisci applicazioni con Discover")
         }
-        if (id === "podman")
-            return SystemBackend.programAvailable("podman") ? qsTr("Podman disponibile") : qsTr("Non disponibile")
         return SystemBackend.osName
     }
 
@@ -392,6 +390,12 @@ Kirigami.ScrollablePage {
                         text: qsTr("Terminale")
                         icon.name: "utilities-terminal"
                         onClicked: SystemBackend.launchTool("konsole")
+                    }
+                    Controls.Button {
+                        Layout.fillWidth: true
+                        text: qsTr("Gestione Web")
+                        icon.name: "applications-internet"
+                        onClicked: SystemBackend.openWebConsole()
                     }
                 }
                 Kirigami.InlineMessage {

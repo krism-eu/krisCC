@@ -1,7 +1,6 @@
 #include "UtilityBackend.h"
 
 #include "OperationLog.h"
-#include "ContractParsers.h"
 #include "ProcessRunner.h"
 #include "Validators.h"
 
@@ -13,18 +12,6 @@
 namespace {
 constexpr int kShortQueryTimeoutMs = 30 * 1000;
 constexpr int kRepositoryQueryTimeoutMs = 2 * 60 * 1000;
-constexpr int kContainerQueryTimeoutMs = 60 * 1000;
-constexpr int kPodmanActionTimeoutMs = 5 * 60 * 1000;
-
-bool shouldLogOperation(const QString &id)
-{
-    return id == QStringLiteral("podman.start")
-        || id == QStringLiteral("podman.stop")
-        || id == QStringLiteral("podman.restart")
-        || id == QStringLiteral("podman.rename")
-        || id == QStringLiteral("podman.remove")
-        || id == QStringLiteral("podman.image-remove");
-}
 }
 
 UtilityBackend::UtilityBackend(QObject *parent)
@@ -37,10 +24,6 @@ bool UtilityBackend::validPackageName(const QString &name) const
     return Validators::packageName(name);
 }
 
-bool UtilityBackend::validContainerName(const QString &name) const
-{
-    return Validators::containerName(name);
-}
 
 void UtilityBackend::setImmediateError(const QString &title, const QString &operationId, const QString &message)
 {
@@ -142,27 +125,6 @@ void UtilityBackend::finish(const QString &message, const QString &state)
     m_rows.clear();
     m_resultState = state;
 
-    if (state == QStringLiteral("success")) {
-        ContractParsers::Rows parsed;
-        bool expectsRows = false;
-        if (completedOperation == QStringLiteral("podman.list")
-            || completedOperation == QStringLiteral("podman.images")) {
-            parsed = ContractParsers::parsePodmanJson(message.toUtf8());
-            expectsRows = true;
-        }
-
-        if (expectsRows) {
-            if (!parsed.ok()) {
-                m_resultState = QStringLiteral("error");
-                m_output = tr("Formato di output non riconosciuto per %1.").arg(completedOperation);
-            } else {
-                m_rows = parsed.values;
-            }
-        }
-    }
-
-    if (shouldLogOperation(completedOperation))
-        OperationLog::append(QStringLiteral("krisCC"), completedOperation, m_resultState, m_title);
     emit stateChanged();
 }
 
@@ -188,7 +150,15 @@ bool UtilityBackend::runBookmark(const QString &id)
     if (id == QStringLiteral("pipewire-restart"))
         return start(QStringLiteral("systemctl"), {QStringLiteral("--user"), QStringLiteral("restart"), QStringLiteral("pipewire"), QStringLiteral("pipewire-pulse"), QStringLiteral("wireplumber")}, tr("Riavvio Audio PipeWire"), QStringLiteral("bookmark.pipewire-restart"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("journal-vacuum"))
-        return start(QStringLiteral("journalctl"), {QStringLiteral("--vacuum-size=150M")}, tr("Pulizia Journal Systemd"), QStringLiteral("bookmark.journal-vacuum"), kShortQueryTimeoutMs);
+        return start(QStringLiteral("journalctl"), {QStringLiteral("--vacuum-size=100M")}, tr("Pulizia Journal Systemd"), QStringLiteral("bookmark.journal-vacuum"), kShortQueryTimeoutMs);
+    if (id == QStringLiteral("dns-flush"))
+        return start(QStringLiteral("resolvectl"), {QStringLiteral("flush-caches")}, tr("Svuota cache DNS"), QStringLiteral("repair.dns-flush"), kShortQueryTimeoutMs);
+    if (id == QStringLiteral("dnf-clean"))
+        return start(QStringLiteral("dnf5"), {QStringLiteral("clean"), QStringLiteral("all")}, tr("Pulizia cache DNF5"), QStringLiteral("cleanup.dnf"), kRepositoryQueryTimeoutMs);
+    if (id == QStringLiteral("flatpak-unused"))
+        return start(QStringLiteral("flatpak"), {QStringLiteral("uninstall"), QStringLiteral("--user"), QStringLiteral("--unused"), QStringLiteral("--noninteractive"), QStringLiteral("--assumeyes")}, tr("Rimozione runtime Flatpak inutilizzati"), QStringLiteral("cleanup.flatpak"), kRepositoryQueryTimeoutMs);
+    if (id == QStringLiteral("vainfo"))
+        return start(QStringLiteral("vainfo"), {QStringLiteral("--display"), QStringLiteral("drm"), QStringLiteral("--device"), QStringLiteral("/dev/dri/renderD128")}, tr("Accelerazione video VA-API"), QStringLiteral("diagnostic.vainfo"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("gpu-driver"))
         return start(QStringLiteral("glxinfo"), {QStringLiteral("-B")}, tr("Info Driver GPU"), QStringLiteral("bookmark.gpu-driver"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("vulkan-info"))
@@ -276,40 +246,3 @@ bool UtilityBackend::previewRpmInstall(const QString &packageName)
                  QStringLiteral("rpm.plan"), kRepositoryQueryTimeoutMs);
 }
 
-bool UtilityBackend::runPodman(const QString &mode, const QString &container, const QString &value)
-{
-    if (mode == QStringLiteral("list"))
-        return start(QStringLiteral("/usr/bin/podman"),
-                     {QStringLiteral("ps"), QStringLiteral("--all"), QStringLiteral("--size"), QStringLiteral("--format"), QStringLiteral("json")},
-                     tr("Container Podman"), QStringLiteral("podman.list"), kContainerQueryTimeoutMs, true);
-    if (mode == QStringLiteral("images"))
-        return start(QStringLiteral("/usr/bin/podman"),
-                     {QStringLiteral("images"), QStringLiteral("--format"), QStringLiteral("json")},
-                     tr("Immagini Podman"), QStringLiteral("podman.images"), kContainerQueryTimeoutMs, true);
-
-    const QString name = container.trimmed();
-    if (mode == QStringLiteral("image-remove") && Validators::containerImageRef(name))
-        return start(QStringLiteral("/usr/bin/podman"),
-                     {QStringLiteral("image"), QStringLiteral("rm"), name},
-                     tr("Elimina immagine: %1").arg(name),
-                     QStringLiteral("podman.image-remove"), kContainerQueryTimeoutMs);
-
-    if (!validContainerName(name))
-        return false;
-
-    if (mode == QStringLiteral("info"))
-        return start(QStringLiteral("/usr/bin/podman"), {QStringLiteral("inspect"), name}, tr("Info container: %1").arg(name), QStringLiteral("podman.info"), kContainerQueryTimeoutMs);
-    if (mode == QStringLiteral("logs"))
-        return start(QStringLiteral("/usr/bin/podman"), {QStringLiteral("logs"), QStringLiteral("--tail"), QStringLiteral("200"), name}, tr("Log container: %1").arg(name), QStringLiteral("podman.logs"), kContainerQueryTimeoutMs);
-    if (mode == QStringLiteral("start"))
-        return start(QStringLiteral("/usr/bin/podman"), {QStringLiteral("start"), name}, tr("Avvio container: %1").arg(name), QStringLiteral("podman.start"), kPodmanActionTimeoutMs);
-    if (mode == QStringLiteral("stop"))
-        return start(QStringLiteral("/usr/bin/podman"), {QStringLiteral("stop"), name}, tr("Arresto container: %1").arg(name), QStringLiteral("podman.stop"), kPodmanActionTimeoutMs);
-    if (mode == QStringLiteral("restart"))
-        return start(QStringLiteral("/usr/bin/podman"), {QStringLiteral("restart"), name}, tr("Riavvio container: %1").arg(name), QStringLiteral("podman.restart"), kPodmanActionTimeoutMs);
-    if (mode == QStringLiteral("remove"))
-        return start(QStringLiteral("/usr/bin/podman"), {QStringLiteral("rm"), name}, tr("Elimina container: %1").arg(name), QStringLiteral("podman.remove"), kPodmanActionTimeoutMs);
-    if (mode == QStringLiteral("rename") && validContainerName(value.trimmed()))
-        return start(QStringLiteral("/usr/bin/podman"), {QStringLiteral("rename"), name, value.trimmed()}, tr("Rinomina container: %1").arg(name), QStringLiteral("podman.rename"), kPodmanActionTimeoutMs);
-    return false;
-}

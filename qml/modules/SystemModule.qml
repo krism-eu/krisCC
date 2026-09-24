@@ -7,7 +7,7 @@ import org.kriscc
 Kirigami.ScrollablePage {
     id: root
     padding: UiMetrics.pageMargin
-    title: qsTr("Sistema")
+    title: qsTr("Sistema & Boot")
 
     UtilityBackend { id: utilityBackend }
 
@@ -148,6 +148,16 @@ Kirigami.ScrollablePage {
                                 Layout.fillWidth: true
                                 opacity: UiMetrics.secondaryOpacity
                                 text: qsTr("%1 pacchetti RPM persistenti richiesti").arg(BootcBackend.persistentPackageCount)
+                            }
+                            Flow {
+                                Layout.fillWidth: true
+                                spacing: Kirigami.Units.smallSpacing
+                                Controls.Button {
+                                    text: qsTr("Firmware UEFI")
+                                    icon.name: "system-reboot"
+                                    enabled: SystemBackend.uefiBootAvailable
+                                    onClicked: firmwareRebootDialog.open()
+                                }
                             }
 
                             Kirigami.InlineMessage {
@@ -629,6 +639,20 @@ Kirigami.ScrollablePage {
                 }
             }
         }
+    }
+
+    Controls.Dialog {
+        id: firmwareRebootDialog
+        modal: true
+        parent: Controls.Overlay.overlay
+        anchors.centerIn: parent
+        title: qsTr("Riavviare nel setup UEFI?")
+        standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
+        contentItem: Controls.Label {
+            wrapMode: Text.WordWrap
+            text: qsTr("Il prossimo riavvio entrerà direttamente nel firmware UEFI, se supportato dal sistema.")
+        }
+        onAccepted: SystemBackend.requestFirmwareReboot()
     }
 
     Controls.Dialog {

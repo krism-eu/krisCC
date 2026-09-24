@@ -247,26 +247,6 @@ ContractParsers::Rows ContractParsers::parseDnfListJson(const QByteArray &data)
     return result;
 }
 
-ContractParsers::Rows ContractParsers::parsePodmanJson(const QByteArray &data)
-{
-    Rows result;
-    QJsonParseError error;
-    const QJsonDocument document = QJsonDocument::fromJson(data, &error);
-    if (error.error != QJsonParseError::NoError || !document.isArray()) {
-        result.error = Error::InvalidJson;
-        return result;
-    }
-    for (const QJsonValue &value : document.array()) {
-        if (!value.isObject()) {
-            result.error = Error::InvalidShape;
-            result.values.clear();
-            return result;
-        }
-        result.values.append(value.toObject().toVariantMap());
-    }
-    return result;
-}
-
 ContractParsers::Rows ContractParsers::parseUefiEntries(const QByteArray &data)
 {
     Rows result;

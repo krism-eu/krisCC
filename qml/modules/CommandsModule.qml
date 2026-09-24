@@ -8,7 +8,7 @@ import org.kriscc
 Kirigami.ScrollablePage {
     id: root
     padding: UiMetrics.pageMargin
-    title: qsTr("Comandi")
+    title: qsTr("Diagnostica")
 
     signal openRequested(string pageId)
 
@@ -20,8 +20,6 @@ Kirigami.ScrollablePage {
     property string deleteCustomName: ""
 
     property var commands: [
-        { id: "pipewire-restart", title: qsTr("Riavvia Audio (PipeWire)"), command: "systemctl --user restart pipewire pipewire-pulse wireplumber", note: qsTr("Riavvia il motore audio senza permessi root quando l'audio sparisce.") },
-        { id: "journal-vacuum", title: qsTr("Pulisci Journal (max 150M)"), command: "journalctl --vacuum-size=150M", note: qsTr("Tronca i log persistenti a 150 MiB liberando spazio su disco.") },
         { id: "gpu-driver", title: qsTr("Driver GPU e OpenGL"), command: "glxinfo -B", note: qsTr("Verifica quale scheda video è attiva e quale driver grafico (Mesa/NVIDIA) è in uso.") },
         { id: "vulkan-info", title: qsTr("Riepilogo Vulkan"), command: "vulkaninfo --summary", note: qsTr("Verifica supporto e runtime Vulkan installati per 3D e gaming.") },
         { id: "failed-units", title: qsTr("Unità di sistema fallite"), command: "systemctl --failed --no-pager --plain", note: qsTr("Servizi e unità systemd in errore.") },
@@ -103,7 +101,7 @@ Kirigami.ScrollablePage {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
                         opacity: UiMetrics.secondaryOpacity
-                        text: qsTr("Comandi read-only e manutenzioni rapide utili nella diagnosi quotidiana. Le funzioni già coperte bene da Discover, dalla pagina Container e dal Monitor di sistema non vengono duplicate qui.")
+                        text: qsTr("Diagnostica read-only, informazioni hardware e comandi personali. Le riparazioni operative sono raccolte in Strumenti & Fix.")
                     }
                     RowLayout {
                         Layout.fillWidth: true

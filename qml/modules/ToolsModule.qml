@@ -1,0 +1,100 @@
+import QtQuick
+import QtQuick.Layouts
+import QtQuick.Controls as Controls
+import org.kde.kirigami as Kirigami
+import org.kriscc
+
+Kirigami.ScrollablePage {
+    id: root
+    padding: UiMetrics.pageMargin
+    title: qsTr("Strumenti & Fix")
+    UtilityBackend { id: utility }
+    RepairBackend { id: repair }
+    property var cleanupQueue: []
+
+    function runNextCleanup() {
+        if (utility.busy || cleanupQueue.length === 0) return
+        var id = cleanupQueue.shift()
+        utility.runBookmark(id)
+    }
+
+    Connections {
+        target: utility
+        function onStateChanged() {
+            if (!utility.busy && root.cleanupQueue.length > 0)
+                Qt.callLater(root.runNextCleanup)
+        }
+    }
+
+    ColumnLayout {
+        width: parent.width
+        spacing: Kirigami.Units.largeSpacing
+
+        GridLayout {
+            Layout.fillWidth: true
+            columns: width > 760 ? 2 : 1
+            uniformCellWidths: true
+            columnSpacing: Kirigami.Units.largeSpacing
+            rowSpacing: Kirigami.Units.largeSpacing
+
+            Kirigami.AbstractCard {
+                Layout.fillWidth: true
+                contentItem: ColumnLayout {
+                    Kirigami.Heading { level: 2; text: qsTr("Riparatore Audio"); font.bold: true }
+                    Controls.Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: qsTr("Riavvia PipeWire, PipeWire Pulse e WirePlumber nella sessione utente.") }
+                    Controls.Button { text: qsTr("Ripristina stack audio"); icon.name: "audio-volume-high"; enabled: !repair.busy; onClicked: repair.restartAudio() }
+                }
+            }
+
+            Kirigami.AbstractCard {
+                Layout.fillWidth: true
+                contentItem: ColumnLayout {
+                    Kirigami.Heading { level: 2; text: qsTr("Rete & DNS"); font.bold: true }
+                    Controls.Label { text: qsTr("Interfaccia: %1").arg(SystemBackend.networkInterface || qsTr("non disponibile")) }
+                    Controls.Button { text: qsTr("Svuota cache DNS"); enabled: !repair.busy; onClicked: repair.flushDns() }
+                    Controls.Button { text: qsTr("Riapplica connessione attiva"); enabled: !repair.busy && SystemBackend.networkInterface.length > 0; onClicked: repair.reconnectNetwork(SystemBackend.networkInterface) }
+                    Controls.Button { text: qsTr("Apri NetworkManager"); icon.name: "network-connect"; onClicked: SystemBackend.openNetworkSettings() }
+                }
+            }
+        }
+
+        Kirigami.AbstractCard {
+            Layout.fillWidth: true
+            contentItem: ColumnLayout {
+                Kirigami.Heading { level: 2; text: qsTr("Pulizia disco unificata"); font.bold: true }
+                Controls.CheckBox { id: trash; text: qsTr("Cestini utente e volumi"); checked: true }
+                Controls.CheckBox { id: journal; text: qsTr("Journal oltre 100 MiB"); checked: true }
+                Controls.CheckBox { id: dnf; text: qsTr("Cache DNF5"); checked: true }
+                Controls.CheckBox { id: flatpak; text: qsTr("Runtime Flatpak inutilizzati"); checked: true; enabled: SystemBackend.programAvailable("flatpak") }
+                Controls.Button {
+                    text: qsTr("Avvia pulizia selezionata")
+                    icon.name: "edit-clear"
+                    enabled: !utility.busy && !MaintenanceBackend.running
+                    onClicked: {
+                        root.cleanupQueue = []
+                        if (trash.checked) MaintenanceBackend.cleanTrash("all")
+                        if (journal.checked) root.cleanupQueue.push("journal-vacuum")
+                        if (dnf.checked) root.cleanupQueue.push("dnf-clean")
+                        if (flatpak.checked) root.cleanupQueue.push("flatpak-unused")
+                        root.runNextCleanup()
+                    }
+                }
+                Controls.ProgressBar { Layout.fillWidth: true; indeterminate: utility.busy || MaintenanceBackend.running; visible: indeterminate }
+                Controls.Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: utility.output.length > 0 ? utility.output : MaintenanceBackend.output }
+            }
+        }
+
+        Kirigami.AbstractCard {
+            Layout.fillWidth: true
+            contentItem: ColumnLayout {
+                Kirigami.Heading { level: 2; text: qsTr("Diagnostica hardware rapida"); font.bold: true }
+                Flow {
+                    Layout.fillWidth: true
+                    Controls.Button { text: qsTr("VA-API"); enabled: !utility.busy; onClicked: utility.runBookmark("vainfo") }
+                    Controls.Button { text: qsTr("GPU / Mesa"); enabled: !utility.busy; onClicked: utility.runBookmark("gpu-driver") }
+                }
+                OutputCard { embedded: true; outputText: utility.output }
+            }
+        }
+    }
+}

@@ -8,6 +8,4 @@ bool repositoryId(const QString &value);
 bool repositoryUrl(const QString &value);
 bool bootToken(const QString &value);
 bool grubEntry(const QString &value);
-bool containerName(const QString &value);
-bool containerImageRef(const QString &value);
 }

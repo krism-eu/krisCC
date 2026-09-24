@@ -110,8 +110,15 @@ public:
     Q_INVOKABLE bool programAvailable(const QString &program) const;
     Q_INVOKABLE void checkControlCenterUpdate();
     Q_INVOKABLE void refreshServiceStates();
+    Q_INVOKABLE bool startService(const QString &service);
+    Q_INVOKABLE bool stopService(const QString &service);
     Q_INVOKABLE bool restartService(const QString &service);
+    Q_INVOKABLE bool resetFailedService(const QString &service);
     Q_INVOKABLE void requestReboot();
+    Q_INVOKABLE void requestFirmwareReboot();
+    Q_INVOKABLE QStringList kernelArguments() const;
+    Q_INVOKABLE bool openWebConsole() const;
+    Q_INVOKABLE bool openNetworkSettings() const;
     Q_INVOKABLE void setResourceMonitoringEnabled(bool enabled);
     Q_INVOKABLE void refreshUefiEntries();
     Q_INVOKABLE void refreshGrubEntries();
