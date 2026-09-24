@@ -153,6 +153,15 @@ bool UtilityBackend::runBookmark(const QString &id)
         return start(QStringLiteral("journalctl"), {QStringLiteral("--vacuum-size=100M")}, tr("Pulizia Journal Systemd"), QStringLiteral("bookmark.journal-vacuum"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("dns-flush"))
         return start(QStringLiteral("resolvectl"), {QStringLiteral("flush-caches")}, tr("Svuota cache DNS"), QStringLiteral("repair.dns-flush"), kShortQueryTimeoutMs);
+    if (id == QStringLiteral("cleanup-estimate")) {
+        const QString script = QStringLiteral(
+            "printf 'Cestini: '; du -sh "$HOME/.local/share/Trash" 2>/dev/null | cut -f1 || echo '0'; "
+            "printf 'Journal: '; journalctl --disk-usage 2>/dev/null | sed 's/^.*take up /circa /'; "
+            "printf 'Cache DNF: '; du -sh /var/cache/libdnf5 2>/dev/null | cut -f1 || echo 'non misurabile'; "
+            "printf 'Flatpak inutilizzati: calcolo esatto durante la pulizia\\n'");
+        return start(QStringLiteral("/usr/bin/bash"), {QStringLiteral("-c"), script},
+                     tr("Stima spazio recuperabile"), QStringLiteral("cleanup.estimate"), kShortQueryTimeoutMs);
+    }
     if (id == QStringLiteral("dnf-clean"))
         return start(QStringLiteral("dnf5"), {QStringLiteral("clean"), QStringLiteral("all")}, tr("Pulizia cache DNF5"), QStringLiteral("cleanup.dnf"), kRepositoryQueryTimeoutMs);
     if (id == QStringLiteral("flatpak-unused"))

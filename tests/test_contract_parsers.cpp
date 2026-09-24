@@ -48,13 +48,6 @@ private slots:
         QVERIFY(!ContractParsers::parseDnfListJson("{\"installed\":[{\"name\":\"bash\"}]}").ok());
     }
 
-    void podmanFormat()
-    {
-        const auto podman = ContractParsers::parsePodmanJson("[{\"Names\":[\"demo\"],\"State\":\"running\",\"Size\":{\"rootFsSize\":2048,\"rwSize\":512}}]");
-        QVERIFY(podman.ok());
-        QCOMPARE(podman.values.size(), 1);
-        QVERIFY(!ContractParsers::parsePodmanJson("{\"not\":\"array\"}").ok());
-    }
 
     void bootEntries()
     {

@@ -393,7 +393,7 @@ Kirigami.ScrollablePage {
                     }
                     Controls.Button {
                         Layout.fillWidth: true
-                        text: qsTr("Gestione Web")
+                        text: qsTr("Cockpit")
                         icon.name: "applications-internet"
                         onClicked: SystemBackend.openWebConsole()
                     }

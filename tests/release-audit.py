@@ -38,6 +38,9 @@ software_qml = read("qml/modules/SoftwareModule.qml")
 system_qml = read("qml/modules/SystemModule.qml")
 dashboard_qml = read("qml/modules/DashboardModule.qml")
 commands_qml = read("qml/modules/CommandsModule.qml")
+tools_qml = read("qml/modules/ToolsModule.qml")
+services_qml = read("qml/modules/ServicesNetworkModule.qml")
+repair_cpp = read("src/RepairBackend.cpp")
 recovery_qml = read("qml/modules/RecoveryModule.qml")
 contract_parsers_h = read("src/ContractParsers.h")
 contract_parsers_cpp = read("src/ContractParsers.cpp")
@@ -134,9 +137,6 @@ require('preflightOptions.arguments = {QStringLiteral("-tzf"), canonical};' in s
 
 require("options.mergedChannels = !structuredOutput;" in utility_cpp,
         "machine-readable utility output must be isolated from stderr")
-for operation in ("podman.list", "podman.images"):
-    require(operation in utility_cpp and "structuredOutput" in utility_cpp,
-            f"{operation}: structured output protection missing")
 
 policy = ET.parse(ROOT / "data/org.kriscc.controlcenter.policy").getroot()
 actions = {node.attrib["id"]: node for node in policy.findall("action")}
@@ -174,15 +174,6 @@ require("id: flatpakDialog" not in system_qml
         "System updates tab must not duplicate Flatpak updating")
 require('text: qsTr("Plasma")' not in system_qml,
         "System tools must not duplicate the Plasma launcher block")
-require('launchTool("isoimagewriter")' in system_qml
-        and 'QStringLiteral("isoimagewriter")' in system_cpp,
-        "ISO Image Writer shortcut contract is missing")
-tools_section = system_qml.split('id: toolsGrid', 1)[1].split('id: restartServiceDialog', 1)[0]
-require('launchTool("qdirstat")' in tools_section,
-        "QDirStat must stay in the Diagnostica tool group")
-require('text: qsTr("Storage")' not in tools_section
-        and 'text: qsTr("Partition Manager")' not in tools_section,
-        "System tools must not expose the removed Storage/Partition Manager block")
 require("entries.size() >= 500" not in package_cpp,
         "installed RPM inventory is silently capped")
 require("entries.size() >= 100" in package_cpp and "m_truncated" in package_cpp,
@@ -283,11 +274,37 @@ require('item.insert(QStringLiteral("included"), false)' not in system_cpp
         "Backup preview backend must not expose excluded or absent rows")
 require("partialFile.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner)" in system_cpp,
         "backup partial file must be created as 0600")
-require("JSON.parse(" not in read("qml/modules/PodmanModule.qml"),
-        "Podman JSON parsing must stay in C++")
-require("containerImageRef" in read("src/Validators.h")
-        and 'QStringLiteral("podman.image-remove")' in utility_cpp,
-        "Podman image removal validator contract is missing")
+require("qml/modules/PodmanModule.qml" not in cmake
+        and "runPodman" not in utility_cpp
+        and "parsePodmanJson" not in contract_parsers_h
+        and "containerImageRef" not in read("src/Validators.h"),
+        "Podman ownership must stay outside krisCC")
+require("qml/modules/ToolsModule.qml" in cmake
+        and "qml/modules/ServicesNetworkModule.qml" in cmake
+        and "src/RepairBackend.cpp src/RepairBackend.h" in cmake,
+        "Swiss Army modules/backends are not wired into the build")
+require('restartAudio()' in read("src/RepairBackend.h")
+        and 'flushDns()' in read("src/RepairBackend.h")
+        and 'reconnectNetwork' in repair_cpp
+        and 'applyDnsPreset' in repair_cpp,
+        "operational audio/network repair contract is incomplete")
+require('cleanup-estimate' in utility_cpp
+        and 'journal-vacuum' in tools_qml
+        and 'dnf-clean' in tools_qml
+        and 'flatpak-unused' in tools_qml,
+        "unified cleanup contract is incomplete")
+require("startService" in system_cpp and "stopService" in system_cpp
+        and "restartService" in system_cpp and "resetFailedService" in system_cpp
+        and 'QStringLiteral("sshd.service")' in system_cpp
+        and 'QStringLiteral("smb.service")' in system_cpp,
+        "allowlisted service controls are incomplete")
+require("requestFirmwareReboot" in system_cpp
+        and 'SetRebootToFirmwareSetup' in system_cpp
+        and "kernelArguments" in system_cpp,
+        "firmware reboot/read-only kernel contract is incomplete")
+require('text: qsTr("Cockpit")' in dashboard_qml
+        and "openWebConsole()" in dashboard_qml,
+        "Dashboard Cockpit shortcut is missing")
 require('parseDnfListJson("{}")' in contract_parsers_test,
         "empty DNF5 list JSON regression test is missing")
 require("m_operationLines.isEmpty()" in rk_cpp

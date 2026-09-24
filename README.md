@@ -11,9 +11,11 @@ Le regole di stabilità, compatibilità e integrazione sono definite in [ARCHITE
 - **Panoramica**: stato essenziale di sistema, aggiornamenti, storage, CPU, RAM usata senza swap, temperatura CPU e Quick System Info.
 - **Software RPM**: ricerca, installati, aggiornabili, provenienza Base/Persistente/Layer non richiesti e piano della transazione tramite la stessa policy `rk` usata per installare.
 - **Flatpak**: la tile Dashboard apre KDE Discover, che resta il proprietario della ricerca, installazione, rimozione e aggiornamento delle applicazioni Flatpak.
-- **Container / Podman**: elenco container e immagini locali, stato, nome/tag, dimensione, informazioni, log, start/stop/restart, rinomina, rimozione dei container e rimozione esplicita delle immagini senza force.
-- **Sistema**: centro aggiornamenti BootC/rk, salute e sicurezza read-only, storage, voci UEFI e GRUB/BLS, selezione one-shot del prossimo avvio e strumenti KDE essenziali.
-- **Comandi**: diagnostica read-only pronta per systemd, journal, rete, spazio, inode, mount e avvio, più **Miei comandi** per salvare comandi o script Bash multilinea personali in `~/.config/krisCC/custom-actions.json`. Il file è privato (`0600`), versionato e fail-closed; le azioni girano soltanto con i privilegi dell'utente corrente, con stdin chiuso, e Annulla/timeout termina l'intero gruppo di processi dello script.
+- **Container**: gestione delegata a un'applicazione dedicata; krisCC non mantiene più un frontend Podman.
+- **Strumenti & Fix**: riparazione audio, DNS/rete, pulizia unificata di cestini/journal/DNF/Flatpak inutilizzati e diagnostica video rapida.
+- **Servizi & Rete**: controlli Start/Stop/Restart/Reset su servizi allowlisted, unità fallite, DNS rapidi indipendenti e accesso all'editor NetworkManager.
+- **Sistema & Boot**: centro aggiornamenti BootC/rk, reboot nel firmware UEFI, kernel arguments read-only, storage e selezione one-shot UEFI/GRUB.
+- **Diagnostica**: controlli read-only su systemd, journal, rete, storage, GPU/VA-API e avvio, più **Miei comandi** per salvare comandi o script Bash multilinea personali in `~/.config/krisCC/custom-actions.json`. Il file è privato (`0600`), versionato e fail-closed; le azioni girano soltanto con i privilegi dell'utente corrente, con stdin chiuso, e Annulla/timeout termina l'intero gruppo di processi dello script.
 - **Backup e recovery**: creazione, anteprima precisa di inclusioni/esclusioni, elenco, verifica e ripristino degli snapshot `tar.gz`, più stato RK strutturato, sync e forget di recovery. Il backup home esclude runtime/app Flatpak e storage Podman ricostruibili, mantenendo i dati Flatpak in `~/.var/app`.
 - **Cronologia**: registro locale privato e limitato delle operazioni mutanti eseguite da krisCC. Non vengono salvati output completi né argomenti sensibili delle operazioni amministrative.
 
@@ -21,7 +23,7 @@ Le regole di stabilità, compatibilità e integrazione sono definite in [ARCHITE
 
 Le mutazioni KrisOS passano da pochi confini espliciti. `rk sync/add/rm/forget` resta il contratto privilegiato proprietario di KrisOS e il gate finale della policy RPM. Le invocazioni provenienti da krisCC, insieme a BootC, repository e selezione one-shot del prossimo boot, passano da `/usr/libexec/kriscc/admin`: Polkit autorizza l'helper e l'helper root valida l'operazione semantica e **tutti** gli argomenti prima di eseguire un binario a percorso fisso, senza shell. La policy usa `auth_admin` senza retention (`auth_admin_keep` è vietato).
 
-La pulizia dei cestini non è privilegiata: l'helper `maintenance` gira come utente e rifiuta esplicitamente l'esecuzione come root. La gestione repository accetta soltanto URL HTTPS validati e ID validi. L'anteprima e ogni installazione/rimozione RPM persistente continuano a passare da `rk plan/add/rm`; rk resta il gate finale della policy KrisOS. Podman e comandi personali restano rootless nel profilo utente; Flatpak è gestito esternamente da KDE Discover.
+La pulizia dei cestini non è privilegiata: l'helper `maintenance` gira come utente e rifiuta esplicitamente l'esecuzione come root. La gestione repository accetta soltanto URL HTTPS validati e ID validi. L'anteprima e ogni installazione/rimozione RPM persistente continuano a passare da `rk plan/add/rm`; rk resta il gate finale della policy KrisOS. I comandi personali restano rootless nel profilo utente; Flatpak e container sono gestiti da applicazioni dedicate.
 
 ## Compatibilità KrisOS
 
@@ -66,7 +68,7 @@ cmake --build build
 
 ## RPM e integrazione nell'immagine
 
-Lo spec RPM è `packaging/krisCC.spec` e produce **`krisCC-0.7.6-*.rpm`**. La CI Fedora 44 costruisce l'RPM, lo installa in un ambiente pulito, riesegue lo smoke test e produce `SHA256SUMS` dell'artefatto RPM.
+Lo spec RPM è `packaging/krisCC.spec` e produce **`krisCC-0.7.7-*.rpm`**. La CI Fedora 44 costruisce l'RPM, lo installa in un ambiente pulito, riesegue lo smoke test e produce `SHA256SUMS` dell'artefatto RPM.
 
 Il flusso previsto per KrisOS è:
 
@@ -80,8 +82,8 @@ Esempio manuale:
 
 ```bash
 mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-git archive --format=tar.gz --prefix=krisCC-0.7.6/ \
-  -o ~/rpmbuild/SOURCES/krisCC-0.7.6.tar.gz HEAD
+git archive --format=tar.gz --prefix=krisCC-0.7.7/ \
+  -o ~/rpmbuild/SOURCES/krisCC-0.7.7.tar.gz HEAD
 cp packaging/krisCC.spec ~/rpmbuild/SPECS/krisCC.spec
 rpmbuild -ba ~/rpmbuild/SPECS/krisCC.spec
 ```
@@ -90,4 +92,4 @@ Repository: https://github.com/krism-eu/krisCC
 
 ## Test reale
 
-La CI verifica compilazione, caricamento QML/Kirigami, controlli DNF5 locali, spec RPM, installazione di staging e installazione/smoke dell'RPM. Prima di considerare una release definitiva vanno comunque provati sulla macchina reale: `rk plan/add/rm/sync`, autenticazione Polkit, ricerca RPM, apertura/gestione Flatpak tramite Discover, Podman, `bootc upgrade --check`, download/apply BootC, creazione/verifica/ripristino backup e selezione one-shot UEFI/GRUB quando gli strumenti sono presenti.
+La CI verifica compilazione, caricamento QML/Kirigami, controlli DNF5 locali, spec RPM, installazione di staging e installazione/smoke dell'RPM. Prima di considerare una release definitiva vanno comunque provati sulla macchina reale: `rk plan/add/rm/sync`, autenticazione Polkit, ricerca RPM, apertura/gestione Flatpak tramite Discover, applicazione container esterna, Tools & Fix, servizi/rete, `bootc upgrade --check`, download/apply BootC, creazione/verifica/ripristino backup e selezione one-shot UEFI/GRUB quando gli strumenti sono presenti.

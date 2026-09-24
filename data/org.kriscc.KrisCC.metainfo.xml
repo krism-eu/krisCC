@@ -6,13 +6,16 @@
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>MIT</project_license>
   <description>
-    <p>krisCC provides persistent KrisOS software management, Podman containers, KrisOS updates, system health and boot diagnostics, practical maintenance tools, recovery and local backup/restore; Flatpak application management is delegated to KDE Discover.</p>
+    <p>krisCC provides persistent KrisOS software management, operational repair tools, services and network controls, KrisOS updates, system/boot diagnostics, recovery and local backup/restore; Flatpak and container application management are delegated to dedicated tools.</p>
   </description>
   <launchable type="desktop-id">krisCC.desktop</launchable>
   <url type="homepage">https://github.com/krism-eu/krisCC</url>
   <provides><binary>krisCC</binary></provides>
   <categories><category>Settings</category><category>System</category></categories>
   <releases>
+    <release version="0.7.7" date="2026-09-24">
+      <description><p>Swiss Army control-center layout with operational repair, cleanup, service/network controls, firmware boot and hardware diagnostics; internal Podman management removed.</p></description>
+    </release>
     <release version="0.7.6" date="2026-09-24">
       <description><p>Minimal Flatpak integration through KDE Discover plus Podman, DNF5, rk preview/error and backup robustness fixes.</p></description>
     </release>

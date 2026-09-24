@@ -9,6 +9,7 @@ Kirigami.ScrollablePage {
     padding: UiMetrics.pageMargin
     title: qsTr("Servizi & Rete")
     RepairBackend { id: repair }
+    UtilityBackend { id: diagnostic }
     property var services: [
         { id: "NetworkManager.service", title: qsTr("Rete") },
         { id: "bluetooth.service", title: qsTr("Bluetooth") },
@@ -39,6 +40,28 @@ Kirigami.ScrollablePage {
                         Controls.Button { text: qsTr("Riavvia"); onClicked: SystemBackend.restartService(modelData.id) }
                         Controls.Button { text: qsTr("Reset"); visible: SystemBackend.serviceStates[modelData.id] === "failed"; onClicked: SystemBackend.resetFailedService(modelData.id) }
                     }
+                }
+            }
+        }
+
+        Kirigami.AbstractCard {
+            Layout.fillWidth: true
+            contentItem: ColumnLayout {
+                RowLayout {
+                    Layout.fillWidth: true
+                    Kirigami.Heading { Layout.fillWidth: true; level: 2; font.bold: true; text: qsTr("Unità fallite") }
+                    Controls.Button {
+                        text: qsTr("Aggiorna")
+                        icon.name: "view-refresh"
+                        enabled: !diagnostic.busy
+                        onClicked: diagnostic.runBookmark("failed-units")
+                    }
+                }
+                Controls.Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: diagnostic.output.length > 0 ? diagnostic.output : qsTr("Premi Aggiorna per controllare le unità systemd in stato failed.")
+                    font.family: Kirigami.Theme.fixedWidthFont.family
                 }
             }
         }

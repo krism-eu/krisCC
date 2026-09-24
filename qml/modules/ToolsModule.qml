@@ -11,18 +11,38 @@ Kirigami.ScrollablePage {
     UtilityBackend { id: utility }
     RepairBackend { id: repair }
     property var cleanupQueue: []
+    property int cleanupTotal: 0
+    property int cleanupDone: 0
 
     function runNextCleanup() {
-        if (utility.busy || cleanupQueue.length === 0) return
+        if (utility.busy || MaintenanceBackend.running || cleanupQueue.length === 0)
+            return
         var id = cleanupQueue.shift()
-        utility.runBookmark(id)
+        if (id === "trash")
+            MaintenanceBackend.cleanTrash("all")
+        else
+            utility.runBookmark(id)
+    }
+
+    function cleanupStepFinished() {
+        if (cleanupTotal > 0 && cleanupDone < cleanupTotal)
+            cleanupDone++
+        if (cleanupQueue.length > 0)
+            Qt.callLater(root.runNextCleanup)
     }
 
     Connections {
         target: utility
         function onStateChanged() {
-            if (!utility.busy && root.cleanupQueue.length > 0)
-                Qt.callLater(root.runNextCleanup)
+            if (!utility.busy && root.cleanupTotal > 0)
+                root.cleanupStepFinished()
+        }
+    }
+    Connections {
+        target: MaintenanceBackend
+        function onFinished(success, output) {
+            if (root.cleanupTotal > 0)
+                root.cleanupStepFinished()
         }
     }
 
@@ -66,20 +86,42 @@ Kirigami.ScrollablePage {
                 Controls.CheckBox { id: journal; text: qsTr("Journal oltre 100 MiB"); checked: true }
                 Controls.CheckBox { id: dnf; text: qsTr("Cache DNF5"); checked: true }
                 Controls.CheckBox { id: flatpak; text: qsTr("Runtime Flatpak inutilizzati"); checked: true; enabled: SystemBackend.programAvailable("flatpak") }
-                Controls.Button {
-                    text: qsTr("Avvia pulizia selezionata")
-                    icon.name: "edit-clear"
-                    enabled: !utility.busy && !MaintenanceBackend.running
-                    onClicked: {
-                        root.cleanupQueue = []
-                        if (trash.checked) MaintenanceBackend.cleanTrash("all")
-                        if (journal.checked) root.cleanupQueue.push("journal-vacuum")
-                        if (dnf.checked) root.cleanupQueue.push("dnf-clean")
-                        if (flatpak.checked) root.cleanupQueue.push("flatpak-unused")
-                        root.runNextCleanup()
+                RowLayout {
+                    Layout.fillWidth: true
+                    Controls.Button {
+                        text: qsTr("Stima spazio")
+                        icon.name: "drive-harddisk"
+                        enabled: !utility.busy && !MaintenanceBackend.running
+                        onClicked: utility.runBookmark("cleanup-estimate")
+                    }
+                    Controls.Button {
+                        text: qsTr("Avvia pulizia selezionata")
+                        icon.name: "edit-clear"
+                        enabled: !utility.busy && !MaintenanceBackend.running
+                        onClicked: {
+                            root.cleanupQueue = []
+                            root.cleanupDone = 0
+                            if (trash.checked) root.cleanupQueue.push("trash")
+                            if (journal.checked) root.cleanupQueue.push("journal-vacuum")
+                            if (dnf.checked) root.cleanupQueue.push("dnf-clean")
+                            if (flatpak.checked) root.cleanupQueue.push("flatpak-unused")
+                            root.cleanupTotal = root.cleanupQueue.length
+                            root.runNextCleanup()
+                        }
                     }
                 }
-                Controls.ProgressBar { Layout.fillWidth: true; indeterminate: utility.busy || MaintenanceBackend.running; visible: indeterminate }
+                Controls.ProgressBar {
+                    Layout.fillWidth: true
+                    visible: root.cleanupTotal > 0
+                    from: 0
+                    to: Math.max(1, root.cleanupTotal)
+                    value: root.cleanupDone
+                }
+                Controls.Label {
+                    visible: root.cleanupTotal > 0
+                    text: qsTr("%1 / %2 operazioni completate").arg(root.cleanupDone).arg(root.cleanupTotal)
+                    opacity: UiMetrics.secondaryOpacity
+                }
                 Controls.Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: utility.output.length > 0 ? utility.output : MaintenanceBackend.output }
             }
         }

@@ -410,6 +410,37 @@ Kirigami.ScrollablePage {
                 Kirigami.AbstractCard {
                     Layout.fillWidth: true
                     contentItem: ColumnLayout {
+                        Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Parametri kernel attivi") }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            opacity: UiMetrics.secondaryOpacity
+                            text: qsTr("Vista read-only di /proc/cmdline. krisCC non modifica i kernel arguments.")
+                        }
+                        Flow {
+                            Layout.fillWidth: true
+                            spacing: Kirigami.Units.smallSpacing
+                            Repeater {
+                                model: SystemBackend.kernelArguments()
+                                delegate: Controls.Label {
+                                    required property string modelData
+                                    text: modelData
+                                    padding: Kirigami.Units.smallSpacing
+                                    background: Rectangle {
+                                        radius: 6
+                                        color: Qt.rgba(Kirigami.Theme.textColor.r,
+                                                       Kirigami.Theme.textColor.g,
+                                                       Kirigami.Theme.textColor.b, 0.06)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Kirigami.AbstractCard {
+                    Layout.fillWidth: true
+                    contentItem: ColumnLayout {
                         Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Prossimo avvio UEFI") }
                         Controls.Label {
                             Layout.fillWidth: true
