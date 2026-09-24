@@ -3,7 +3,7 @@
 #include <QPointer>
 #include <QString>
 class ProcessRunner;
-class RepairBackend final : public QObject {
+class RepairBackend : public QObject {
     Q_OBJECT
     Q_PROPERTY(bool busy READ busy NOTIFY stateChanged)
     Q_PROPERTY(QString state READ state NOTIFY stateChanged)
