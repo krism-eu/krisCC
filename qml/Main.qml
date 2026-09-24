@@ -343,7 +343,8 @@ Kirigami.ApplicationWindow {
     Controls.Dialog {
         id: informationDialog
         modal: true
-        parent: Controls.Overlay.overlay        anchors.centerIn: parent
+        parent: Controls.Overlay.overlay
+        anchors.centerIn: parent
         width: Math.min(Kirigami.Units.gridUnit * 34,
                         parent ? parent.width - Kirigami.Units.largeSpacing * 2
                                : Kirigami.Units.gridUnit * 34)

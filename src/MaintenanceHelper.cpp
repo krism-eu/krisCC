@@ -45,7 +45,8 @@ bool safeHomeTrash(const QString &home, QString *trashRoot)
     const QFileInfo trashInfo(current);
     if (trashInfo.exists()) {
         const QString canonicalTrash = trashInfo.canonicalFilePath();
-        if (canonicalTrash.isEmpty()            || !canonicalTrash.startsWith(canonicalHome + QLatin1Char('/')))
+        if (canonicalTrash.isEmpty()
+            || !canonicalTrash.startsWith(canonicalHome + QLatin1Char('/')))
             return false;
     }
 

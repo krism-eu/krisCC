@@ -280,7 +280,8 @@ Kirigami.Page {
                     visible: searchField.text.trim().length >= 2 && !searchModel.searching && searchModel.count === 0
                     type: Kirigami.MessageType.Information
                     text: qsTr("Nessun risultato.")
-                }            }
+                }
+            }
 
             ColumnLayout {
                 Layout.fillHeight: true

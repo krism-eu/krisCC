@@ -110,7 +110,8 @@ ContractParsers::BootcStatus ContractParsers::parseBootcStatus(const QByteArray 
         return result;
     }
 
-    const QJsonObject root = document.object();    if (root.value(QStringLiteral("apiVersion")).toString() != QStringLiteral("org.containers.bootc/v1")
+    const QJsonObject root = document.object();
+    if (root.value(QStringLiteral("apiVersion")).toString() != QStringLiteral("org.containers.bootc/v1")
         || root.value(QStringLiteral("kind")).toString() != QStringLiteral("BootcHost")) {
         result.error = Error::UnsupportedContract;
         return result;

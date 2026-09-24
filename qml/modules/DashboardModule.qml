@@ -394,7 +394,8 @@ Kirigami.ScrollablePage {
                     }
                     Controls.Button { Layout.fillWidth: true; text: qsTr("Temporanea"); icon.name: "folder-temp"; onClicked: SystemBackend.openTemporaryFolder() }
                     Controls.Button { Layout.fillWidth: true; text: qsTr("Home"); icon.name: "user-home"; onClicked: SystemBackend.openHomeFolder() }
-                    Controls.Button { Layout.fillWidth: true; text: qsTr("Radice /"); icon.name: "folder"; onClicked: SystemBackend.openRootFolder() }                }
+                    Controls.Button { Layout.fillWidth: true; text: qsTr("Radice /"); icon.name: "folder"; onClicked: SystemBackend.openRootFolder() }
+                }
                 Kirigami.InlineMessage {
                     Layout.fillWidth: true
                     visible: MaintenanceBackend.resultState !== "idle"

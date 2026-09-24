@@ -757,7 +757,8 @@ bool SystemBackend::openWebConsole()
     }
 
     manager.setInteractiveAuthorizationAllowed(true);
-    auto *watcher = new QDBusPendingCallWatcher(        manager.asyncCall(QStringLiteral("StartUnit"),
+    auto *watcher = new QDBusPendingCallWatcher(
+        manager.asyncCall(QStringLiteral("StartUnit"),
                           QStringLiteral("cockpit.socket"),
                           QStringLiteral("replace")),
         this);
@@ -1756,7 +1757,8 @@ bool SystemBackend::createSnapshot(const QString &kind)
             args << QStringLiteral("--exclude=./") + QFileInfo(output).fileName();
         } else if (!canonicalHome.isEmpty()
                    && canonicalBackupRoot.startsWith(canonicalHome + QLatin1Char('/'))) {
-            const QString relativeBackup = QDir(canonicalHome).relativeFilePath(canonicalBackupRoot);            if (!relativeBackup.isEmpty() && relativeBackup != QStringLiteral("."))
+            const QString relativeBackup = QDir(canonicalHome).relativeFilePath(canonicalBackupRoot);
+            if (!relativeBackup.isEmpty() && relativeBackup != QStringLiteral("."))
                 args << QStringLiteral("--exclude=./") + relativeBackup;
         }
         args << QStringLiteral("-C") << home << QStringLiteral(".");

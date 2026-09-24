@@ -2,7 +2,8 @@
 
 #include <QString>
 
-namespace Validators {bool packageName(const QString &value);
+namespace Validators {
+bool packageName(const QString &value);
 bool repositoryId(const QString &value);
 bool repositoryUrl(const QString &value);
 bool bootToken(const QString &value);
