@@ -35,7 +35,6 @@ utility_cpp = read("src/UtilityBackend.cpp")
 package_cpp = read("src/PackageSearch.cpp")
 system_cpp = read("src/SystemBackend.cpp")
 software_qml = read("qml/modules/SoftwareModule.qml")
-flatpak_qml = read("qml/modules/FlatpakModule.qml")
 system_qml = read("qml/modules/SystemModule.qml")
 dashboard_qml = read("qml/modules/DashboardModule.qml")
 commands_qml = read("qml/modules/CommandsModule.qml")
@@ -135,8 +134,7 @@ require('preflightOptions.arguments = {QStringLiteral("-tzf"), canonical};' in s
 
 require("options.mergedChannels = !structuredOutput;" in utility_cpp,
         "machine-readable utility output must be isolated from stderr")
-for operation in ("flatpak.installed", "flatpak.system-installed", "flatpak.updates",
-                  "flatpak.remotes", "flatpak.search", "podman.list", "podman.images"):
+for operation in ("podman.list", "podman.images"):
     require(operation in utility_cpp and "structuredOutput" in utility_cpp,
             f"{operation}: structured output protection missing")
 
@@ -163,14 +161,10 @@ for qml in ROOT.glob("qml/**/*.qml"):
 
 require("Layout.preferredHeight: contentHeight" not in software_qml,
         "Software list virtualization regressed")
-require("Layout.preferredHeight: contentHeight" not in flatpak_qml,
-        "Flatpak list virtualization regressed")
-require("Kirigami.ScrollablePage" not in software_qml
-        and "Kirigami.ScrollablePage" not in flatpak_qml,
-        "Software/Flatpak must have a single scrolling owner")
-require("Layout.fillHeight: true" in software_qml
-        and "Layout.fillHeight: true" in flatpak_qml,
-        "Software/Flatpak list viewport must fill available height")
+require("Kirigami.ScrollablePage" not in software_qml,
+        "Software must have a single scrolling owner")
+require("Layout.fillHeight: true" in software_qml,
+        "Software list viewport must fill available height")
 require("Novità repository" not in software_qml,
         "removed repository-news tab returned")
 require('text: qsTr("Dettagli tecnici")' not in system_qml,
@@ -236,22 +230,20 @@ require('"podman", title: qsTr("Container")' not in dashboard_qml,
 require("Aggiorna Control Center" not in dashboard_qml
         and "checkControlCenterUpdate()" in commands_qml
         and 'openRequested("system")' in commands_qml
-        and "updateControlCenter()" not in commands_qml,
-        "Control Center release check must stay in Commands and route updates through KrisOS")
-require('QStringLiteral("--columns=name,url")' in utility_cpp,
-        "Flatpak remotes must use the minimal name/url contract")
-require("parseFlatpakTsv(message.toUtf8(), 2)" in utility_cpp,
-        "Flatpak remote output is not parsed as the fixed two-column contract")
-require("parseFlatpakRemotes" not in contract_parsers_h
-        and "parseFlatpakRemotes" not in contract_parsers_cpp
-        and "parseFlatpakRemotes" not in contract_parsers_test,
-        "dead legacy Flatpak remote parser returned")
-require('QStringLiteral("flatpak.info")' in utility_cpp
-        and 'QStringLiteral("remote-info")' in utility_cpp
-        and 'text: qsTr("Info")' in flatpak_qml,
-        "Flatpak search results lost on-demand remote information")
-require("Layout.alignment: Qt.AlignVCenter" in flatpak_qml,
-        "Flatpak result icon is not vertically centered")
+        and "updateControlCenter()" not in commands_qml
+        and "fc44.x86_64.rpm" not in system_cpp,
+        "Control Center release check must stay image-owned and independent from a fixed RPM asset")
+require("qml/modules/FlatpakModule.qml" not in cmake
+        and "runFlatpak" not in utility_cpp
+        and "addFlathubUser" not in utility_cpp
+        and "parseFlatpakTsv" not in contract_parsers_h
+        and "parseFlatpakTsv" not in contract_parsers_cpp
+        and "parseFlatpakTsv" not in contract_parsers_test,
+        "Flatpak management engine must stay delegated to KDE Discover")
+require('else if (pageId === "flatpak") SystemBackend.launchTool("discover")' in read("qml/Main.qml")
+        and '{ id: "flatpak", title: qsTr("Flatpak")' in dashboard_qml
+        and 'SystemBackend.toolAvailable("discover")' in dashboard_qml,
+        "Dashboard Flatpak tile must delegate to KDE Discover")
 require("(?:rpm|i686|x86_64|noarch)" in recovery_qml,
         "Recovery forget input must reject package suffixes rejected by Validators::packageName")
 require("anchors.right: parent.right" in read("qml/Main.qml")
@@ -293,8 +285,21 @@ require("partialFile.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteO
         "backup partial file must be created as 0600")
 require("JSON.parse(" not in read("qml/modules/PodmanModule.qml"),
         "Podman JSON parsing must stay in C++")
-require('split("\\n")' not in read("qml/modules/FlatpakModule.qml"),
-        "Flatpak TSV parsing must stay in C++")
+require("containerImageRef" in read("src/Validators.h")
+        and 'QStringLiteral("podman.image-remove")' in utility_cpp,
+        "Podman image removal validator contract is missing")
+require('parseDnfListJson("{}")' in contract_parsers_test,
+        "empty DNF5 list JSON regression test is missing")
+require("m_operationLines.isEmpty()" in rk_cpp
+        and "m_operationLines.append(output.trimmed())" in rk_cpp,
+        "rk privileged failures must surface a fallback operation line")
+require("pendingPreviewPackage" in software_qml
+        and 'utilityBackend.operationId === "rpm.plan"' in software_qml
+        and "utilityBackend.cancel()" in software_qml,
+        "rk plan preview cancellation/serialization contract is missing")
+require("canonicalBackupRoot == canonicalHome" in system_cpp
+        and 'QFileInfo(partial).fileName()' in system_cpp,
+        "Home-as-backup-directory self-output exclusion is missing")
 
 wrapper = read("src/bootc-status.sh")
 require('exec /usr/bin/timeout --signal=TERM --kill-after=3s 30s /usr/bin/bootc status --format json --format-version=1' in wrapper,

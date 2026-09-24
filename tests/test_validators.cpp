@@ -17,6 +17,16 @@ private slots:
         QVERIFY(!Validators::packageName(QStringLiteral("tree.rpm")));
         QVERIFY(!Validators::packageName(QStringLiteral("name with spaces")));
     }
+    void containerImageRefs()
+    {
+        QVERIFY(Validators::containerImageRef(QStringLiteral("sha256:7b52401234567890abcdef")));
+        QVERIFY(Validators::containerImageRef(QStringLiteral("localhost:5000/app:1.0")));
+        QVERIFY(Validators::containerImageRef(QStringLiteral("registry.example.org/team/app@sha256:0123456789abcdef")));
+        QVERIFY(!Validators::containerImageRef(QStringLiteral("--force")));
+        QVERIFY(!Validators::containerImageRef(QStringLiteral("bad image")));
+        QVERIFY(!Validators::containerImageRef(QStringLiteral("image;rm")));
+    }
+
     void repositoryUrls()
     {
         QVERIFY(Validators::repositoryUrl(QStringLiteral("https://example.org/repo.repo")));

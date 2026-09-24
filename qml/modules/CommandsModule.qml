@@ -103,7 +103,7 @@ Kirigami.ScrollablePage {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
                         opacity: UiMetrics.secondaryOpacity
-                        text: qsTr("Comandi read-only e manutenzioni rapide utili nella diagnosi quotidiana. Le funzioni già coperte bene dalle pagine Flatpak, Container e dal Monitor di sistema non vengono duplicate qui.")
+                        text: qsTr("Comandi read-only e manutenzioni rapide utili nella diagnosi quotidiana. Le funzioni già coperte bene da Discover, dalla pagina Container e dal Monitor di sistema non vengono duplicate qui.")
                     }
                     RowLayout {
                         Layout.fillWidth: true

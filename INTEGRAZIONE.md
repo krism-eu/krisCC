@@ -1,6 +1,6 @@
 # Integrazione krisCC in KrisOS / Fedora bootc
 
-krisCC 0.7.5 è un'applicazione standalone Qt 6/Kirigami pensata per uso personale su Fedora bootc. Non duplica Plasma System Settings: integra solo le funzioni specifiche del sistema e gli strumenti di manutenzione che è utile avere in un unico posto.
+krisCC 0.7.6 è un'applicazione standalone Qt 6/Kirigami pensata per uso personale su Fedora bootc. Non duplica Plasma System Settings: integra solo le funzioni specifiche del sistema e gli strumenti di manutenzione che è utile avere in un unico posto.
 
 ## Runtime
 
@@ -10,7 +10,7 @@ krisCC 0.7.5 è un'applicazione standalone Qt 6/Kirigami pensata per uso persona
 - `/usr/bin/rk` come helper del layer persistente KrisOS
 - systemd/logind per sessione e restart servizi
 
-Info Center, Partition Manager, KSystemLog, System Monitor, Konsole, Flatpak, Podman, `efibootmgr`, `grubby` e `grub2-reboot` sono opzionali: i relativi controlli vengono disabilitati o mostrano lo stato non disponibile se il programma non è presente.
+Info Center, Discover, Partition Manager, KSystemLog, System Monitor, Konsole, Podman, `efibootmgr`, `grubby` e `grub2-reboot` sono opzionali: i relativi controlli vengono disabilitati o mostrano lo stato non disponibile se il programma non è presente. Flatpak non è gestito direttamente da krisCC: la tile Dashboard delega a KDE Discover.
 
 ## Compatibilità dati KrisOS
 
@@ -74,7 +74,7 @@ rpm -q krisCC
 rpm -V krisCC
 ```
 
-Poi verificare manualmente `rk plan/add/rm/sync`, ricerca RPM, Flatpak, Podman, update BootC, backup create/verify/restore, cronologia locale e selezione one-shot UEFI/GRUB quando disponibile.
+Poi verificare manualmente `rk plan/add/rm/sync`, ricerca RPM, apertura e gestione Flatpak tramite Discover, Podman, update BootC, backup create/verify/restore, cronologia locale e selezione one-shot UEFI/GRUB quando disponibile.
 
 Repository: https://github.com/krism-eu/krisCC
 

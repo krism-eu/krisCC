@@ -1,5 +1,5 @@
 Name:           krisCC
-Version:        0.7.5
+Version:        0.7.6
 Release:        1%{?dist}
 Summary:        krisCC personal control center for KrisOS and Fedora bootc
 License:        MIT
@@ -26,10 +26,10 @@ Requires:       bash
 
 %description
 krisCC is a compact personal Kirigami control center for KrisOS and Fedora bootc
-systems. It focuses on persistent software management, Flatpak applications,
-Podman containers, bootc updates, practical maintenance tools, diagnostics,
-recovery and local configuration/home backups without duplicating Plasma System
-Settings.
+systems. It focuses on persistent KrisOS software management, Podman containers,
+bootc updates, practical maintenance tools, diagnostics, recovery and local
+configuration/home backups without duplicating Plasma System Settings. Flatpak
+application management is delegated to KDE Discover.
 
 %prep
 %autosetup -n %{name}-%{version}
@@ -54,6 +54,13 @@ Settings.
 %{_datadir}/icons/hicolor/scalable/apps/krisCC.svg
 
 %changelog
+* Thu Sep 24 2026 krism-eu - 0.7.6-1
+- Delegate Flatpak application management to KDE Discover and remove the duplicate engine/page
+- Fix Podman image deletion, empty DNF5 upgrade lists and rk authentication error feedback
+- Serialize rk plan previews so stale solver output cannot cross package dialogs
+- Exclude the active backup archive when the selected backup directory is Home
+- Keep the Dashboard Flatpak tile as the Discover entry point and simplify the stable release check
+
 * Wed Sep 23 2026 krism-eu - 0.7.5-1
 - Preserve KrisOS image-owned krisCC semantics and route updates through the OS image
 - Remove the dead Flatpak remote parser and align recovery input validation

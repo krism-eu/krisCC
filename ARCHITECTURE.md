@@ -61,7 +61,8 @@ Sono fonti della verità i componenti proprietari del dominio, per esempio:
 - `bootc` per lo stato e gli aggiornamenti image-based;
 - systemd per unità, timer e sessioni;
 - DNF5 per informazioni repository;
-- Flatpak e Podman per i rispettivi profili utente.
+- Podman per i container del profilo utente;
+- KDE Discover/Flatpak per la gestione applicativa Flatpak, delegata fuori da krisCC.
 
 krisCC legge e presenta lo stato; non reimplementa solver, recovery, deployment o policy.
 
