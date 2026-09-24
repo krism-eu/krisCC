@@ -53,17 +53,17 @@ bool grubEntry(const QString &value)
     return true;
 }
 
-bool flatpakId(const QString &value)
-{
-    static const QRegularExpression pattern(
-        QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$"));
-    return pattern.match(value).hasMatch();
-}
-
 bool containerName(const QString &value)
 {
     static const QRegularExpression pattern(
         QStringLiteral("^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"));
+    return pattern.match(value).hasMatch();
+}
+
+bool containerImageRef(const QString &value)
+{
+    static const QRegularExpression pattern(
+        QStringLiteral("^[A-Za-z0-9][A-Za-z0-9_./:@-]{0,255}$"));
     return pattern.match(value).hasMatch();
 }
 

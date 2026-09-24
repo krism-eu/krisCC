@@ -639,64 +639,6 @@ void SystemBackend::copyToClipboard(const QString &text) const
         QGuiApplication::clipboard()->setText(text);
 }
 
-QString SystemBackend::flatpakIconPath(const QString &appId) const
-{
-    static const QRegularExpression safeId(QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._-]{0,255}$"));
-    const QString id = appId.trimmed();
-    if (!safeId.match(id).hasMatch())
-        return {};
-
-    const QString home = QDir::homePath();
-    const QStringList iconRoots = {
-        home + QStringLiteral("/.local/share/flatpak/exports/share/icons/hicolor"),
-        QStringLiteral("/var/lib/flatpak/exports/share/icons/hicolor"),
-        QStringLiteral("/usr/share/icons/hicolor")
-    };
-    const QStringList iconPaths = {
-        QStringLiteral("128x128/apps/") + id + QStringLiteral(".png"),
-        QStringLiteral("64x64/apps/") + id + QStringLiteral(".png"),
-        QStringLiteral("scalable/apps/") + id + QStringLiteral(".svg")
-    };
-
-    for (const QString &root : iconRoots) {
-        for (const QString &relative : iconPaths) {
-            const QString candidate = QDir(root).filePath(relative);
-            if (QFileInfo(candidate).isFile())
-                return QUrl::fromLocalFile(candidate).toString();
-        }
-    }
-
-    const QString arch = QSysInfo::currentCpuArchitecture();
-    const QStringList appstreamRoots = {
-        home + QStringLiteral("/.local/share/flatpak/appstream"),
-        QStringLiteral("/var/lib/flatpak/appstream")
-    };
-    for (const QString &root : appstreamRoots) {
-        QDir appstream(root);
-        const QStringList remotes = appstream.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
-        for (const QString &remote : remotes) {
-            for (const QString &size : {QStringLiteral("128x128"), QStringLiteral("64x64")}) {
-                const QString candidate = appstream.filePath(
-                    remote + QLatin1Char('/') + arch
-                    + QStringLiteral("/active/icons/") + size
-                    + QLatin1Char('/') + id + QStringLiteral(".png"));
-                if (QFileInfo(candidate).isFile())
-                    return QUrl::fromLocalFile(candidate).toString();
-            }
-        }
-    }
-    return {};
-}
-
-bool SystemBackend::launchFlatpak(const QString &appId) const
-{
-    const QString id = appId.trimmed();
-    const QString flatpak = resolveExecutable(QStringLiteral("flatpak"));
-    if (flatpak.isEmpty() || !Validators::flatpakId(id))
-        return false;
-    return QProcess::startDetached(flatpak, {QStringLiteral("run"), id});
-}
-
 QString SystemBackend::resolveExecutable(const QString &program) const
 {
     if (program.isEmpty())
@@ -826,20 +768,6 @@ void SystemBackend::checkControlCenterUpdate()
         }
 
         const QString latest = match.captured(1);
-        const QString expectedAsset =
-            QStringLiteral("krisCC-%1-1.fc44.x86_64.rpm").arg(latest);
-        bool assetFound = false;
-        for (const QJsonValue &value : release.value(QStringLiteral("assets")).toArray()) {
-            if (value.isObject()
-                && value.toObject().value(QStringLiteral("name")).toString() == expectedAsset) {
-                assetFound = true;
-                break;
-            }
-        }
-        if (!assetFound) {
-            finishError(tr("La release %1 non contiene l'RPM previsto.").arg(tag));
-            return;
-        }
 
         const QVersionNumber current =
             QVersionNumber::fromString(QCoreApplication::applicationVersion());
@@ -1463,8 +1391,11 @@ bool SystemBackend::createSnapshot(const QString &kind)
             args << QStringLiteral("--exclude=./") + excluded;
 
         const QString canonicalHome = QFileInfo(home).canonicalFilePath();
-        if (!canonicalHome.isEmpty()
-            && canonicalBackupRoot.startsWith(canonicalHome + QLatin1Char('/'))) {
+        if (!canonicalHome.isEmpty() && canonicalBackupRoot == canonicalHome) {
+            args << QStringLiteral("--exclude=./") + QFileInfo(partial).fileName();
+            args << QStringLiteral("--exclude=./") + QFileInfo(output).fileName();
+        } else if (!canonicalHome.isEmpty()
+                   && canonicalBackupRoot.startsWith(canonicalHome + QLatin1Char('/'))) {
             const QString relativeBackup = QDir(canonicalHome).relativeFilePath(canonicalBackupRoot);
             if (!relativeBackup.isEmpty() && relativeBackup != QStringLiteral("."))
                 args << QStringLiteral("--exclude=./") + relativeBackup;

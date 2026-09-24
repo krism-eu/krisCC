@@ -20,6 +20,7 @@ Kirigami.Page {
     property string pendingValue: ""
     property string pendingTitle: ""
     property string pendingMessage: ""
+    property string pendingPreviewPackage: ""
 
     function humanSize(bytes) {
         if (!bytes || bytes <= 0)
@@ -54,8 +55,22 @@ Kirigami.Page {
             installSize: model.installSize || 0,
             state: root.packageState(model)
         }
-        utilityBackend.previewRpmInstall(model.name)
         packageDialog.open()
+        root.requestPackagePreview(model.name)
+    }
+
+    function requestPackagePreview(packageName) {
+        root.pendingPreviewPackage = packageName
+        if (utilityBackend.busy) {
+            if (utilityBackend.operationId === "rpm.plan")
+                utilityBackend.cancel()
+            return
+        }
+        utilityBackend.clearResult()
+        var nextPackage = root.pendingPreviewPackage
+        root.pendingPreviewPackage = ""
+        if (root.detailPackage && root.detailPackage.name === nextPackage)
+            utilityBackend.previewRpmInstall(nextPackage)
     }
 
     function requestAction(action, value, title, message) {
@@ -110,6 +125,14 @@ Kirigami.Page {
     PackageSearch { id: searchModel; onSearchError: function(message) { root.searchError = message } }
     PackageSearch { id: installedModel; onSearchError: function(message) { root.listError = message } }
     PackageSearch { id: upgradesModel; onSearchError: function(message) { root.listError = message } }
+
+    Connections {
+        target: utilityBackend
+        function onStateChanged() {
+            if (!utilityBackend.busy && root.pendingPreviewPackage.length > 0)
+                Qt.callLater(function() { root.requestPackagePreview(root.pendingPreviewPackage) })
+        }
+    }
 
     Connections {
         target: RkBackend
@@ -571,6 +594,14 @@ Kirigami.Page {
         height: Math.min(parent ? parent.height - Kirigami.Units.largeSpacing * 2 : 650, 650)
         title: root.detailPackage ? root.detailPackage.name : qsTr("Dettagli pacchetto")
         standardButtons: Controls.Dialog.Close
+        onClosed: {
+            root.pendingPreviewPackage = ""
+            if (utilityBackend.busy && utilityBackend.operationId === "rpm.plan")
+                utilityBackend.cancel()
+            else if (utilityBackend.operationId === "rpm.plan")
+                utilityBackend.clearResult()
+            root.detailPackage = null
+        }
 
         contentItem: Controls.ScrollView {
             clip: true

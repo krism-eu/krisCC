@@ -14,18 +14,11 @@ namespace {
 constexpr int kShortQueryTimeoutMs = 30 * 1000;
 constexpr int kRepositoryQueryTimeoutMs = 2 * 60 * 1000;
 constexpr int kContainerQueryTimeoutMs = 60 * 1000;
-constexpr int kInteractiveTimeoutMs = 30 * 60 * 1000;
 constexpr int kPodmanActionTimeoutMs = 5 * 60 * 1000;
 
 bool shouldLogOperation(const QString &id)
 {
-    return id == QStringLiteral("flatpak.update")
-        || id == QStringLiteral("flatpak.update-all")
-        || id == QStringLiteral("flatpak.install")
-        || id == QStringLiteral("flatpak.remove")
-        || id == QStringLiteral("flatpak.remove-unused")
-        || id == QStringLiteral("flatpak.flathub-add")
-        || id == QStringLiteral("podman.start")
+    return id == QStringLiteral("podman.start")
         || id == QStringLiteral("podman.stop")
         || id == QStringLiteral("podman.restart")
         || id == QStringLiteral("podman.rename")
@@ -152,19 +145,8 @@ void UtilityBackend::finish(const QString &message, const QString &state)
     if (state == QStringLiteral("success")) {
         ContractParsers::Rows parsed;
         bool expectsRows = false;
-        if (completedOperation == QStringLiteral("flatpak.search")) {
-            parsed = ContractParsers::parseFlatpakTsv(message.toUtf8(), 6);
-            expectsRows = true;
-        } else if (completedOperation == QStringLiteral("flatpak.remotes")) {
-            parsed = ContractParsers::parseFlatpakTsv(message.toUtf8(), 2);
-            expectsRows = true;
-        } else if (completedOperation == QStringLiteral("flatpak.installed")
-                   || completedOperation == QStringLiteral("flatpak.updates")
-                   || completedOperation == QStringLiteral("flatpak.system-installed")) {
-            parsed = ContractParsers::parseFlatpakTsv(message.toUtf8(), 4);
-            expectsRows = true;
-        } else if (completedOperation == QStringLiteral("podman.list")
-                   || completedOperation == QStringLiteral("podman.images")) {
+        if (completedOperation == QStringLiteral("podman.list")
+            || completedOperation == QStringLiteral("podman.images")) {
             parsed = ContractParsers::parsePodmanJson(message.toUtf8());
             expectsRows = true;
         }
@@ -294,85 +276,6 @@ bool UtilityBackend::previewRpmInstall(const QString &packageName)
                  QStringLiteral("rpm.plan"), kRepositoryQueryTimeoutMs);
 }
 
-bool UtilityBackend::runFlatpak(const QString &mode, const QString &query, const QString &remote)
-{
-    if (mode == QStringLiteral("installed"))
-        return start(QStringLiteral("/usr/bin/flatpak"),
-                     {QStringLiteral("list"), QStringLiteral("--user"), QStringLiteral("--app"),
-                      QStringLiteral("--columns=name,application,version,origin")},
-                     tr("Flatpak installati"), QStringLiteral("flatpak.installed"), kRepositoryQueryTimeoutMs, true);
-    if (mode == QStringLiteral("system-installed"))
-        return start(QStringLiteral("/usr/bin/flatpak"),
-                     {QStringLiteral("list"), QStringLiteral("--system"), QStringLiteral("--app"),
-                      QStringLiteral("--columns=name,application,version,origin")},
-                     tr("Flatpak di sistema"), QStringLiteral("flatpak.system-installed"), kRepositoryQueryTimeoutMs, true);
-    if (mode == QStringLiteral("updates"))
-        return start(QStringLiteral("/usr/bin/flatpak"),
-                     {QStringLiteral("remote-ls"), QStringLiteral("--user"), QStringLiteral("--updates"), QStringLiteral("--app"),
-                      QStringLiteral("--columns=name,application,version,origin")},
-                     tr("Aggiornamenti Flatpak"), QStringLiteral("flatpak.updates"), kRepositoryQueryTimeoutMs, true);
-    if (mode == QStringLiteral("update-all"))
-        return start(QStringLiteral("/usr/bin/flatpak"),
-                     {QStringLiteral("update"), QStringLiteral("--user"), QStringLiteral("--noninteractive"), QStringLiteral("--assumeyes")},
-                     tr("Aggiornamento Flatpak"), QStringLiteral("flatpak.update-all"), kInteractiveTimeoutMs);
-    if (mode == QStringLiteral("update") && validPackageName(query.trimmed()))
-        return start(QStringLiteral("/usr/bin/flatpak"),
-                     {QStringLiteral("update"), QStringLiteral("--user"), QStringLiteral("--noninteractive"), QStringLiteral("--assumeyes"), query.trimmed()},
-                     tr("Aggiornamento Flatpak: %1").arg(query.trimmed()), QStringLiteral("flatpak.update"), kInteractiveTimeoutMs);
-    if (mode == QStringLiteral("remotes"))
-        return start(QStringLiteral("/usr/bin/flatpak"),
-                     {QStringLiteral("remotes"), QStringLiteral("--user"), QStringLiteral("--columns=name,url")},
-                     tr("Remote Flatpak"), QStringLiteral("flatpak.remotes"), kRepositoryQueryTimeoutMs, true);
-    if (mode == QStringLiteral("search") && query.trimmed().size() >= 2)
-        return start(QStringLiteral("/usr/bin/flatpak"),
-                     {QStringLiteral("search"), QStringLiteral("--user"),
-                      QStringLiteral("--columns=name,description,application,version,branch,remotes"), query.trimmed()},
-                     tr("Ricerca Flatpak: %1").arg(query.trimmed()), QStringLiteral("flatpak.search"), kRepositoryQueryTimeoutMs, true);
-    if (mode == QStringLiteral("info") && validPackageName(query.trimmed())) {
-        const QString selectedRemote = remote.trimmed().isEmpty() ? QStringLiteral("flathub") : remote.trimmed();
-        if (!validPackageName(selectedRemote)) {
-            setImmediateError(tr("Informazioni Flatpak"), QStringLiteral("flatpak.info"),
-                              tr("Remote Flatpak non valido."));
-            return false;
-        }
-        return start(QStringLiteral("/usr/bin/flatpak"),
-                     {QStringLiteral("remote-info"), QStringLiteral("--user"), QStringLiteral("--app"),
-                      selectedRemote, query.trimmed()},
-                     tr("Informazioni Flatpak: %1").arg(query.trimmed()),
-                     QStringLiteral("flatpak.info"), kRepositoryQueryTimeoutMs);
-    }
-    if (mode == QStringLiteral("install") && validPackageName(query.trimmed())) {
-        const QString selectedRemote = remote.trimmed().isEmpty() ? QStringLiteral("flathub") : remote.trimmed();
-        if (!validPackageName(selectedRemote)) {
-            setImmediateError(tr("Installazione Flatpak"), QStringLiteral("flatpak.install"),
-                              tr("Remote Flatpak non valido."));
-            return false;
-        }
-        return start(QStringLiteral("/usr/bin/flatpak"),
-                     {QStringLiteral("install"), QStringLiteral("--user"), QStringLiteral("--noninteractive"),
-                      QStringLiteral("--assumeyes"), selectedRemote, query.trimmed()},
-                     tr("Installazione Flatpak: %1").arg(query.trimmed()), QStringLiteral("flatpak.install"), kInteractiveTimeoutMs);
-    }
-    if (mode == QStringLiteral("remove") && validPackageName(query.trimmed()))
-        return start(QStringLiteral("/usr/bin/flatpak"),
-                     {QStringLiteral("uninstall"), QStringLiteral("--user"), QStringLiteral("--noninteractive"), query.trimmed()},
-                     tr("Rimozione Flatpak: %1").arg(query.trimmed()), QStringLiteral("flatpak.remove"), kInteractiveTimeoutMs);
-    if (mode == QStringLiteral("remove-unused"))
-        return start(QStringLiteral("/usr/bin/flatpak"),
-                     {QStringLiteral("uninstall"), QStringLiteral("--user"), QStringLiteral("--unused"),
-                      QStringLiteral("--noninteractive"), QStringLiteral("--assumeyes")},
-                     tr("Pulizia Flatpak inutilizzati"), QStringLiteral("flatpak.remove-unused"), kInteractiveTimeoutMs);
-    return false;
-}
-
-bool UtilityBackend::addFlathubUser()
-{
-    return start(QStringLiteral("/usr/bin/flatpak"),
-                 {QStringLiteral("remote-add"), QStringLiteral("--user"), QStringLiteral("--if-not-exists"),
-                  QStringLiteral("flathub"), QStringLiteral("https://flathub.org/repo/flathub.flatpakrepo")},
-                 tr("Aggiunta Flathub per l'utente"), QStringLiteral("flatpak.flathub-add"), kInteractiveTimeoutMs);
-}
-
 bool UtilityBackend::runPodman(const QString &mode, const QString &container, const QString &value)
 {
     if (mode == QStringLiteral("list"))
@@ -385,6 +288,12 @@ bool UtilityBackend::runPodman(const QString &mode, const QString &container, co
                      tr("Immagini Podman"), QStringLiteral("podman.images"), kContainerQueryTimeoutMs, true);
 
     const QString name = container.trimmed();
+    if (mode == QStringLiteral("image-remove") && Validators::containerImageRef(name))
+        return start(QStringLiteral("/usr/bin/podman"),
+                     {QStringLiteral("image"), QStringLiteral("rm"), name},
+                     tr("Elimina immagine: %1").arg(name),
+                     QStringLiteral("podman.image-remove"), kContainerQueryTimeoutMs);
+
     if (!validContainerName(name))
         return false;
 
@@ -402,9 +311,5 @@ bool UtilityBackend::runPodman(const QString &mode, const QString &container, co
         return start(QStringLiteral("/usr/bin/podman"), {QStringLiteral("rm"), name}, tr("Elimina container: %1").arg(name), QStringLiteral("podman.remove"), kPodmanActionTimeoutMs);
     if (mode == QStringLiteral("rename") && validContainerName(value.trimmed()))
         return start(QStringLiteral("/usr/bin/podman"), {QStringLiteral("rename"), name, value.trimmed()}, tr("Rinomina container: %1").arg(name), QStringLiteral("podman.rename"), kPodmanActionTimeoutMs);
-    if (mode == QStringLiteral("image-remove") && validPackageName(name))
-        return start(QStringLiteral("/usr/bin/podman"), {QStringLiteral("image"), QStringLiteral("rm"), name},
-                     tr("Elimina immagine: %1").arg(name), QStringLiteral("podman.image-remove"), kContainerQueryTimeoutMs);
-
     return false;
 }

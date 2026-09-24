@@ -606,11 +606,6 @@ Kirigami.ScrollablePage {
                                       ? qsTr("Pulizia in corso…")
                                       : MaintenanceBackend.output
                             }
-                            Controls.Button { icon.name: "edit-clear";
-                                text: qsTr("Flatpak inutilizzati")
-                                enabled: SystemBackend.programAvailable("flatpak") && !utilityBackend.busy
-                                onClicked: unusedFlatpakDialog.open()
-                            }
                             Controls.Button { icon.name: "edit-find";
                                 text: qsTr("RPM non necessari")
                                 enabled: SystemBackend.programAvailable("dnf5") && !utilityBackend.busy
@@ -624,7 +619,6 @@ Kirigami.ScrollablePage {
                 Kirigami.AbstractCard {
                     Layout.fillWidth: true
                     visible: utilityBackend.operationId === "bookmark.unneeded-rpms"
-                          || utilityBackend.operationId === "flatpak.remove-unused"
                     contentItem: ColumnLayout {
                         Kirigami.Heading { level: 3; font.bold: true; text: utilityBackend.title }
                         OutputCard {
@@ -712,21 +706,6 @@ Kirigami.ScrollablePage {
             text: qsTr("Verranno svuotati %1 con i privilegi del tuo utente. L'operazione è irreversibile.").arg(trashDialog.scopeLabel)
         }
         onAccepted: MaintenanceBackend.cleanTrash(scope)
-    }
-
-    Controls.Dialog {
-        id: unusedFlatpakDialog
-        modal: true
-        parent: Controls.Overlay.overlay
-        anchors.centerIn: parent
-        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
-        title: qsTr("Rimuovere i Flatpak inutilizzati?")
-        standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
-        contentItem: Controls.Label {
-            wrapMode: Text.WordWrap
-            text: qsTr("Rimuove dal profilo utente i runtime e le dipendenze Flatpak non più necessari.")
-        }
-        onAccepted: utilityBackend.runFlatpak("remove-unused", "")
     }
 
     Controls.Dialog {

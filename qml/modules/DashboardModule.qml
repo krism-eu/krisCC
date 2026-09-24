@@ -104,8 +104,11 @@ Kirigami.ScrollablePage {
                    ? qsTr("1 RPM persistente")
                    : qsTr("%1 RPM persistenti").arg(rpmCount)
         }
-        if (id === "flatpak")
-            return SystemBackend.programAvailable("flatpak") ? qsTr("Flatpak disponibile") : qsTr("Non disponibile")
+        if (id === "flatpak") {
+            if (!SystemBackend.toolAvailable("discover"))
+                return qsTr("Discover non disponibile")
+            return qsTr("Gestisci applicazioni con Discover")
+        }
         if (id === "podman")
             return SystemBackend.programAvailable("podman") ? qsTr("Podman disponibile") : qsTr("Non disponibile")
         return SystemBackend.osName
@@ -151,6 +154,7 @@ Kirigami.ScrollablePage {
                     Layout.column: index
                     Layout.row: 0
                     Layout.fillWidth: true
+                    enabled: modelData.id !== "flatpak" || SystemBackend.toolAvailable("discover")
                     onClicked: root.openRequested(modelData.id)
                     contentItem: ColumnLayout {
                         spacing: Kirigami.Units.smallSpacing

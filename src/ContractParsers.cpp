@@ -199,6 +199,8 @@ ContractParsers::Rows ContractParsers::parseDnfListJson(const QByteArray &data)
     bool sawArray = false;
     QSet<QString> seen;
     const QJsonObject root = document.object();
+    if (root.isEmpty())
+        return result;
     for (auto it = root.constBegin(); it != root.constEnd(); ++it) {
         if (!it.value().isArray())
             continue;
@@ -242,25 +244,6 @@ ContractParsers::Rows ContractParsers::parseDnfListJson(const QByteArray &data)
     }
     if (!sawArray)
         result.error = Error::InvalidShape;
-    return result;
-}
-
-ContractParsers::Rows ContractParsers::parseFlatpakTsv(const QByteArray &data, int expectedColumns)
-{
-    Rows result;
-    if (expectedColumns <= 0) {
-        result.error = Error::InvalidValue;
-        return result;
-    }
-    for (const QString &line : QString::fromUtf8(data).split(QLatin1Char('\n'), Qt::SkipEmptyParts)) {
-        const QStringList columns = line.split(QLatin1Char('\t'), Qt::KeepEmptyParts);
-        if (columns.size() != expectedColumns) {
-            result.error = Error::InvalidShape;
-            result.values.clear();
-            return result;
-        }
-        result.values.append(columns);
-    }
     return result;
 }
 

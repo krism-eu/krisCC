@@ -45,7 +45,6 @@ set(KRISCC_QML_FILES
     qml/Main.qml
     qml/modules/DashboardModule.qml
     qml/modules/SoftwareModule.qml
-    qml/modules/FlatpakModule.qml
     qml/modules/PodmanModule.qml
     qml/modules/SystemModule.qml
     qml/modules/CommandsModule.qml
