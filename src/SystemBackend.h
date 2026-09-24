@@ -126,8 +126,6 @@ public:
     Q_INVOKABLE void requestReboot();
     Q_INVOKABLE void requestFirmwareReboot();
     Q_INVOKABLE QStringList kernelArguments() const;
-    Q_INVOKABLE bool cockpitAvailable() const;
-    Q_INVOKABLE bool openWebConsole();
     Q_INVOKABLE bool vacuumJournal();
     Q_INVOKABLE bool cleanDnfCache();
     Q_INVOKABLE bool openNetworkSettings() const;
@@ -170,6 +168,7 @@ signals:
     void adminMaintenanceFinished(const QString &operation, bool success, const QString &output);
 
 private:
+    bool setWifiRadio(bool enabled, bool restartAfter);
     QString readOsName() const;
     QString toolProgram(const QString &toolId) const;
     QString resolveExecutable(const QString &program) const;

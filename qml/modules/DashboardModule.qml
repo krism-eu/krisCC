@@ -116,10 +116,15 @@ Kirigami.ScrollablePage {
         width: parent.width
         spacing: Kirigami.Units.largeSpacing
 
-        RowLayout {
+        GridLayout {
             Layout.fillWidth: true
+            columns: 3
+            uniformCellWidths: true
+            columnSpacing: Kirigami.Units.largeSpacing
+
             Kirigami.AbstractCard {
                 Layout.fillWidth: true
+                Layout.fillHeight: true
                 contentItem: RowLayout {
                     Kirigami.Icon { source: "system-reboot"; Layout.preferredWidth: 22; Layout.preferredHeight: 22 }
                     ColumnLayout {
@@ -137,11 +142,45 @@ Kirigami.ScrollablePage {
                     }
                 }
             }
-            Controls.Button {
-                text: qsTr("Aggiorna stato")
-                icon.name: "view-refresh"
+
+            Kirigami.AbstractCard {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                contentItem: RowLayout {
+                    Kirigami.Icon { source: "network-server"; Layout.preferredWidth: 22; Layout.preferredHeight: 22 }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+                        Controls.Label { text: qsTr("Cockpit"); font.bold: true }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            text: {
+                                var state = SystemBackend.serviceStates["cockpit.socket"] || "loading"
+                                if (state === "active" || state === "activating") return qsTr("Attivo")
+                                if (state === "missing") return qsTr("Non installato")
+                                if (state === "loading") return qsTr("Verifica…")
+                                return qsTr("Non attivo")
+                            }
+                            opacity: UiMetrics.secondaryOpacity
+                        }
+                    }
+                }
+            }
+
+            Kirigami.AbstractCard {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
                 enabled: !RkBackend.busy && !BootcBackend.busy
                 onClicked: root.refreshDashboard()
+                contentItem: RowLayout {
+                    Kirigami.Icon { source: "view-refresh"; Layout.preferredWidth: 22; Layout.preferredHeight: 22 }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+                        Controls.Label { text: qsTr("Aggiorna stato"); font.bold: true }
+                        Controls.Label { text: qsTr("Rileggi lo stato del sistema"); opacity: UiMetrics.secondaryOpacity }
+                    }
+                }
             }
         }
 
@@ -373,13 +412,6 @@ Kirigami.ScrollablePage {
 
                     Controls.Button {
                         Layout.fillWidth: true
-                        text: SystemBackend.cockpitAvailable() ? qsTr("Cockpit") : qsTr("Cockpit · non installato")
-                        icon.name: "applications-internet"
-                        enabled: SystemBackend.cockpitAvailable()
-                        onClicked: SystemBackend.openWebConsole()
-                    }
-                    Controls.Button {
-                        Layout.fillWidth: true
                         text: qsTr("Svuota cestini")
                         icon.name: "user-trash"
                         enabled: MaintenanceBackend.available && !MaintenanceBackend.running
@@ -395,6 +427,7 @@ Kirigami.ScrollablePage {
                     Controls.Button { Layout.fillWidth: true; text: qsTr("Temporanea"); icon.name: "folder-temp"; onClicked: SystemBackend.openTemporaryFolder() }
                     Controls.Button { Layout.fillWidth: true; text: qsTr("Home"); icon.name: "user-home"; onClicked: SystemBackend.openHomeFolder() }
                     Controls.Button { Layout.fillWidth: true; text: qsTr("Radice /"); icon.name: "folder"; onClicked: SystemBackend.openRootFolder() }
+                    Item { Layout.fillWidth: true; Layout.preferredHeight: Kirigami.Units.gridUnit * 2 }
                 }
                 Kirigami.InlineMessage {
                     Layout.fillWidth: true

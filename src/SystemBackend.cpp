@@ -75,8 +75,7 @@ const QSet<QString> &allowedServices()
         QStringLiteral("cups.service"),
         QStringLiteral("bluetooth.service"),
         QStringLiteral("firewalld.service"),
-        QStringLiteral("wpa_supplicant.service"),
-        QStringLiteral("iwd.service")
+        QStringLiteral("cockpit.socket")
     };
     return services;
 }
@@ -733,48 +732,6 @@ bool SystemBackend::launchTool(const QString &toolId) const
     return info.exists() && info.isExecutable() && QProcess::startDetached(program, {});
 }
 
-bool SystemBackend::cockpitAvailable() const
-{
-    return !resolveExecutable(QStringLiteral("cockpit-ws")).isEmpty()
-        || QFileInfo::exists(QStringLiteral("/usr/lib/systemd/system/cockpit.socket"))
-        || QFileInfo::exists(QStringLiteral("/etc/systemd/system/cockpit.socket"));
-}
-
-bool SystemBackend::openWebConsole()
-{
-    if (!cockpitAvailable()) {
-        notify(tr("Cockpit non disponibile"), tr("La console web non risulta installata."));
-        return false;
-    }
-
-    QDBusInterface manager(QStringLiteral("org.freedesktop.systemd1"),
-                           QStringLiteral("/org/freedesktop/systemd1"),
-                           QStringLiteral("org.freedesktop.systemd1.Manager"),
-                           QDBusConnection::systemBus());
-    if (!manager.isValid()) {
-        notify(tr("Cockpit non disponibile"), tr("systemd non è disponibile sul bus di sistema."));
-        return false;
-    }
-
-    manager.setInteractiveAuthorizationAllowed(true);
-    auto *watcher = new QDBusPendingCallWatcher(
-        manager.asyncCall(QStringLiteral("StartUnit"),
-                          QStringLiteral("cockpit.socket"),
-                          QStringLiteral("replace")),
-        this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this,
-            [this](QDBusPendingCallWatcher *call) {
-        const QDBusPendingReply<QDBusObjectPath> reply(*call);
-        call->deleteLater();
-        if (reply.isError()) {
-            notify(tr("Avvio Cockpit non riuscito"), reply.error().message());
-            return;
-        }
-        if (!QDesktopServices::openUrl(QUrl(QStringLiteral("https://localhost:9090"))))
-            notify(tr("Apertura Cockpit non riuscita"), tr("Impossibile aprire il browser predefinito."));
-    });
-    return true;
-}
 
 bool SystemBackend::vacuumJournal()
 {
@@ -995,6 +952,7 @@ void SystemBackend::refreshServiceStates()
     const quint64 generation = ++m_serviceRefreshGeneration;
     for (const QString &service : allowedServices())
         m_serviceStates.insert(service, QStringLiteral("loading"));
+    m_serviceStates.insert(QStringLiteral("wifi"), QStringLiteral("loading"));
     emit serviceStatesChanged();
 
     for (const QString &service : allowedServices()) {
@@ -1056,10 +1014,77 @@ void SystemBackend::refreshServiceStates()
             });
         });
     }
+
+    QDBusInterface nmProperties(QStringLiteral("org.freedesktop.NetworkManager"),
+                                QStringLiteral("/org/freedesktop/NetworkManager"),
+                                QStringLiteral("org.freedesktop.DBus.Properties"),
+                                QDBusConnection::systemBus());
+    if (!nmProperties.isValid()) {
+        m_serviceStates.insert(QStringLiteral("wifi"), QStringLiteral("missing"));
+        emit serviceStatesChanged();
+    } else {
+        auto *wifiWatcher = new QDBusPendingCallWatcher(
+            nmProperties.asyncCall(QStringLiteral("Get"),
+                                   QStringLiteral("org.freedesktop.NetworkManager"),
+                                   QStringLiteral("WirelessEnabled")),
+            this);
+        connect(wifiWatcher, &QDBusPendingCallWatcher::finished, this,
+                [this, generation](QDBusPendingCallWatcher *call) {
+            const QDBusPendingReply<QDBusVariant> reply(*call);
+            call->deleteLater();
+            if (generation != m_serviceRefreshGeneration)
+                return;
+            m_serviceStates.insert(
+                QStringLiteral("wifi"),
+                reply.isError() ? QStringLiteral("missing")
+                                : (reply.value().variant().toBool()
+                                       ? QStringLiteral("active")
+                                       : QStringLiteral("inactive")));
+            emit serviceStatesChanged();
+        });
+    }
+}
+
+bool SystemBackend::setWifiRadio(bool enabled, bool restartAfter)
+{
+    QDBusInterface properties(QStringLiteral("org.freedesktop.NetworkManager"),
+                              QStringLiteral("/org/freedesktop/NetworkManager"),
+                              QStringLiteral("org.freedesktop.DBus.Properties"),
+                              QDBusConnection::systemBus());
+    if (!properties.isValid()) {
+        notify(tr("Wi-Fi non disponibile"), tr("NetworkManager non è disponibile sul bus di sistema."));
+        return false;
+    }
+    properties.setInteractiveAuthorizationAllowed(true);
+    auto *watcher = new QDBusPendingCallWatcher(
+        properties.asyncCall(QStringLiteral("Set"),
+                             QStringLiteral("org.freedesktop.NetworkManager"),
+                             QStringLiteral("WirelessEnabled"),
+                             QVariant::fromValue(QDBusVariant(enabled))),
+        this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this,
+            [this, enabled, restartAfter](QDBusPendingCallWatcher *call) {
+        const QDBusPendingReply<> reply(*call);
+        call->deleteLater();
+        if (reply.isError()) {
+            notify(tr("Operazione Wi-Fi non riuscita"), reply.error().message());
+            QTimer::singleShot(250, this, &SystemBackend::refreshServiceStates);
+            return;
+        }
+        if (restartAfter && !enabled) {
+            QTimer::singleShot(350, this, [this] { setWifiRadio(true, false); });
+            return;
+        }
+        notify(enabled ? tr("Wi-Fi attivato") : tr("Wi-Fi disattivato"));
+        QTimer::singleShot(350, this, &SystemBackend::refreshServiceStates);
+    });
+    return true;
 }
 
 bool SystemBackend::startService(const QString &service)
 {
+    if (service == QStringLiteral("wifi"))
+        return setWifiRadio(true, false);
     if (!allowedServices().contains(service)) {
         notify(tr("Avvio servizio non riuscito"), tr("Servizio non autorizzato dal Control Center: %1").arg(service));
         return false;
@@ -1085,6 +1110,8 @@ bool SystemBackend::startService(const QString &service)
 
 bool SystemBackend::stopService(const QString &service)
 {
+    if (service == QStringLiteral("wifi"))
+        return setWifiRadio(false, false);
     if (!allowedServices().contains(service)) {
         notify(tr("Arresto servizio non riuscito"), tr("Servizio non autorizzato dal Control Center: %1").arg(service));
         return false;
@@ -1140,6 +1167,8 @@ bool SystemBackend::resetFailedService(const QString &service)
 
 bool SystemBackend::restartService(const QString &service)
 {
+    if (service == QStringLiteral("wifi"))
+        return setWifiRadio(false, true);
     if (!allowedServices().contains(service)) {
         notify(tr("Riavvio servizio non riuscito"), tr("Servizio non autorizzato dal Control Center: %1").arg(service));
         return false;

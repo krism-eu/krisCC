@@ -147,41 +147,24 @@ Kirigami.ScrollablePage {
             ColumnLayout {
                 spacing: Kirigami.Units.largeSpacing
 
-                GridLayout {
+                Kirigami.AbstractCard {
                     Layout.fillWidth: true
-                    columns: width > 760 ? 2 : 1
-                    uniformCellWidths: true
-                    columnSpacing: Kirigami.Units.largeSpacing
-                    rowSpacing: Kirigami.Units.largeSpacing
-
-                    Kirigami.AbstractCard {
-                        Layout.fillWidth: true
-                        Layout.alignment: Qt.AlignTop
-                        contentItem: ColumnLayout {
-                            Kirigami.Heading { level: 2; text: qsTr("Diagnostica hardware rapida"); font.bold: true }
-                            Controls.Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; opacity: UiMetrics.secondaryOpacity; text: qsTr("Controlli leggibili su GPU e stack grafico. VA-API è stato rimosso perché non affidabile su tutte le GPU/configurazioni.") }
-                            Flow {
-                                Layout.fillWidth: true
-                                Controls.Button { text: qsTr("GPU / Mesa"); enabled: !utility.busy && SystemBackend.programAvailable("glxinfo"); onClicked: utility.runBookmark("gpu-driver") }
-                                Controls.Button { text: qsTr("Vulkan"); enabled: !utility.busy && SystemBackend.programAvailable("vulkaninfo"); onClicked: utility.runBookmark("vulkan-info") }
-                            }
-                        }
-                    }
-
-                    Kirigami.AbstractCard {
-                        Layout.fillWidth: true
-                        Layout.alignment: Qt.AlignTop
-                        contentItem: ColumnLayout {
-                            Kirigami.Heading { level: 2; text: qsTr("Controlli di sistema"); font.bold: true }
-                            Flow {
-                                Layout.fillWidth: true
-                                Controls.Button { text: qsTr("Sicurezza"); enabled: !utility.busy; onClicked: utility.runBookmark("security") }
-                                Controls.Button { text: qsTr("Errori avvio"); enabled: !utility.busy; onClicked: utility.runBookmark("journal-errors") }
-                                Controls.Button { text: qsTr("Warning kernel"); enabled: !utility.busy; onClicked: utility.runBookmark("kernel-errors") }
-                                Controls.Button { text: qsTr("Spazio"); enabled: !utility.busy; onClicked: utility.runBookmark("disk-space") }
-                                Controls.Button { text: qsTr("Inode"); enabled: !utility.busy; onClicked: utility.runBookmark("inodes") }
-                                Controls.Button { text: qsTr("Tempo avvio"); enabled: !utility.busy; onClicked: utility.runBookmark("boot-time") }
-                            }
+                    contentItem: ColumnLayout {
+                        Kirigami.Heading { level: 2; text: qsTr("Diagnostica"); font.bold: true }
+                        GridLayout {
+                            Layout.fillWidth: true
+                            columns: width > 900 ? 4 : width > 520 ? 2 : 1
+                            uniformCellWidths: true
+                            columnSpacing: Kirigami.Units.smallSpacing
+                            rowSpacing: Kirigami.Units.smallSpacing
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("Sicurezza"); enabled: !utility.busy; onClicked: utility.runBookmark("security") }
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("Errori avvio"); enabled: !utility.busy; onClicked: utility.runBookmark("journal-errors") }
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("Warning kernel"); enabled: !utility.busy; onClicked: utility.runBookmark("kernel-errors") }
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("Spazio"); enabled: !utility.busy; onClicked: utility.runBookmark("disk-space") }
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("Inode"); enabled: !utility.busy; onClicked: utility.runBookmark("inodes") }
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("Tempo avvio"); enabled: !utility.busy; onClicked: utility.runBookmark("boot-time") }
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("GPU / Mesa"); enabled: !utility.busy && SystemBackend.programAvailable("glxinfo"); onClicked: utility.runBookmark("gpu-driver") }
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("Vulkan"); enabled: !utility.busy && SystemBackend.programAvailable("vulkaninfo"); onClicked: utility.runBookmark("vulkan-info") }
                         }
                     }
                 }
@@ -190,12 +173,16 @@ Kirigami.ScrollablePage {
                     Layout.fillWidth: true
                     contentItem: ColumnLayout {
                         Kirigami.Heading { level: 2; text: qsTr("Strumenti esterni"); font.bold: true }
-                        Flow {
+                        GridLayout {
                             Layout.fillWidth: true
-                            Controls.Button { text: qsTr("KSystemLog"); icon.name: "utilities-log-viewer"; enabled: SystemBackend.toolAvailable("ksystemlog"); onClicked: SystemBackend.launchTool("ksystemlog") }
-                            Controls.Button { text: qsTr("Monitor di sistema"); icon.name: "utilities-system-monitor"; enabled: SystemBackend.toolAvailable("systemmonitor"); onClicked: SystemBackend.launchTool("systemmonitor") }
-                            Controls.Button { text: qsTr("ISO Image Writer"); icon.name: "media-optical"; enabled: SystemBackend.toolAvailable("isoimagewriter"); onClicked: SystemBackend.launchTool("isoimagewriter") }
-                            Controls.Button { text: qsTr("QDirStat"); icon.name: "folder-chart"; enabled: SystemBackend.toolAvailable("qdirstat"); onClicked: SystemBackend.launchTool("qdirstat") }
+                            columns: width > 900 ? 4 : width > 520 ? 2 : 1
+                            uniformCellWidths: true
+                            columnSpacing: Kirigami.Units.smallSpacing
+                            rowSpacing: Kirigami.Units.smallSpacing
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("KSystemLog"); icon.name: "utilities-log-viewer"; enabled: SystemBackend.toolAvailable("ksystemlog"); onClicked: SystemBackend.launchTool("ksystemlog") }
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("Monitor di sistema"); icon.name: "utilities-system-monitor"; enabled: SystemBackend.toolAvailable("systemmonitor"); onClicked: SystemBackend.launchTool("systemmonitor") }
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("ISO Image Writer"); icon.name: "media-optical"; enabled: SystemBackend.toolAvailable("isoimagewriter"); onClicked: SystemBackend.launchTool("isoimagewriter") }
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("QDirStat"); icon.name: "folder-chart"; enabled: SystemBackend.toolAvailable("qdirstat"); onClicked: SystemBackend.launchTool("qdirstat") }
                         }
                     }
                 }

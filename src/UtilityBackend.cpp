@@ -182,12 +182,24 @@ bool UtilityBackend::runBookmark(const QString &id)
         return start(QStringLiteral("getenforce"), {}, tr("SELinux"), QStringLiteral("bookmark.selinux"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("services-active"))
         return start(QStringLiteral("systemctl"), {QStringLiteral("list-units"), QStringLiteral("--type=service"), QStringLiteral("--state=running"), QStringLiteral("--no-pager"), QStringLiteral("--plain")}, tr("Servizi attivi"), QStringLiteral("bookmark.services-active"), kShortQueryTimeoutMs);
+    if (id == QStringLiteral("services-all"))
+        return start(QStringLiteral("systemctl"), {QStringLiteral("list-units"), QStringLiteral("--type=service"), QStringLiteral("--all"), QStringLiteral("--no-pager"), QStringLiteral("--plain")}, tr("Tutti i servizi"), QStringLiteral("bookmark.services-all"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("uptime"))
         return start(QStringLiteral("uptime"), {QStringLiteral("-p")}, tr("Tempo di attività"), QStringLiteral("bookmark.uptime"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("boot-time"))
         return start(QStringLiteral("systemd-analyze"), {QStringLiteral("time")}, tr("Tempo di avvio"), QStringLiteral("bookmark.boot-time"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("blame"))
         return start(QStringLiteral("systemd-analyze"), {QStringLiteral("blame")}, tr("Servizi più lenti all'avvio"), QStringLiteral("bookmark.blame"), kShortQueryTimeoutMs);
+    if (id == QStringLiteral("critical-chain"))
+        return start(QStringLiteral("systemd-analyze"), {QStringLiteral("critical-chain")}, tr("Catena critica avvio"), QStringLiteral("bookmark.critical-chain"), kShortQueryTimeoutMs);
+    if (id == QStringLiteral("git-config-origins"))
+        return start(QStringLiteral("git"), {QStringLiteral("config"), QStringLiteral("--list"), QStringLiteral("--show-origin")}, tr("Configurazione Git"), QStringLiteral("bookmark.git-config-origins"), kShortQueryTimeoutMs);
+    if (id == QStringLiteral("podman-storage"))
+        return start(QStringLiteral("podman"), {QStringLiteral("info"), QStringLiteral("--format"), QStringLiteral("{{.Store.GraphRoot}}")}, tr("Cartella storage Podman"), QStringLiteral("bookmark.podman-storage"), kShortQueryTimeoutMs);
+    if (id == QStringLiteral("podman-connections"))
+        return start(QStringLiteral("podman"), {QStringLiteral("system"), QStringLiteral("connection"), QStringLiteral("list")}, tr("Connessioni Podman"), QStringLiteral("bookmark.podman-connections"), kShortQueryTimeoutMs);
+    if (id == QStringLiteral("shell-path"))
+        return start(QStringLiteral("printenv"), {QStringLiteral("PATH")}, tr("PATH della sessione"), QStringLiteral("bookmark.shell-path"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("disk-space"))
         return start(QStringLiteral("df"), {QStringLiteral("-hT"), QStringLiteral("-x"), QStringLiteral("tmpfs"), QStringLiteral("-x"), QStringLiteral("devtmpfs")}, tr("Spazio filesystem"), QStringLiteral("bookmark.disk-space"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("inodes"))

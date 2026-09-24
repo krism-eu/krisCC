@@ -1,5 +1,5 @@
 Name:           krisCC
-Version:        0.7.8
+Version:        0.7.9
 Release:        1%{?dist}
 Summary:        krisCC personal control center for KrisOS and Fedora bootc
 License:        MIT
@@ -56,6 +56,13 @@ delegated to a dedicated external application.
 %{_datadir}/icons/hicolor/scalable/apps/krisCC.svg
 
 %changelog
+* Thu Sep 24 2026 krism-eu - 0.7.9-1
+- Final dashboard top status strip with EFI, Cockpit state and refresh tiles
+- Make Wi-Fi radio controllable through NetworkManager even when disabled
+- Manage cockpit.socket explicitly from Services & Network without opening a browser
+- Compact diagnostics/tools layout and extend fixed read-only command bookmarks
+- Keep six Dashboard quick-action slots with one reserved placeholder
+
 * Thu Sep 24 2026 krism-eu - 0.7.8-1
 - Finalize dashboard/sidebar and System & Boot layout without changing Avvio e dischi
 - Consolidate repair, cleanup and diagnostics under Strumenti & Fix

@@ -18,19 +18,12 @@ Kirigami.ScrollablePage {
         { id: "wifi", title: qsTr("Wi-Fi") },
         { id: "bluetooth.service", title: qsTr("Bluetooth") },
         { id: "cups.service", title: qsTr("Stampa") },
-        { id: "firewalld.service", title: qsTr("Firewall") }
+        { id: "firewalld.service", title: qsTr("Firewall") },
+        { id: "cockpit.socket", title: qsTr("Cockpit") }
     ]
 
     function serviceId(item) {
-        if (item.id !== "wifi")
-            return item.id
-        var iwd = SystemBackend.serviceStates["iwd.service"] || "missing"
-        var wpa = SystemBackend.serviceStates["wpa_supplicant.service"] || "missing"
-        if (iwd === "active" || iwd === "activating")
-            return "iwd.service"
-        if (wpa === "active" || wpa === "activating")
-            return "wpa_supplicant.service"
-        return iwd !== "missing" ? "iwd.service" : "wpa_supplicant.service"
+        return item.id
     }
 
     function stateLabel(state) {
@@ -69,17 +62,17 @@ Kirigami.ScrollablePage {
                         Controls.Label { Layout.preferredWidth: 120; text: root.stateLabel(root.serviceState(modelData)) }
                         Controls.Button {
                             text: qsTr("Avvia")
-                            enabled: root.serviceState(modelData) !== "missing"
+                            enabled: root.serviceState(modelData) === "inactive" || root.serviceState(modelData) === "failed"
                             onClicked: { root.pendingService = actualService; root.pendingServiceTitle = modelData.title; root.pendingAction = "start"; serviceConfirmDialog.open() }
                         }
                         Controls.Button {
                             text: qsTr("Ferma")
-                            enabled: root.serviceState(modelData) !== "missing"
+                            enabled: root.serviceState(modelData) === "active" || root.serviceState(modelData) === "activating"
                             onClicked: { root.pendingService = actualService; root.pendingServiceTitle = modelData.title; root.pendingAction = "stop"; serviceConfirmDialog.open() }
                         }
                         Controls.Button {
                             text: qsTr("Riavvia")
-                            enabled: root.serviceState(modelData) !== "missing"
+                            enabled: root.serviceState(modelData) === "active"
                             onClicked: { root.pendingService = actualService; root.pendingServiceTitle = modelData.title; root.pendingAction = "restart"; serviceConfirmDialog.open() }
                         }
                         Controls.Button {

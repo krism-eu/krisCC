@@ -214,10 +214,10 @@ require('SystemBackend.launchTool("kfind")' in dashboard_qml
 require('qsTr("Backup e Recovery")' not in dashboard_qml,
         "Dashboard quick actions must not duplicate Backup and Recovery")
 require('qsTr("Terminale")' not in dashboard_qml
-        and 'qsTr("Cockpit")' in dashboard_qml
         and 'columns: width >= 900 ? 6' in dashboard_qml
-        and 'uniformCellWidths: true' in dashboard_qml,
-        "Dashboard quick actions must remain six equal-width buttons with Cockpit first and no Terminal")
+        and 'uniformCellWidths: true' in dashboard_qml
+        and 'Item { Layout.fillWidth: true; Layout.preferredHeight:' in dashboard_qml,
+        "Dashboard quick actions must remain six equal-width slots with one reserved and no Terminal")
 require('"podman", title: qsTr("Container")' not in dashboard_qml,
         "Dashboard must not duplicate the Container navigation tile")
 require("Aggiorna Control Center" not in dashboard_qml
@@ -299,8 +299,7 @@ require('cleanup-estimate' in utility_cpp
         "unified cleanup contract is incomplete")
 require("startService" in system_cpp and "stopService" in system_cpp
         and "restartService" in system_cpp and "resetFailedService" in system_cpp
-        and 'QStringLiteral("wpa_supplicant.service")' in system_cpp
-        and 'QStringLiteral("iwd.service")' in system_cpp
+        and 'QStringLiteral("cockpit.socket")' in system_cpp
         and 'QStringLiteral("sshd.service")' not in system_cpp
         and 'QStringLiteral("smb.service")' not in system_cpp,
         "allowlisted common-service controls are incomplete")
@@ -308,9 +307,6 @@ require("requestFirmwareReboot" in system_cpp
         and 'SetRebootToFirmwareSetup' in system_cpp
         and "kernelArguments" in system_cpp,
         "firmware reboot/read-only kernel contract is incomplete")
-require('qsTr("Cockpit")' in dashboard_qml
-        and "openWebConsole()" in dashboard_qml,
-        "Dashboard Cockpit shortcut is missing")
 require('parseDnfListJson("{}")' in contract_parsers_test,
         "empty DNF5 list JSON regression test is missing")
 require("m_operationLines.isEmpty()" in rk_cpp
@@ -344,8 +340,6 @@ require("QTimer::singleShot(15000, reply" in system_cpp,
         "Control Center update check must have a network timeout")
 require("Validators::repositoryId" in read("src/SoftwareBackend.cpp") and "validRepositoryId" not in read("src/SoftwareBackend.h"),
         "repository validation must use shared Validators")
-require("cockpitAvailable" in system_cpp and "SystemBackend.cockpitAvailable()" in dashboard_qml,
-        "Cockpit shortcut must be capability-gated")
 require("OperationLog::append" in repair_cpp,
         "RepairBackend mutations must be recorded in operation history")
 
@@ -398,7 +392,7 @@ require('title: qsTr("Comandi")' in commands_qml
 require('qsTr("Rete & DNS")' not in tools_qml
         and 'qsTr("Pulizia disco unificata")' in tools_qml
         and 'qsTr("Riparatore Audio")' in tools_qml
-        and 'qsTr("Diagnostica hardware rapida")' in tools_qml
+        and 'qsTr("Diagnostica")' in tools_qml
         and 'diagnostic.vainfo' not in utility_cpp,
         "Tools & Fix ownership/VA-API cleanup is inconsistent")
 require('qsTr("Cloudflare")' not in services_qml
@@ -421,13 +415,6 @@ require("applyDnsPreset" not in repair_cpp and "applyDnsPreset" not in read("src
 require('networkDisplayName' in read("src/SystemBackend.h")
         and 'iface.humanReadableName()' in system_cpp,
         "network UI must keep a display label separate from the kernel interface name")
-require('iwd === "active" || iwd === "activating"' in services_qml
-        and 'wpa === "active" || wpa === "activating"' in services_qml,
-        "Wi-Fi service selection must prefer the daemon that is actually active")
-require('asyncCall(QStringLiteral("StartUnit")' in system_cpp
-        and 'QStringLiteral("cockpit.socket")' in system_cpp
-        and 'openWebConsole() const' not in read("src/SystemBackend.h"),
-        "Cockpit must use asynchronous on-demand socket activation")
 require('recent(int limit = 20)' in read("src/OperationLog.h")
         and 'operationHistory() const' not in read("src/SystemBackend.h"),
         "history API/default contract is inconsistent")
@@ -435,5 +422,34 @@ require('QStringLiteral("--vacuum-size=16M")' in admin_policy
         and '--vacuum-size=100M' not in admin_policy
         and 'Journal archiviati oltre 16 MiB' in tools_qml,
         "journal vacuum must remain aggressively bounded at 16 MiB")
+
+require('QStringLiteral("cockpit.socket")' in system_cpp
+        and '{ id: "cockpit.socket", title: qsTr("Cockpit") }' in services_qml
+        and 'SystemBackend.serviceStates["cockpit.socket"]' in dashboard_qml
+        and 'openWebConsole' not in dashboard_qml,
+        "Cockpit must be informational on Dashboard and managed as a service/socket")
+require('QStringLiteral("wifi")' in system_cpp
+        and 'WirelessEnabled' in system_cpp
+        and 'setWifiRadio(true, false)' in system_cpp
+        and 'setWifiRadio(false, false)' in system_cpp
+        and '{ id: "wifi", title: qsTr("Wi-Fi") }' in services_qml,
+        "Wi-Fi must be controlled through NetworkManager radio state even when disabled")
+require('qsTr("Diagnostica hardware rapida")' not in tools_qml
+        and tools_qml.count('Layout.fillWidth: true; text: qsTr("GPU / Mesa")') == 1
+        and 'qsTr("Strumenti esterni")' in tools_qml,
+        "Tools diagnostics must use two compact full-width groups")
+require('id: "services-all"' in commands_qml
+        and 'id: "git-config-origins"' in commands_qml
+        and 'id: "podman-storage"' in commands_qml
+        and 'id: "podman-connections"' in commands_qml
+        and 'id: "shell-path"' in commands_qml
+        and 'QStringLiteral("services-all")' in utility_cpp,
+        "final fixed command shortcuts are missing")
+require('columns: 3' in dashboard_qml
+        and 'qsTr("Prossimo avvio EFI")' in dashboard_qml
+        and 'qsTr("Cockpit")' in dashboard_qml
+        and 'qsTr("Aggiorna stato")' in dashboard_qml
+        and 'Item { Layout.fillWidth: true; Layout.preferredHeight:' in dashboard_qml,
+        "Dashboard top strip / reserved quick-action slot contract missing")
 
 print(f"release audit OK: krisCC {VERSION}")
