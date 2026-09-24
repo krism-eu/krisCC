@@ -115,7 +115,6 @@ bool UtilityBackend::start(const QString &program, const QStringList &args, cons
 
 void UtilityBackend::finish(const QString &message, const QString &state)
 {
-    const QString completedOperation = m_operationId;
     if (m_runner) {
         m_runner->deleteLater();
         m_runner = nullptr;
@@ -155,7 +154,7 @@ bool UtilityBackend::runBookmark(const QString &id)
         return start(QStringLiteral("resolvectl"), {QStringLiteral("flush-caches")}, tr("Svuota cache DNS"), QStringLiteral("repair.dns-flush"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("cleanup-estimate")) {
         const QString script = QStringLiteral(
-            "printf 'Cestini: '; du -sh "$HOME/.local/share/Trash" 2>/dev/null | cut -f1 || echo '0'; "
+            "printf 'Cestini: '; du -sh \"$HOME/.local/share/Trash\" 2>/dev/null | cut -f1 || echo '0'; "
             "printf 'Journal: '; journalctl --disk-usage 2>/dev/null | sed 's/^.*take up /circa /'; "
             "printf 'Cache DNF: '; du -sh /var/cache/libdnf5 2>/dev/null | cut -f1 || echo 'non misurabile'; "
             "printf 'Flatpak inutilizzati: calcolo esatto durante la pulizia\\n'");

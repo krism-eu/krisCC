@@ -289,6 +289,7 @@ require('restartAudio()' in read("src/RepairBackend.h")
         and 'applyDnsPreset' in repair_cpp,
         "operational audio/network repair contract is incomplete")
 require('cleanup-estimate' in utility_cpp
+        and 'du -sh \\"$HOME/.local/share/Trash\\"' in utility_cpp
         and 'journal-vacuum' in tools_qml
         and 'dnf-clean' in tools_qml
         and 'flatpak-unused' in tools_qml,

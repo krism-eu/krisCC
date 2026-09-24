@@ -35,9 +35,9 @@ Kirigami.ScrollablePage {
                         Layout.fillWidth: true
                         Controls.Label { Layout.fillWidth: true; text: modelData.title }
                         Controls.Label { Layout.preferredWidth: 120; text: SystemBackend.serviceStates[modelData.id] || qsTr("lettura…") }
-                        Controls.Button { text: qsTr("Avvia"); onClicked: SystemBackend.startService(modelData.id) }
-                        Controls.Button { text: qsTr("Ferma"); onClicked: SystemBackend.stopService(modelData.id) }
-                        Controls.Button { text: qsTr("Riavvia"); onClicked: SystemBackend.restartService(modelData.id) }
+                        Controls.Button { text: qsTr("Avvia"); enabled: SystemBackend.serviceStates[modelData.id] !== "non disponibile"; onClicked: SystemBackend.startService(modelData.id) }
+                        Controls.Button { text: qsTr("Ferma"); enabled: SystemBackend.serviceStates[modelData.id] !== "non disponibile"; onClicked: SystemBackend.stopService(modelData.id) }
+                        Controls.Button { text: qsTr("Riavvia"); enabled: SystemBackend.serviceStates[modelData.id] !== "non disponibile"; onClicked: SystemBackend.restartService(modelData.id) }
                         Controls.Button { text: qsTr("Reset"); visible: SystemBackend.serviceStates[modelData.id] === "failed"; onClicked: SystemBackend.resetFailedService(modelData.id) }
                     }
                 }
