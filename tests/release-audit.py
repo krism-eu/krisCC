@@ -37,6 +37,7 @@ system_cpp = read("src/SystemBackend.cpp")
 software_qml = read("qml/modules/SoftwareModule.qml")
 system_qml = read("qml/modules/SystemModule.qml")
 dashboard_qml = read("qml/modules/DashboardModule.qml")
+main_qml = read("qml/Main.qml")
 commands_qml = read("qml/modules/CommandsModule.qml")
 tools_qml = read("qml/modules/ToolsModule.qml")
 services_qml = read("qml/modules/ServicesNetworkModule.qml")
@@ -212,18 +213,19 @@ require('SystemBackend.launchTool("kfind")' in dashboard_qml
         "Dashboard quick actions lost KFind, temporary folder, Home or root filesystem")
 require('qsTr("Backup e Recovery")' not in dashboard_qml,
         "Dashboard quick actions must not duplicate Backup and Recovery")
-require('qsTr("Terminale")' in dashboard_qml
+require('qsTr("Terminale")' not in dashboard_qml
+        and 'qsTr("Cockpit")' in dashboard_qml
         and 'columns: width >= 900 ? 6' in dashboard_qml
         and 'uniformCellWidths: true' in dashboard_qml,
-        "Dashboard quick actions must remain six equal-width buttons on wide layouts")
+        "Dashboard quick actions must remain six equal-width buttons with Cockpit first and no Terminal")
 require('"podman", title: qsTr("Container")' not in dashboard_qml,
         "Dashboard must not duplicate the Container navigation tile")
 require("Aggiorna Control Center" not in dashboard_qml
-        and "checkControlCenterUpdate()" in commands_qml
-        and 'openRequested("system")' in commands_qml
+        and "checkControlCenterUpdate()" in read("qml/modules/SystemModule.qml")
+        and "checkControlCenterUpdate()" not in commands_qml
         and "updateControlCenter()" not in commands_qml
         and "fc44.x86_64.rpm" not in system_cpp,
-        "Control Center release check must stay image-owned and independent from a fixed RPM asset")
+        "Control Center release check must stay image-owned and in System & Boot")
 require("qml/modules/FlatpakModule.qml" not in cmake
         and "runFlatpak" not in utility_cpp
         and "addFlathubUser" not in utility_cpp
@@ -285,25 +287,28 @@ require("qml/modules/ToolsModule.qml" in cmake
         "Swiss Army modules/backends are not wired into the build")
 require('restartAudio()' in read("src/RepairBackend.h")
         and 'flushDns()' in read("src/RepairBackend.h")
-        and 'reconnectNetwork' in repair_cpp
-        and 'applyDnsPreset' in repair_cpp,
+        and 'reconnectNetwork' in repair_cpp,
         "operational audio/network repair contract is incomplete")
 require('cleanup-estimate' in utility_cpp
         and 'du -sh \\"$HOME/.local/share/Trash\\"' in utility_cpp
         and 'journal-vacuum' in tools_qml
         and 'dnf-clean' in tools_qml
+        and 'QStringLiteral("journal-vacuum")' in admin_policy
+        and 'QStringLiteral("dnf-clean")' in admin_policy
         and 'flatpak-unused' in tools_qml,
         "unified cleanup contract is incomplete")
 require("startService" in system_cpp and "stopService" in system_cpp
         and "restartService" in system_cpp and "resetFailedService" in system_cpp
-        and 'QStringLiteral("sshd.service")' in system_cpp
-        and 'QStringLiteral("smb.service")' in system_cpp,
-        "allowlisted service controls are incomplete")
+        and 'QStringLiteral("wpa_supplicant.service")' in system_cpp
+        and 'QStringLiteral("iwd.service")' in system_cpp
+        and 'QStringLiteral("sshd.service")' not in system_cpp
+        and 'QStringLiteral("smb.service")' not in system_cpp,
+        "allowlisted common-service controls are incomplete")
 require("requestFirmwareReboot" in system_cpp
         and 'SetRebootToFirmwareSetup' in system_cpp
         and "kernelArguments" in system_cpp,
         "firmware reboot/read-only kernel contract is incomplete")
-require('text: qsTr("Cockpit")' in dashboard_qml
+require('qsTr("Cockpit")' in dashboard_qml
         and "openWebConsole()" in dashboard_qml,
         "Dashboard Cockpit shortcut is missing")
 require('parseDnfListJson("{}")' in contract_parsers_test,
@@ -331,5 +336,104 @@ require("0.6 è" not in read("INTEGRAZIONE.md"), "integration docs are stale")
 require("release 0.5.1" not in read("i18n/README.md"), "i18n docs are stale")
 require("auth_admin_keep" not in read("data/org.kriscc.controlcenter.policy"),
         "Polkit retention is forbidden")
+
+require("archiveMemberPath" in read("src/Validators.cpp") and "archiveVerboseEntry" in read("src/Validators.cpp")
+        and 'QStringLiteral("-tvzf")' in system_cpp,
+        "restore preflight must validate archive member paths and types before extraction")
+require("QTimer::singleShot(15000, reply" in system_cpp,
+        "Control Center update check must have a network timeout")
+require("Validators::repositoryId" in read("src/SoftwareBackend.cpp") and "validRepositoryId" not in read("src/SoftwareBackend.h"),
+        "repository validation must use shared Validators")
+require("cockpitAvailable" in system_cpp and "SystemBackend.cockpitAvailable()" in dashboard_qml,
+        "Cockpit shortcut must be capability-gated")
+require("OperationLog::append" in repair_cpp,
+        "RepairBackend mutations must be recorded in operation history")
+
+require('root.pendingAction = "restart"' in services_qml
+        and 'SystemBackend.restartService(root.pendingService)' in services_qml,
+        "service restart must use the shared confirmation dialog")
+require('id: cleanupConfirmDialog' in tools_qml
+        and 'onClicked: cleanupConfirmDialog.open()' in tools_qml
+        and 'La pulizia dei cestini è irreversibile.' in tools_qml,
+        "unified cleanup must require explicit confirmation")
+require('Reset stato fallito non riuscito' in system_cpp
+        and 'manager.asyncCall(QStringLiteral("ResetFailedUnit"), service), this' in system_cpp,
+        "ResetFailedUnit errors must be watched and surfaced")
+require('Impossibile eliminare il backup: %1.' in system_cpp
+        and 'La cartella backup non è disponibile o scrivibile.' in system_cpp,
+        "backup mutation failures must be surfaced through backup state")
+
+require('selectedInterface = iface.name();' in system_cpp
+        and 'selectedInterface = iface.humanReadableName()' not in system_cpp,
+        "NetworkManager mutations must use the kernel interface name")
+require('Interfaccia di rete non valida.' in repair_cpp
+        and 'bool RepairBackend::fail' in repair_cpp,
+        "network repair validation failures must be surfaced")
+require('root.pendingAction = "reset"' in services_qml
+        and 'SystemBackend.resetFailedService(root.pendingService)' in services_qml,
+        "failed-service reset must use the shared confirmation dialog")
+require('cleanupTotal = 0' in tools_qml and 'cleanupDone = 0' in tools_qml,
+        "cleanup queue must clear transient progress state after completion")
+require('Notification ownership stays in main.cpp for Polkit operations.' in system_cpp,
+        "Polkit maintenance notifications must have a single owner")
+
+# Final success marker: keep this after every contract check above.
+
+require('label: qsTr("Comandi")' in main_qml
+        and 'label: qsTr("Strumenti & Fix")' in main_qml
+        and main_qml.index('label: qsTr("Comandi")') < main_qml.index('label: qsTr("Strumenti & Fix")'),
+        "navigation must keep Commands before final Tools & Fix page")
+require('text: qsTr("Terminale")' in main_qml
+        and 'text: qsTr("Info Center")' in main_qml
+        and main_qml.index('text: qsTr("Terminale")') < main_qml.index('text: qsTr("Info Center")'),
+        "Terminal must live in the persistent sidebar above Info Center")
+require('qsTr("Salute")' not in read("qml/modules/SystemModule.qml")
+        and 'qsTr("Strumenti")' not in read("qml/modules/SystemModule.qml")
+        and 'qsTr("Avvio e dischi")' in read("qml/modules/SystemModule.qml")
+        and 'qsTr("Control Center")' in read("qml/modules/SystemModule.qml"),
+        "System & Boot tab ownership is inconsistent")
+require('title: qsTr("Comandi")' in commands_qml
+        and 'qsTr("Control Center")' not in commands_qml,
+        "Commands page must not own the Control Center card")
+require('qsTr("Rete & DNS")' not in tools_qml
+        and 'qsTr("Pulizia disco unificata")' in tools_qml
+        and 'qsTr("Riparatore Audio")' in tools_qml
+        and 'qsTr("Diagnostica hardware rapida")' in tools_qml
+        and 'diagnostic.vainfo' not in utility_cpp,
+        "Tools & Fix ownership/VA-API cleanup is inconsistent")
+require('qsTr("Cloudflare")' not in services_qml
+        and 'qsTr("Quad9")' not in services_qml
+        and 'qsTr("Google")' not in services_qml
+        and 'checkInternetIdentity()' in services_qml,
+        "Services & Network must delegate DNS editing and expose Internet identity")
+require('nextUefiBootLabel' in system_cpp
+        and 'qsTr("Prossimo avvio EFI")' in dashboard_qml,
+        "Dashboard next-EFI informational tile is missing")
+require('emitted < 20' in system_cpp and 'recent(int limit = 20)' in read("src/OperationLog.h"),
+        "operation history UI/default must be capped at 20 recent entries")
+
+
+require(r'QStringLiteral("(?m)^BootNext:\\s*([0-9A-Fa-f]{4})\\s*$")' in system_cpp
+        and r'QStringLiteral("(?m)^BootOrder:\\s*([0-9A-Fa-f]{4})")' in system_cpp,
+        "UEFI BootNext/BootOrder regex must use valid escaped whitespace")
+require("applyDnsPreset" not in repair_cpp and "applyDnsPreset" not in read("src/RepairBackend.h"),
+        "removed DNS preset UI must not leave a dead backend API")
+require('networkDisplayName' in read("src/SystemBackend.h")
+        and 'iface.humanReadableName()' in system_cpp,
+        "network UI must keep a display label separate from the kernel interface name")
+require('iwd === "active" || iwd === "activating"' in services_qml
+        and 'wpa === "active" || wpa === "activating"' in services_qml,
+        "Wi-Fi service selection must prefer the daemon that is actually active")
+require('asyncCall(QStringLiteral("StartUnit")' in system_cpp
+        and 'QStringLiteral("cockpit.socket")' in system_cpp
+        and 'openWebConsole() const' not in read("src/SystemBackend.h"),
+        "Cockpit must use asynchronous on-demand socket activation")
+require('recent(int limit = 20)' in read("src/OperationLog.h")
+        and 'operationHistory() const' not in read("src/SystemBackend.h"),
+        "history API/default contract is inconsistent")
+require('QStringLiteral("--vacuum-size=16M")' in admin_policy
+        and '--vacuum-size=100M' not in admin_policy
+        and 'Journal archiviati oltre 16 MiB' in tools_qml,
+        "journal vacuum must remain aggressively bounded at 16 MiB")
 
 print(f"release audit OK: krisCC {VERSION}")

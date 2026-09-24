@@ -8,9 +8,7 @@ import org.kriscc
 Kirigami.ScrollablePage {
     id: root
     padding: UiMetrics.pageMargin
-    title: qsTr("Diagnostica")
-
-    signal openRequested(string pageId)
+    title: qsTr("Comandi")
 
     UtilityBackend { id: utilityBackend }
 
@@ -101,7 +99,7 @@ Kirigami.ScrollablePage {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
                         opacity: UiMetrics.secondaryOpacity
-                        text: qsTr("Diagnostica read-only, informazioni hardware e comandi personali. Le riparazioni operative sono raccolte in Strumenti & Fix.")
+                        text: qsTr("Comandi diagnostici read-only e script personali. Le riparazioni operative sono raccolte in Strumenti & Fix.")
                     }
                     RowLayout {
                         Layout.fillWidth: true
@@ -115,63 +113,6 @@ Kirigami.ScrollablePage {
                             icon.name: "edit-clear"
                             enabled: commandFilter.text.length > 0
                             onClicked: commandFilter.clear()
-                        }
-                    }
-                }
-
-                Kirigami.AbstractCard {
-                    Layout.fillWidth: true
-                    contentItem: ColumnLayout {
-                        spacing: Kirigami.Units.smallSpacing
-                        RowLayout {
-                            Layout.fillWidth: true
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 0
-                                Kirigami.Heading {
-                                    level: 3
-                                    font.bold: true
-                                    text: qsTr("Control Center")
-                                }
-                                Controls.Label {
-                                    text: qsTr("Versione installata: %1").arg(Qt.application.version)
-                                    opacity: UiMetrics.secondaryOpacity
-                                }
-                            }
-                            Controls.BusyIndicator {
-                                visible: SystemBackend.controlCenterUpdateBusy
-                                running: visible
-                            }
-                        }
-                        Controls.Label {
-                            Layout.fillWidth: true
-                            wrapMode: Text.WordWrap
-                            text: SystemBackend.controlCenterUpdateStatus.length > 0
-                                  ? SystemBackend.controlCenterUpdateStatus
-                                  : qsTr("Controlla la release stable ufficiale di krisCC. Gli aggiornamenti del Control Center vengono applicati insieme all'immagine KrisOS.")
-                            opacity: UiMetrics.secondaryOpacity
-                        }
-                        RowLayout {
-                            Layout.fillWidth: true
-                            Controls.Button {
-                                text: qsTr("Verifica aggiornamenti")
-                                icon.name: "view-refresh"
-                                enabled: !SystemBackend.controlCenterUpdateBusy
-                                onClicked: SystemBackend.checkControlCenterUpdate()
-                            }
-                            Controls.Button {
-                                text: qsTr("Aggiorna tramite KrisOS")
-                                icon.name: "system-software-update"
-                                enabled: SystemBackend.controlCenterUpdateAvailable
-                                         && !SystemBackend.controlCenterUpdateBusy
-                                onClicked: root.openRequested("system")
-                            }
-                            Item { Layout.fillWidth: true }
-                            Controls.Label {
-                                visible: SystemBackend.controlCenterLatestVersion.length > 0
-                                text: qsTr("Stable: %1").arg(SystemBackend.controlCenterLatestVersion)
-                                opacity: UiMetrics.secondaryOpacity
-                            }
                         }
                     }
                 }

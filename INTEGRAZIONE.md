@@ -1,6 +1,6 @@
 # Integrazione krisCC in KrisOS / Fedora bootc
 
-krisCC 0.7.7 è un'applicazione standalone Qt 6/Kirigami pensata per uso personale su Fedora bootc. Non duplica Plasma System Settings: integra solo le funzioni specifiche del sistema e gli strumenti di manutenzione che è utile avere in un unico posto.
+krisCC 0.7.8 è un'applicazione standalone Qt 6/Kirigami pensata per uso personale su Fedora bootc. Non duplica Plasma System Settings: integra solo le funzioni specifiche del sistema e gli strumenti di manutenzione che è utile avere in un unico posto.
 
 ## Runtime
 
@@ -34,7 +34,6 @@ L'anteprima deve usare `rk plan <pacchetto>` e non un comando DNF5 parallelo: il
 krisCC legge lo stato del layer persistente esclusivamente tramite `rk status --json` con schema versione 1. Il formato umano resta per il terminale, ma non viene parsato dalla UI.
 
 ## Privilegi
-
 Non aggiungere wrapper shell generici. `rk sync/add/rm/forget` resta il gate privilegiato autonomo di KrisOS. Le mutazioni richieste dalla UI, incluse quelle rk, passano da `/usr/libexec/kriscc/admin`, che supervisiona il comando root con timeout reale e poi invoca `/usr/bin/rk` senza duplicarne la policy: `PolkitHelper` accetta soltanto operazioni semantiche enumerate, Polkit autorizza il percorso dell'helper con `auth_admin` senza retention e l'helper root rivalida operazione e argomenti completi, chiude stdin e avvia solo `rk`, `bootc`, `dnf5`, `efibootmgr` o `grub2-reboot` con argv fissi e timeout root-owned. Nessuna shell root è ammessa. La pulizia cestini è invece intenzionalmente user-level e l'helper rifiuta l'esecuzione come root. Il rollback BootC non è esposto.
 
 ## Pipeline immagine

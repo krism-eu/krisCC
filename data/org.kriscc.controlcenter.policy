@@ -105,4 +105,18 @@
     <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/admin</annotate>
     <annotate key="org.freedesktop.policykit.exec.argv1">boot-next-grub</annotate>
   </action>
+  <action id="org.kriscc.controlcenter.journal-vacuum">
+    <description>Reduce persistent system journal size</description>
+    <message>Authentication is required to clean the system journal</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/admin</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">journal-vacuum</annotate>
+  </action>
+  <action id="org.kriscc.controlcenter.dnf-clean">
+    <description>Clean DNF5 system cache</description>
+    <message>Authentication is required to clean the DNF5 cache</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/admin</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">dnf-clean</annotate>
+  </action>
 </policyconfig>

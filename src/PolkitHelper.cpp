@@ -1,5 +1,4 @@
 #include "PolkitHelper.h"
-
 #include "OperationLog.h"
 #include "AdminPolicy.h"
 

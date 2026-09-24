@@ -13,6 +13,9 @@
   <provides><binary>krisCC</binary></provides>
   <categories><category>Settings</category><category>System</category></categories>
   <releases>
+    <release version="0.7.8" date="2026-09-24">
+      <description><p>Final control-center layout, service/network simplification, EFI next-boot status, Cockpit on-demand activation and stable-fix hardening.</p></description>
+    </release>
     <release version="0.7.7" date="2026-09-24">
       <description><p>Swiss Army control-center layout with operational repair, cleanup, service/network controls, firmware boot and hardware diagnostics; internal Podman management removed.</p></description>
     </release>

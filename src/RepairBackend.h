@@ -16,13 +16,14 @@ public:
     Q_INVOKABLE bool restartAudio();
     Q_INVOKABLE bool flushDns();
     Q_INVOKABLE bool reconnectNetwork(const QString &interfaceName);
-    Q_INVOKABLE bool applyDnsPreset(const QString &interfaceName, const QString &preset);
     Q_INVOKABLE bool cancel();
 signals: void stateChanged();
 private:
-    bool start(const QString &program, const QStringList &args);
+    bool start(const QString &program, const QStringList &args, const QString &operation);
+    bool fail(const QString &operation, const QString &message);
     QPointer<ProcessRunner> m_runner;
     bool m_busy=false;
     QString m_state=QStringLiteral("idle");
     QString m_output;
+    QString m_operation;
 };

@@ -1,5 +1,6 @@
 #include "RepairBackend.h"
 #include "ProcessRunner.h"
+#include "OperationLog.h"
 
 #include <QRegularExpression>
 #include <QStandardPaths>
@@ -9,7 +10,7 @@ RepairBackend::RepairBackend(QObject *parent)
 {
 }
 
-bool RepairBackend::start(const QString &program, const QStringList &args)
+bool RepairBackend::start(const QString &program, const QStringList &args, const QString &operation)
 {
     if (m_busy)
         return false;
@@ -27,6 +28,7 @@ bool RepairBackend::start(const QString &program, const QStringList &args)
     m_busy = true;
     m_state = QStringLiteral("running");
     m_output.clear();
+    m_operation = operation;
     emit stateChanged();
 
     connect(runner, &ProcessRunner::finished, this,
@@ -59,6 +61,8 @@ bool RepairBackend::start(const QString &program, const QStringList &args)
             if (m_output.isEmpty())
                 m_output = errorString;
         }
+        OperationLog::append(QStringLiteral("Riparazione"), m_operation, m_state, m_output.left(200));
+        m_operation.clear();
         emit stateChanged();
     });
 
@@ -79,51 +83,39 @@ bool RepairBackend::start(const QString &program, const QStringList &args)
     return true;
 }
 
+bool RepairBackend::fail(const QString &operation, const QString &message)
+{
+    if (m_busy)
+        return false;
+    m_state = QStringLiteral("error");
+    m_output = message;
+    OperationLog::append(QStringLiteral("Riparazione"), operation, m_state, m_output.left(200));
+    emit stateChanged();
+    return false;
+}
+
 bool RepairBackend::restartAudio()
 {
     return start(QStringLiteral("systemctl"),
                  {QStringLiteral("--user"), QStringLiteral("restart"),
                   QStringLiteral("pipewire.service"),
                   QStringLiteral("pipewire-pulse.service"),
-                  QStringLiteral("wireplumber.service")});
+                  QStringLiteral("wireplumber.service")}, QStringLiteral("audio-restart"));
 }
 
 bool RepairBackend::flushDns()
 {
-    return start(QStringLiteral("resolvectl"), {QStringLiteral("flush-caches")});
+    return start(QStringLiteral("resolvectl"), {QStringLiteral("flush-caches")}, QStringLiteral("dns-flush"));
 }
 
 bool RepairBackend::reconnectNetwork(const QString &interfaceName)
 {
     static const QRegularExpression safeInterface(QStringLiteral("^[A-Za-z0-9_.:-]{1,32}$"));
     if (!safeInterface.match(interfaceName).hasMatch())
-        return false;
+        return fail(QStringLiteral("network-reapply"), tr("Interfaccia di rete non valida."));
     return start(QStringLiteral("nmcli"),
-                 {QStringLiteral("device"), QStringLiteral("reapply"), interfaceName});
-}
-
-bool RepairBackend::applyDnsPreset(const QString &interfaceName, const QString &preset)
-{
-    static const QRegularExpression safeInterface(QStringLiteral("^[A-Za-z0-9_.:-]{1,32}$"));
-    if (!safeInterface.match(interfaceName).hasMatch())
-        return false;
-
-    QString dns;
-    if (preset == QStringLiteral("cloudflare"))
-        dns = QStringLiteral("1.1.1.1,1.0.0.1");
-    else if (preset == QStringLiteral("quad9"))
-        dns = QStringLiteral("9.9.9.9,149.112.112.112");
-    else if (preset == QStringLiteral("google"))
-        dns = QStringLiteral("8.8.8.8,8.8.4.4");
-    else if (preset != QStringLiteral("automatic"))
-        return false;
-
-    return start(QStringLiteral("nmcli"),
-                 {QStringLiteral("device"), QStringLiteral("modify"), interfaceName,
-                  QStringLiteral("ipv4.ignore-auto-dns"),
-                  preset == QStringLiteral("automatic") ? QStringLiteral("no")
-                                                        : QStringLiteral("yes"),
-                  QStringLiteral("ipv4.dns"), dns});
+                 {QStringLiteral("device"), QStringLiteral("reapply"), interfaceName},
+                 QStringLiteral("network-reapply"));
 }
 
 bool RepairBackend::cancel()

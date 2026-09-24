@@ -12,10 +12,10 @@ Le regole di stabilità, compatibilità e integrazione sono definite in [ARCHITE
 - **Software RPM**: ricerca, installati, aggiornabili, provenienza Base/Persistente/Layer non richiesti e piano della transazione tramite la stessa policy `rk` usata per installare.
 - **Flatpak**: la tile Dashboard apre KDE Discover, che resta il proprietario della ricerca, installazione, rimozione e aggiornamento delle applicazioni Flatpak.
 - **Container**: gestione delegata a un'applicazione dedicata; krisCC non mantiene più un frontend Podman.
-- **Strumenti & Fix**: riparazione audio, DNS/rete, pulizia unificata di cestini/journal/DNF/Flatpak inutilizzati e diagnostica video rapida.
-- **Servizi & Rete**: controlli Start/Stop/Restart/Reset su servizi allowlisted, unità fallite, DNS rapidi indipendenti e accesso all'editor NetworkManager.
-- **Sistema & Boot**: centro aggiornamenti BootC/rk, reboot nel firmware UEFI, kernel arguments read-only, storage e selezione one-shot UEFI/GRUB.
-- **Diagnostica**: controlli read-only su systemd, journal, rete, storage, GPU/VA-API e avvio, più **Miei comandi** per salvare comandi o script Bash multilinea personali in `~/.config/krisCC/custom-actions.json`. Il file è privato (`0600`), versionato e fail-closed; le azioni girano soltanto con i privilegi dell'utente corrente, con stdin chiuso, e Annulla/timeout termina l'intero gruppo di processi dello script.
+- **Strumenti & Fix**: ultima pagina operativa del Control Center, con riparazione audio, pulizia unificata e mirata, diagnostica grafica/sistema e collegamenti agli strumenti esterni.
+- **Servizi & Rete**: controlli Start/Stop/Restart/Reset sui servizi comuni, unità fallite, NetworkManager, flush DNS e verifica su richiesta di IP pubblico e DNS effettivamente in uso.
+- **Sistema & Boot**: BootC/rk, stato Control Center, cronologia recente limitata, reboot firmware e il tab **Avvio e dischi** completo con kernel arguments, UEFI/GRUB e storage.
+- **Comandi**: controlli read-only su systemd, journal, rete, storage e avvio, più **Miei comandi** per salvare comandi o script Bash multilinea personali in `~/.config/krisCC/custom-actions.json`. Il file è privato (`0600`), versionato e fail-closed; le azioni girano soltanto con i privilegi dell'utente corrente, con stdin chiuso, e Annulla/timeout termina l'intero gruppo di processi dello script.
 - **Backup e recovery**: creazione, anteprima precisa di inclusioni/esclusioni, elenco, verifica e ripristino degli snapshot `tar.gz`, più stato RK strutturato, sync e forget di recovery. Il backup home esclude runtime/app Flatpak e storage Podman ricostruibili, mantenendo i dati Flatpak in `~/.var/app`.
 - **Cronologia**: registro locale privato e limitato delle operazioni mutanti eseguite da krisCC. Non vengono salvati output completi né argomenti sensibili delle operazioni amministrative.
 
@@ -68,7 +68,7 @@ cmake --build build
 
 ## RPM e integrazione nell'immagine
 
-Lo spec RPM è `packaging/krisCC.spec` e produce **`krisCC-0.7.7-*.rpm`**. La CI Fedora 44 costruisce l'RPM, lo installa in un ambiente pulito, riesegue lo smoke test e produce `SHA256SUMS` dell'artefatto RPM.
+Lo spec RPM è `packaging/krisCC.spec` e produce **`krisCC-0.7.8-*.rpm`**. La CI Fedora 44 costruisce l'RPM, lo installa in un ambiente pulito, riesegue lo smoke test e produce `SHA256SUMS` dell'artefatto RPM.
 
 Il flusso previsto per KrisOS è:
 
@@ -82,8 +82,8 @@ Esempio manuale:
 
 ```bash
 mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-git archive --format=tar.gz --prefix=krisCC-0.7.7/ \
-  -o ~/rpmbuild/SOURCES/krisCC-0.7.7.tar.gz HEAD
+git archive --format=tar.gz --prefix=krisCC-0.7.8/ \
+  -o ~/rpmbuild/SOURCES/krisCC-0.7.8.tar.gz HEAD
 cp packaging/krisCC.spec ~/rpmbuild/SPECS/krisCC.spec
 rpmbuild -ba ~/rpmbuild/SPECS/krisCC.spec
 ```

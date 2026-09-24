@@ -1,4 +1,5 @@
 #include "SystemBackend.h"
+#include "Validators.h"
 
 #include "OperationLog.h"
 #include "PolkitHelper.h"
@@ -74,8 +75,8 @@ const QSet<QString> &allowedServices()
         QStringLiteral("cups.service"),
         QStringLiteral("bluetooth.service"),
         QStringLiteral("firewalld.service"),
-        QStringLiteral("sshd.service"),
-        QStringLiteral("smb.service")
+        QStringLiteral("wpa_supplicant.service"),
+        QStringLiteral("iwd.service")
     };
     return services;
 }
@@ -117,6 +118,14 @@ SystemBackend::SystemBackend(PolkitHelper *polkit, QObject *parent)
         connect(m_polkit, &PolkitHelper::runningChanged, this, &SystemBackend::bootSelectionStateChanged);
         connect(m_polkit, &PolkitHelper::finished, this,
                 [this](bool success, const QString &output) {
+            if (m_adminMaintenanceOwned) {
+                const QString operation = m_adminMaintenanceOperation;
+                m_adminMaintenanceOwned = false;
+                m_adminMaintenanceOperation.clear();
+                emit adminMaintenanceFinished(operation, success, output);
+                // Notification ownership stays in main.cpp for Polkit operations.
+                return;
+            }
             if (!m_bootSelectionOwned)
                 return;
             const QString kind = m_bootSelectionKind;
@@ -178,6 +187,7 @@ void SystemBackend::refreshUefiEntries()
     const QString program = resolveExecutable(QStringLiteral("efibootmgr"));
     if (program.isEmpty()) {
         m_uefiEntries.clear();
+        m_nextUefiBootLabel.clear();
         m_bootEntriesError = tr("efibootmgr non disponibile.");
         emit bootEntriesChanged();
         return;
@@ -204,6 +214,7 @@ void SystemBackend::refreshUefiEntries()
 
         if (timedOut || status != QProcess::NormalExit || exitCode != 0) {
             m_uefiEntries.clear();
+            m_nextUefiBootLabel.clear();
             m_bootEntriesError = timedOut ? tr("Tempo massimo superato leggendo le voci UEFI.")
                                           : tr("Impossibile leggere le voci UEFI.");
             emit bootEntriesChanged();
@@ -212,6 +223,28 @@ void SystemBackend::refreshUefiEntries()
 
         const auto parsed = ContractParsers::parseUefiEntries(output.toUtf8());
         m_uefiEntries = parsed.values;
+        m_nextUefiBootLabel.clear();
+
+        QString preferredCode;
+        const QRegularExpression bootNextPattern(QStringLiteral("(?m)^BootNext:\\s*([0-9A-Fa-f]{4})\\s*$"));
+        const QRegularExpression bootOrderPattern(QStringLiteral("(?m)^BootOrder:\\s*([0-9A-Fa-f]{4})"));
+        QRegularExpressionMatch match = bootNextPattern.match(output);
+        if (match.hasMatch())
+            preferredCode = match.captured(1).toUpper();
+        else {
+            match = bootOrderPattern.match(output);
+            if (match.hasMatch())
+                preferredCode = match.captured(1).toUpper();
+        }
+        for (const QVariant &value : m_uefiEntries) {
+            const QVariantMap row = value.toMap();
+            if (row.value(QStringLiteral("code")).toString() == preferredCode) {
+                m_nextUefiBootLabel = row.value(QStringLiteral("label")).toString();
+                break;
+            }
+        }
+        if (m_nextUefiBootLabel.isEmpty() && !preferredCode.isEmpty())
+            m_nextUefiBootLabel = preferredCode;
         m_bootEntriesError.clear();
         emit bootEntriesChanged();
     });
@@ -224,6 +257,7 @@ void SystemBackend::refreshUefiEntries()
         guard->deleteLater();
         m_bootEntriesBusy = false;
         m_uefiEntries.clear();
+        m_nextUefiBootLabel.clear();
         m_bootEntriesError = tr("Impossibile avviare efibootmgr.");
         emit bootEntriesChanged();
     });
@@ -350,6 +384,8 @@ bool SystemBackend::selectNextGrub(const QString &value)
 
 SystemBackend::~SystemBackend()
 {
+    if (m_internetIdentityReply && m_internetIdentityReply->isRunning())
+        m_internetIdentityReply->abort();
     if (m_backupRunner && m_backupRunner->running())
         m_backupRunner->cancel();
     if (!m_backupPartialPath.isEmpty())
@@ -439,6 +475,8 @@ void SystemBackend::refreshDashboardState()
     refreshServiceStates();
     refreshTopMemoryProcesses();
     refreshNetworkState();
+    if (uefiBootAvailable())
+        refreshUefiEntries();
 }
 
 void SystemBackend::refreshTopMemoryProcesses()
@@ -532,6 +570,7 @@ void SystemBackend::refreshTopMemoryProcesses()
 void SystemBackend::refreshNetworkState()
 {
     QString selectedInterface;
+    QString selectedDisplayName;
     QString selectedAddress;
     QString selectedState = QStringLiteral("down");
     QString selectedKind = QStringLiteral("ethernet");
@@ -567,8 +606,9 @@ void SystemBackend::refreshNetworkState()
         if (score <= bestScore)
             continue;
         bestScore = score;
-        selectedInterface = iface.humanReadableName().isEmpty()
-            ? iface.name() : iface.humanReadableName();
+        // Operational APIs such as nmcli require the kernel interface name.
+        selectedInterface = iface.name();
+        selectedDisplayName = iface.humanReadableName().isEmpty() ? iface.name() : iface.humanReadableName();
         selectedAddress = !ipv4.isEmpty() ? ipv4 : ipv6;
         selectedState = !ipv4.isEmpty() ? QStringLiteral("ipv4")
                       : !ipv6.isEmpty() ? QStringLiteral("ipv6")
@@ -578,12 +618,14 @@ void SystemBackend::refreshNetworkState()
     }
 
     if (selectedInterface == m_networkInterface
+        && selectedDisplayName == m_networkDisplayName
         && selectedAddress == m_networkAddress
         && selectedState == m_networkState
         && selectedKind == m_networkKind)
         return;
 
     m_networkInterface = selectedInterface;
+    m_networkDisplayName = selectedDisplayName;
     m_networkAddress = selectedAddress;
     m_networkState = selectedState;
     m_networkKind = selectedKind;
@@ -691,9 +733,131 @@ bool SystemBackend::launchTool(const QString &toolId) const
     return info.exists() && info.isExecutable() && QProcess::startDetached(program, {});
 }
 
-bool SystemBackend::openWebConsole() const
+bool SystemBackend::cockpitAvailable() const
 {
-    return QDesktopServices::openUrl(QUrl(QStringLiteral("https://localhost:9090")));
+    return !resolveExecutable(QStringLiteral("cockpit-ws")).isEmpty()
+        || QFileInfo::exists(QStringLiteral("/usr/lib/systemd/system/cockpit.socket"))
+        || QFileInfo::exists(QStringLiteral("/etc/systemd/system/cockpit.socket"));
+}
+
+bool SystemBackend::openWebConsole()
+{
+    if (!cockpitAvailable()) {
+        notify(tr("Cockpit non disponibile"), tr("La console web non risulta installata."));
+        return false;
+    }
+
+    QDBusInterface manager(QStringLiteral("org.freedesktop.systemd1"),
+                           QStringLiteral("/org/freedesktop/systemd1"),
+                           QStringLiteral("org.freedesktop.systemd1.Manager"),
+                           QDBusConnection::systemBus());
+    if (!manager.isValid()) {
+        notify(tr("Cockpit non disponibile"), tr("systemd non è disponibile sul bus di sistema."));
+        return false;
+    }
+
+    manager.setInteractiveAuthorizationAllowed(true);
+    auto *watcher = new QDBusPendingCallWatcher(        manager.asyncCall(QStringLiteral("StartUnit"),
+                          QStringLiteral("cockpit.socket"),
+                          QStringLiteral("replace")),
+        this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this,
+            [this](QDBusPendingCallWatcher *call) {
+        const QDBusPendingReply<QDBusObjectPath> reply(*call);
+        call->deleteLater();
+        if (reply.isError()) {
+            notify(tr("Avvio Cockpit non riuscito"), reply.error().message());
+            return;
+        }
+        if (!QDesktopServices::openUrl(QUrl(QStringLiteral("https://localhost:9090"))))
+            notify(tr("Apertura Cockpit non riuscita"), tr("Impossibile aprire il browser predefinito."));
+    });
+    return true;
+}
+
+bool SystemBackend::vacuumJournal()
+{
+    if (!m_polkit || m_polkit->running() || m_adminMaintenanceOwned)
+        return false;
+    m_adminMaintenanceOwned = true;
+    m_adminMaintenanceOperation = QStringLiteral("journal-vacuum");
+    m_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin"), {QStringLiteral("journal-vacuum")});
+    return true;
+}
+
+bool SystemBackend::cleanDnfCache()
+{
+    if (!m_polkit || m_polkit->running() || m_adminMaintenanceOwned)
+        return false;
+    m_adminMaintenanceOwned = true;
+    m_adminMaintenanceOperation = QStringLiteral("dnf-clean");
+    m_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin"), {QStringLiteral("dnf-clean")});
+    return true;
+}
+
+void SystemBackend::checkInternetIdentity()
+{
+    if (m_internetIdentityBusy || !m_networkAccess)
+        return;
+
+    QStringList dnsServers;
+    const QStringList resolverFiles = {
+        QStringLiteral("/run/systemd/resolve/resolv.conf"),
+        QStringLiteral("/etc/resolv.conf")
+    };
+    for (const QString &path : resolverFiles) {
+        QFile file(path);
+        if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
+            continue;
+        while (!file.atEnd()) {
+            const QString line = QString::fromUtf8(file.readLine()).trimmed();
+            if (!line.startsWith(QStringLiteral("nameserver ")))
+                continue;
+            const QString address = line.section(QLatin1Char(' '), 1, 1).trimmed();
+            if (!address.isEmpty() && !dnsServers.contains(address))
+                dnsServers.append(address);
+        }
+        if (!dnsServers.isEmpty())
+            break;
+    }
+
+    m_internetIdentityBusy = true;
+    m_internetIdentity = tr("Verifica della connessione Internet in corso…");
+    emit internetIdentityChanged();
+
+    QNetworkRequest request(QUrl(QStringLiteral("https://api.ipify.org")));
+    request.setHeader(QNetworkRequest::UserAgentHeader,
+                      QStringLiteral("krisCC/%1").arg(QCoreApplication::applicationVersion()));
+    QNetworkReply *reply = m_networkAccess->get(request);
+    m_internetIdentityReply = reply;
+    QTimer::singleShot(10000, reply, [reply] {
+        if (reply->isRunning())
+            reply->abort();
+    });
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply, dnsServers] {
+        if (m_internetIdentityReply != reply) {
+            reply->deleteLater();
+            return;
+        }
+        m_internetIdentityReply = nullptr;
+        m_internetIdentityBusy = false;
+
+        QString publicAddress;
+        if (reply->error() == QNetworkReply::NoError) {
+            const QString candidate = QString::fromUtf8(reply->readAll()).trimmed();
+            QHostAddress parsed(candidate);
+            if (!parsed.isNull())
+                publicAddress = candidate;
+        }
+
+        const QString dns = dnsServers.isEmpty() ? tr("non disponibile") : dnsServers.join(QStringLiteral(", "));
+        m_internetIdentity = tr("IP pubblico: %1\nDNS in uso: %2")
+                                 .arg(publicAddress.isEmpty() ? tr("non disponibile") : publicAddress,
+                                      dns);
+        reply->deleteLater();
+        emit internetIdentityChanged();
+    });
 }
 
 bool SystemBackend::openNetworkSettings() const
@@ -751,6 +915,10 @@ void SystemBackend::checkControlCenterUpdate()
                          QByteArray("krisCC/") + QCoreApplication::applicationVersion().toUtf8());
 
     QNetworkReply *reply = m_networkAccess->get(request);
+    QTimer::singleShot(15000, reply, [reply] {
+        if (reply->isRunning())
+            reply->abort();
+    });
     connect(reply, &QNetworkReply::finished, this, [this, reply] {
         const auto finishError = [this](const QString &message) {
             m_controlCenterUpdateBusy = false;
@@ -825,7 +993,7 @@ void SystemBackend::refreshServiceStates()
 {
     const quint64 generation = ++m_serviceRefreshGeneration;
     for (const QString &service : allowedServices())
-        m_serviceStates.insert(service, tr("lettura…"));
+        m_serviceStates.insert(service, QStringLiteral("loading"));
     emit serviceStatesChanged();
 
     for (const QString &service : allowedServices()) {
@@ -835,7 +1003,7 @@ void SystemBackend::refreshServiceStates()
                                QDBusConnection::systemBus());
         if (!manager.isValid()) {
             if (generation == m_serviceRefreshGeneration) {
-                m_serviceStates.insert(service, tr("non disponibile"));
+                m_serviceStates.insert(service, QStringLiteral("missing"));
                 emit serviceStatesChanged();
             }
             continue;
@@ -851,7 +1019,7 @@ void SystemBackend::refreshServiceStates()
                 return;
 
             if (unitReply.isError()) {
-                m_serviceStates.insert(service, tr("non disponibile"));
+                m_serviceStates.insert(service, QStringLiteral("missing"));
                 emit serviceStatesChanged();
                 return;
             }
@@ -861,7 +1029,7 @@ void SystemBackend::refreshServiceStates()
                                       QStringLiteral("org.freedesktop.DBus.Properties"),
                                       QDBusConnection::systemBus());
             if (!properties.isValid()) {
-                m_serviceStates.insert(service, tr("sconosciuto"));
+                m_serviceStates.insert(service, QStringLiteral("unknown"));
                 emit serviceStatesChanged();
                 return;
             }
@@ -881,7 +1049,7 @@ void SystemBackend::refreshServiceStates()
                 m_serviceStates.insert(
                     service,
                     stateReply.isError()
-                        ? tr("sconosciuto")
+                        ? QStringLiteral("unknown")
                         : stateReply.value().variant().toString());
                 emit serviceStatesChanged();
             });
@@ -891,54 +1059,99 @@ void SystemBackend::refreshServiceStates()
 
 bool SystemBackend::startService(const QString &service)
 {
-    if (!allowedServices().contains(service))
+    if (!allowedServices().contains(service)) {
+        notify(tr("Avvio servizio non riuscito"), tr("Servizio non autorizzato dal Control Center: %1").arg(service));
         return false;
+    }
     QDBusInterface manager(QStringLiteral("org.freedesktop.systemd1"), QStringLiteral("/org/freedesktop/systemd1"),
                            QStringLiteral("org.freedesktop.systemd1.Manager"), QDBusConnection::systemBus());
-    if (!manager.isValid()) return false;
+    if (!manager.isValid()) {
+        notify(tr("Avvio servizio non riuscito"), tr("systemd non è disponibile sul bus di sistema."));
+        return false;
+    }
     manager.setInteractiveAuthorizationAllowed(true);
-    manager.asyncCall(QStringLiteral("StartUnit"), service, QStringLiteral("replace"));
-    QTimer::singleShot(500, this, &SystemBackend::refreshServiceStates);
+    auto *watcher = new QDBusPendingCallWatcher(
+        manager.asyncCall(QStringLiteral("StartUnit"), service, QStringLiteral("replace")), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, service](QDBusPendingCallWatcher *call) {
+        const QDBusPendingReply<QDBusObjectPath> reply(*call);
+        notify(reply.isError() ? tr("Avvio servizio non riuscito") : tr("Servizio avviato"),
+               reply.isError() ? reply.error().message() : service);
+        call->deleteLater();
+        QTimer::singleShot(400, this, &SystemBackend::refreshServiceStates);
+    });
     return true;
 }
 
 bool SystemBackend::stopService(const QString &service)
 {
-    if (!allowedServices().contains(service))
+    if (!allowedServices().contains(service)) {
+        notify(tr("Arresto servizio non riuscito"), tr("Servizio non autorizzato dal Control Center: %1").arg(service));
         return false;
+    }
     QDBusInterface manager(QStringLiteral("org.freedesktop.systemd1"), QStringLiteral("/org/freedesktop/systemd1"),
                            QStringLiteral("org.freedesktop.systemd1.Manager"), QDBusConnection::systemBus());
-    if (!manager.isValid()) return false;
+    if (!manager.isValid()) {
+        notify(tr("Arresto servizio non riuscito"), tr("systemd non è disponibile sul bus di sistema."));
+        return false;
+    }
     manager.setInteractiveAuthorizationAllowed(true);
-    manager.asyncCall(QStringLiteral("StopUnit"), service, QStringLiteral("replace"));
-    QTimer::singleShot(500, this, &SystemBackend::refreshServiceStates);
+    auto *watcher = new QDBusPendingCallWatcher(
+        manager.asyncCall(QStringLiteral("StopUnit"), service, QStringLiteral("replace")), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, service](QDBusPendingCallWatcher *call) {
+        const QDBusPendingReply<QDBusObjectPath> reply(*call);
+        notify(reply.isError() ? tr("Arresto servizio non riuscito") : tr("Servizio arrestato"),
+               reply.isError() ? reply.error().message() : service);
+        call->deleteLater();
+        QTimer::singleShot(400, this, &SystemBackend::refreshServiceStates);
+    });
     return true;
 }
 
 bool SystemBackend::resetFailedService(const QString &service)
 {
-    if (!allowedServices().contains(service))
+    if (!allowedServices().contains(service)) {
+        notify(tr("Reset stato fallito non riuscito"), tr("Servizio non autorizzato dal Control Center: %1").arg(service));
         return false;
-    QDBusInterface manager(QStringLiteral("org.freedesktop.systemd1"), QStringLiteral("/org/freedesktop/systemd1"),
-                           QStringLiteral("org.freedesktop.systemd1.Manager"), QDBusConnection::systemBus());
-    if (!manager.isValid()) return false;
+    }
+    QDBusInterface manager(QStringLiteral("org.freedesktop.systemd1"),
+                           QStringLiteral("/org/freedesktop/systemd1"),
+                           QStringLiteral("org.freedesktop.systemd1.Manager"),
+                           QDBusConnection::systemBus());
+    if (!manager.isValid()) {
+        notify(tr("Reset stato fallito non riuscito"), tr("systemd non è disponibile sul bus di sistema."));
+        return false;
+    }
     manager.setInteractiveAuthorizationAllowed(true);
-    manager.asyncCall(QStringLiteral("ResetFailedUnit"), service);
-    QTimer::singleShot(500, this, &SystemBackend::refreshServiceStates);
+
+    auto *watcher = new QDBusPendingCallWatcher(
+        manager.asyncCall(QStringLiteral("ResetFailedUnit"), service), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this,
+            [this, service](QDBusPendingCallWatcher *call) {
+        const QDBusPendingReply<> reply(*call);
+        notify(reply.isError() ? tr("Reset stato fallito non riuscito")
+                               : tr("Stato fallito reimpostato"),
+               reply.isError() ? reply.error().message() : service);
+        call->deleteLater();
+        QTimer::singleShot(400, this, &SystemBackend::refreshServiceStates);
+    });
     return true;
 }
 
 bool SystemBackend::restartService(const QString &service)
 {
-    if (!allowedServices().contains(service))
+    if (!allowedServices().contains(service)) {
+        notify(tr("Riavvio servizio non riuscito"), tr("Servizio non autorizzato dal Control Center: %1").arg(service));
         return false;
+    }
 
     QDBusInterface manager(QStringLiteral("org.freedesktop.systemd1"),
                            QStringLiteral("/org/freedesktop/systemd1"),
                            QStringLiteral("org.freedesktop.systemd1.Manager"),
                            QDBusConnection::systemBus());
-    if (!manager.isValid())
+    if (!manager.isValid()) {
+        notify(tr("Riavvio servizio non riuscito"), tr("systemd non è disponibile sul bus di sistema."));
         return false;
+    }
     manager.setInteractiveAuthorizationAllowed(true);
 
     auto *watcher = new QDBusPendingCallWatcher(
@@ -1058,12 +1271,18 @@ bool SystemBackend::setBackupDirectory(const QString &pathOrUrl)
         return false;
 
     QDir directory(localPath);
-    if (!directory.exists() && !directory.mkpath(QStringLiteral(".")))
+    if (!directory.exists() && !directory.mkpath(QStringLiteral("."))) {
+        setBackupResult(tr("La cartella backup non è disponibile o scrivibile."),
+                        QString(), QStringLiteral("error"));
         return false;
+    }
 
     QString canonical;
-    if (!validateBackupDirectory(directory.absolutePath(), &canonical))
+    if (!validateBackupDirectory(directory.absolutePath(), &canonical)) {
+        setBackupResult(tr("La cartella backup non è disponibile o scrivibile."),
+                        QString(), QStringLiteral("error"));
         return false;
+    }
     if (m_backupDirectory == canonical)
         return true;
 
@@ -1309,7 +1528,7 @@ bool SystemBackend::restoreSnapshot(const QString &path)
     m_backupRunner = preflight;
     connect(preflight, &ProcessRunner::finished, this,
             [this, preflight, canonical, startRestore](ProcessRunner::Outcome outcome, int,
-                                                       const QByteArray &,
+                                                       const QByteArray &stdoutData,
                                                        const QByteArray &stderrData,
                                                        const QString &errorString) {
         if (preflight != m_backupRunner)
@@ -1318,7 +1537,65 @@ bool SystemBackend::restoreSnapshot(const QString &path)
         preflight->deleteLater();
 
         if (outcome == ProcessRunner::Success) {
-            startRestore();
+            const QStringList members = QString::fromUtf8(stdoutData).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+            for (const QString &member : members) {
+                if (!Validators::archiveMemberPath(member.trimmed())) {
+                    setBackupBusy(false);
+                    setBackupResult(tr("Ripristino bloccato: percorso archivio non sicuro: %1").arg(member.left(160)),
+                                    canonical, QStringLiteral("error"));
+                    OperationLog::append(QStringLiteral("Backup"), QStringLiteral("restore"),
+                                         QStringLiteral("error"), QFileInfo(canonical).fileName());
+                    return;
+                }
+            }
+
+            auto *typeCheck = new ProcessRunner(this);
+            m_backupRunner = typeCheck;
+            connect(typeCheck, &ProcessRunner::finished, this,
+                    [this, typeCheck, canonical, startRestore](ProcessRunner::Outcome typeOutcome, int,
+                                                               const QByteArray &typeStdout,
+                                                               const QByteArray &typeStderr,
+                                                               const QString &typeError) {
+                if (typeCheck != m_backupRunner)
+                    return;
+                m_backupRunner = nullptr;
+                typeCheck->deleteLater();
+                if (typeOutcome == ProcessRunner::Success) {
+                    const QStringList entries = QString::fromUtf8(typeStdout).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
+                    for (const QString &entry : entries) {
+                        if (!Validators::archiveVerboseEntry(entry)) {
+                            setBackupBusy(false);
+                            setBackupResult(tr("Ripristino bloccato: tipo o collegamento archivio non sicuro."),
+                                            canonical, QStringLiteral("error"));
+                            OperationLog::append(QStringLiteral("Backup"), QStringLiteral("restore"),
+                                                 QStringLiteral("error"), QFileInfo(canonical).fileName());
+                            return;
+                        }
+                    }
+                    startRestore();
+                    return;
+                }
+                setBackupBusy(false);
+                const QString details = QString::fromUtf8(typeStderr).trimmed();
+                setBackupResult(details.isEmpty() ? tr("Ripristino bloccato: impossibile validare i tipi dei membri dell'archivio.")
+                                                  : details,
+                                canonical, QStringLiteral("error"));
+                if (typeOutcome == ProcessRunner::FailedToStart && !typeError.isEmpty())
+                    setBackupResult(tr("Impossibile avviare la verifica dei tipi: %1").arg(typeError), canonical, QStringLiteral("error"));
+            });
+            ProcessRunner::Options typeOptions;
+            typeOptions.program = resolveExecutable(QStringLiteral("tar"));
+            typeOptions.arguments = {QStringLiteral("-tvzf"), canonical, QStringLiteral("--numeric-owner")};
+            typeOptions.timeoutMs = kBackupVerifyTimeoutMs;
+            typeOptions.maxOutputBytes = 256 * 1024;
+            typeOptions.mergedChannels = false;
+            typeOptions.processGroup = true;
+            if (!typeCheck->start(typeOptions)) {
+                m_backupRunner = nullptr;
+                typeCheck->deleteLater();
+                setBackupBusy(false);
+                setBackupResult(tr("Impossibile inizializzare la verifica dei tipi dell'archivio."), canonical, QStringLiteral("error"));
+            }
             return;
         }
 
@@ -1361,11 +1638,6 @@ bool SystemBackend::restoreSnapshot(const QString &path)
     return true;
 }
 
-QString SystemBackend::operationHistory() const
-{
-    return OperationLog::recent(50);
-}
-
 QVariantList SystemBackend::operationHistoryEntries() const
 {
     QVariantList result;
@@ -1381,7 +1653,7 @@ QVariantList SystemBackend::operationHistoryEntries() const
     }
 
     int emitted = 0;
-    for (qsizetype i = lines.size(); i > 0 && emitted < 50; --i) {
+    for (qsizetype i = lines.size(); i > 0 && emitted < 20; --i) {
         QJsonParseError error;
         const QJsonDocument document = QJsonDocument::fromJson(lines.at(i - 1), &error);
         if (error.error != QJsonParseError::NoError || !document.isObject())
@@ -1484,8 +1756,7 @@ bool SystemBackend::createSnapshot(const QString &kind)
             args << QStringLiteral("--exclude=./") + QFileInfo(output).fileName();
         } else if (!canonicalHome.isEmpty()
                    && canonicalBackupRoot.startsWith(canonicalHome + QLatin1Char('/'))) {
-            const QString relativeBackup = QDir(canonicalHome).relativeFilePath(canonicalBackupRoot);
-            if (!relativeBackup.isEmpty() && relativeBackup != QStringLiteral("."))
+            const QString relativeBackup = QDir(canonicalHome).relativeFilePath(canonicalBackupRoot);            if (!relativeBackup.isEmpty() && relativeBackup != QStringLiteral("."))
                 args << QStringLiteral("--exclude=./") + relativeBackup;
         }
         args << QStringLiteral("-C") << home << QStringLiteral(".");
@@ -1602,8 +1873,11 @@ bool SystemBackend::deleteSnapshot(const QString &path)
     if (!validateBackupPath(path, &canonical))
         return false;
     const QString name = QFileInfo(canonical).fileName();
-    if (!QFile::remove(canonical))
+    if (!QFile::remove(canonical)) {
+        setBackupResult(tr("Impossibile eliminare il backup: %1.").arg(name),
+                        QString(), QStringLiteral("error"));
         return false;
+    }
     OperationLog::append(QStringLiteral("Backup"), QStringLiteral("delete"),
                          QStringLiteral("success"), name);
     setBackupResult(tr("Backup eliminato."), QString(), QStringLiteral("success"));

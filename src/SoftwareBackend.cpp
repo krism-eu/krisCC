@@ -1,6 +1,7 @@
 #include "SoftwareBackend.h"
 
 #include "PolkitHelper.h"
+#include "Validators.h"
 
 #include <QFileInfo>
 #include <QJsonArray>
@@ -46,27 +47,6 @@ bool SoftwareBackend::canModifyRepositories() const
 {
     return !m_busy && m_polkit && !m_polkit->running() && !m_operationRunning;
 }
-
-bool SoftwareBackend::validRepositoryId(const QString &repoId) const
-{
-    static const QRegularExpression pattern(
-        QStringLiteral("^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"));
-    return pattern.match(repoId.trimmed()).hasMatch();
-}
-
-bool SoftwareBackend::validRepositoryUrl(const QString &value) const
-{
-    const QString urlText = value.trimmed();
-    if (urlText.isEmpty() || urlText.size() > 2048
-        || urlText.contains(QRegularExpression(QStringLiteral("[\\s\\x00-\\x1f]"))))
-        return false;
-    const QUrl url(urlText);
-    return url.isValid()
-        && url.scheme() == QStringLiteral("https")
-        && !url.host().isEmpty()
-        && url.userInfo().isEmpty();
-}
-
 bool SoftwareBackend::startPrivileged(const QStringList &args)
 {
     if (!canModifyRepositories())
@@ -84,7 +64,7 @@ bool SoftwareBackend::startPrivileged(const QStringList &args)
 bool SoftwareBackend::enableRepository(const QString &repoId)
 {
     const QString id = repoId.trimmed();
-    if (!validRepositoryId(id)) {
+    if (!Validators::repositoryId(id)) {
         setError(tr("Identificatore repository non valido."));
         return false;
     }
@@ -94,7 +74,7 @@ bool SoftwareBackend::enableRepository(const QString &repoId)
 bool SoftwareBackend::disableRepository(const QString &repoId)
 {
     const QString id = repoId.trimmed();
-    if (!validRepositoryId(id)) {
+    if (!Validators::repositoryId(id)) {
         setError(tr("Identificatore repository non valido."));
         return false;
     }
@@ -104,7 +84,7 @@ bool SoftwareBackend::disableRepository(const QString &repoId)
 bool SoftwareBackend::addRepository(const QString &value)
 {
     const QString url = value.trimmed();
-    if (!validRepositoryUrl(url)) {
+    if (!Validators::repositoryUrl(url)) {
         setError(tr("Repository non aggiunto: usa un URL HTTPS valido."));
         return false;
     }

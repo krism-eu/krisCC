@@ -1,5 +1,5 @@
 Name:           krisCC
-Version:        0.7.7
+Version:        0.7.8
 Release:        1%{?dist}
 Summary:        krisCC personal control center for KrisOS and Fedora bootc
 License:        MIT
@@ -56,6 +56,14 @@ delegated to a dedicated external application.
 %{_datadir}/icons/hicolor/scalable/apps/krisCC.svg
 
 %changelog
+* Thu Sep 24 2026 krism-eu - 0.7.8-1
+- Finalize dashboard/sidebar and System & Boot layout without changing Avvio e dischi
+- Consolidate repair, cleanup and diagnostics under Strumenti & Fix
+- Simplify Services & Network and expose public IP / active DNS inspection
+- Add informative next-EFI-boot tile and bounded operation history
+- Harden Cockpit on-demand activation, service feedback and backup/restore contracts
+- Reduce archived journal vacuum target to 16 MiB
+
 * Thu Sep 24 2026 krism-eu - 0.7.7-1
 - Recast krisCC as an operational Swiss Army control center with Tools & Fix and Services & Network
 - Remove internal Podman/container management completely

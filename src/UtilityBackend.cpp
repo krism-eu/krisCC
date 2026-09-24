@@ -148,8 +148,6 @@ bool UtilityBackend::runBookmark(const QString &id)
 {
     if (id == QStringLiteral("pipewire-restart"))
         return start(QStringLiteral("systemctl"), {QStringLiteral("--user"), QStringLiteral("restart"), QStringLiteral("pipewire"), QStringLiteral("pipewire-pulse"), QStringLiteral("wireplumber")}, tr("Riavvio Audio PipeWire"), QStringLiteral("bookmark.pipewire-restart"), kShortQueryTimeoutMs);
-    if (id == QStringLiteral("journal-vacuum"))
-        return start(QStringLiteral("journalctl"), {QStringLiteral("--vacuum-size=100M")}, tr("Pulizia Journal Systemd"), QStringLiteral("bookmark.journal-vacuum"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("dns-flush"))
         return start(QStringLiteral("resolvectl"), {QStringLiteral("flush-caches")}, tr("Svuota cache DNS"), QStringLiteral("repair.dns-flush"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("cleanup-estimate")) {
@@ -161,12 +159,8 @@ bool UtilityBackend::runBookmark(const QString &id)
         return start(QStringLiteral("/usr/bin/bash"), {QStringLiteral("-c"), script},
                      tr("Stima spazio recuperabile"), QStringLiteral("cleanup.estimate"), kShortQueryTimeoutMs);
     }
-    if (id == QStringLiteral("dnf-clean"))
-        return start(QStringLiteral("dnf5"), {QStringLiteral("clean"), QStringLiteral("all")}, tr("Pulizia cache DNF5"), QStringLiteral("cleanup.dnf"), kRepositoryQueryTimeoutMs);
     if (id == QStringLiteral("flatpak-unused"))
         return start(QStringLiteral("flatpak"), {QStringLiteral("uninstall"), QStringLiteral("--user"), QStringLiteral("--unused"), QStringLiteral("--noninteractive"), QStringLiteral("--assumeyes")}, tr("Rimozione runtime Flatpak inutilizzati"), QStringLiteral("cleanup.flatpak"), kRepositoryQueryTimeoutMs);
-    if (id == QStringLiteral("vainfo"))
-        return start(QStringLiteral("vainfo"), {QStringLiteral("--display"), QStringLiteral("drm"), QStringLiteral("--device"), QStringLiteral("/dev/dri/renderD128")}, tr("Accelerazione video VA-API"), QStringLiteral("diagnostic.vainfo"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("gpu-driver"))
         return start(QStringLiteral("glxinfo"), {QStringLiteral("-B")}, tr("Info Driver GPU"), QStringLiteral("bookmark.gpu-driver"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("vulkan-info"))
