@@ -269,6 +269,7 @@ Kirigami.ScrollablePage {
         modal: true
         parent: Controls.Overlay.overlay
         anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
         title: qsTr("Svuotare i cestini selezionati?")
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label { wrapMode: Text.WordWrap; text: qsTr("L'operazione elimina definitivamente gli elementi dal cestino selezionato.") }
