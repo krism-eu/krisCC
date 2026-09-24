@@ -45,8 +45,6 @@ signals:
 private:
     void setBusy(bool busy);
     void setError(const QString &error);
-    bool validRepositoryId(const QString &repoId) const;
-    bool validRepositoryUrl(const QString &url) const;
     bool startPrivileged(const QStringList &args);
 
     PolkitHelper *m_polkit = nullptr;

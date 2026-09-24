@@ -117,7 +117,10 @@ public:
     Q_INVOKABLE void requestReboot();
     Q_INVOKABLE void requestFirmwareReboot();
     Q_INVOKABLE QStringList kernelArguments() const;
-    Q_INVOKABLE bool openWebConsole() const;
+    Q_INVOKABLE bool cockpitAvailable() const;
+    Q_INVOKABLE bool openWebConsole();
+    Q_INVOKABLE bool vacuumJournal();
+    Q_INVOKABLE bool cleanDnfCache();
     Q_INVOKABLE bool openNetworkSettings() const;
     Q_INVOKABLE void setResourceMonitoringEnabled(bool enabled);
     Q_INVOKABLE void refreshUefiEntries();
@@ -154,6 +157,7 @@ signals:
     void topMemoryProcessesChanged();
     void networkChanged();
     void controlCenterUpdateChanged();
+    void adminMaintenanceFinished(const QString &operation, bool success, const QString &output);
 
 private:
     QString readOsName() const;
@@ -174,6 +178,8 @@ private:
     PolkitHelper *m_polkit = nullptr;
     QNetworkAccessManager *m_networkAccess = nullptr;
     bool m_bootSelectionOwned = false;
+    bool m_adminMaintenanceOwned = false;
+    QString m_adminMaintenanceOperation;
     bool m_bootSelectionRunning = false;
     QString m_bootSelectionKind;
     QString m_bootSelectionState = QStringLiteral("idle");

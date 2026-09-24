@@ -13,36 +13,71 @@ Kirigami.ScrollablePage {
     property var cleanupQueue: []
     property int cleanupTotal: 0
     property int cleanupDone: 0
+    property string cleanupErrors: ""
+    property string cleanupCurrent: ""
 
     function runNextCleanup() {
         if (utility.busy || MaintenanceBackend.running || cleanupQueue.length === 0)
             return
         var id = cleanupQueue.shift()
+        cleanupCurrent = id
+        var started = true
         if (id === "trash")
-            MaintenanceBackend.cleanTrash("all")
+            started = MaintenanceBackend.cleanTrash("all")
+        else if (id === "journal-vacuum")
+            started = SystemBackend.vacuumJournal()
+        else if (id === "dnf-clean")
+            started = SystemBackend.cleanDnfCache()
         else
-            utility.runBookmark(id)
+            started = utility.runBookmark(id)
+        if (!started) {
+            cleanupErrors += (cleanupErrors.length ? "\n" : "") + id + ": " + qsTr("impossibile avviare")
+            Qt.callLater(root.cleanupStepFinished)
+        }
     }
 
     function cleanupStepFinished() {
         if (cleanupTotal > 0 && cleanupDone < cleanupTotal)
             cleanupDone++
-        if (cleanupQueue.length > 0)
+        if (cleanupQueue.length > 0) {
             Qt.callLater(root.runNextCleanup)
+        } else {
+            cleanupCurrent = ""
+            cleanupTotal = 0
+            cleanupDone = 0
+        }
     }
 
     Connections {
         target: utility
         function onStateChanged() {
-            if (!utility.busy && root.cleanupTotal > 0)
+            if (!utility.busy && root.cleanupTotal > 0 && root.cleanupCurrent.length > 0
+                    && root.cleanupCurrent !== "trash" && root.cleanupCurrent !== "journal-vacuum" && root.cleanupCurrent !== "dnf-clean") {
+                if (utility.resultState !== "success")
+                    root.cleanupErrors += (root.cleanupErrors.length ? "\n" : "") + root.cleanupCurrent + ": " + utility.output
+                root.cleanupCurrent = ""
                 root.cleanupStepFinished()
+            }
         }
     }
     Connections {
         target: MaintenanceBackend
         function onFinished(success, output) {
-            if (root.cleanupTotal > 0)
+            if (root.cleanupTotal > 0 && root.cleanupCurrent === "trash") {
+                if (!success) root.cleanupErrors += (root.cleanupErrors.length ? "\n" : "") + "trash: " + output
+                root.cleanupCurrent = ""
                 root.cleanupStepFinished()
+            }
+        }
+    }
+    Connections {
+        target: SystemBackend
+        function onAdminMaintenanceFinished(operation, success, output) {
+            if (root.cleanupTotal > 0 && root.cleanupCurrent === operation) {
+                if (!success) root.cleanupErrors += (root.cleanupErrors.length ? "\n" : "") + operation + ": " + output
+                root.cleanupCurrent = ""
+                root.cleanupStepFinished()
+            }
         }
     }
 
@@ -98,16 +133,8 @@ Kirigami.ScrollablePage {
                         text: qsTr("Avvia pulizia selezionata")
                         icon.name: "edit-clear"
                         enabled: !utility.busy && !MaintenanceBackend.running
-                        onClicked: {
-                            root.cleanupQueue = []
-                            root.cleanupDone = 0
-                            if (trash.checked) root.cleanupQueue.push("trash")
-                            if (journal.checked) root.cleanupQueue.push("journal-vacuum")
-                            if (dnf.checked) root.cleanupQueue.push("dnf-clean")
-                            if (flatpak.checked) root.cleanupQueue.push("flatpak-unused")
-                            root.cleanupTotal = root.cleanupQueue.length
-                            root.runNextCleanup()
-                        }
+                                 && (trash.checked || journal.checked || dnf.checked || flatpak.checked)
+                        onClicked: cleanupConfirmDialog.open()
                     }
                 }
                 Controls.ProgressBar {
@@ -123,6 +150,12 @@ Kirigami.ScrollablePage {
                     opacity: UiMetrics.secondaryOpacity
                 }
                 Controls.Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: utility.output.length > 0 ? utility.output : MaintenanceBackend.output }
+                Kirigami.InlineMessage {
+                    Layout.fillWidth: true
+                    visible: root.cleanupErrors.length > 0
+                    type: Kirigami.MessageType.Warning
+                    text: qsTr("Pulizia parziale:\n") + root.cleanupErrors
+                }
             }
         }
 
@@ -139,4 +172,44 @@ Kirigami.ScrollablePage {
             }
         }
     }
+    Controls.Dialog {
+        id: cleanupConfirmDialog
+        modal: true
+        parent: Controls.Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30,
+                        parent ? parent.width - Kirigami.Units.largeSpacing * 2
+                               : Kirigami.Units.gridUnit * 30)
+        title: qsTr("Avviare la pulizia selezionata?")
+        standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
+
+        function selectedList() {
+            var items = []
+            if (trash.checked) items.push(qsTr("Cestini utente e volumi"))
+            if (journal.checked) items.push(qsTr("Journal oltre 100 MiB"))
+            if (dnf.checked) items.push(qsTr("Cache DNF5"))
+            if (flatpak.checked) items.push(qsTr("Runtime Flatpak inutilizzati"))
+            return items.join("\n• ")
+        }
+
+        contentItem: Controls.Label {
+            wrapMode: Text.WordWrap
+            text: qsTr("Verranno eseguite le seguenti operazioni:\n• %1\n\nLa pulizia dei cestini è irreversibile.")
+                  .arg(cleanupConfirmDialog.selectedList())
+        }
+
+        onAccepted: {
+            root.cleanupQueue = []
+            root.cleanupDone = 0
+            root.cleanupErrors = ""
+            root.cleanupCurrent = ""
+            if (trash.checked) root.cleanupQueue.push("trash")
+            if (journal.checked) root.cleanupQueue.push("journal-vacuum")
+            if (dnf.checked) root.cleanupQueue.push("dnf-clean")
+            if (flatpak.checked) root.cleanupQueue.push("flatpak-unused")
+            root.cleanupTotal = root.cleanupQueue.length
+            root.runNextCleanup()
+        }
+    }
+
 }

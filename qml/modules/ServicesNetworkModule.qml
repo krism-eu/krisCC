@@ -10,6 +10,9 @@ Kirigami.ScrollablePage {
     title: qsTr("Servizi & Rete")
     RepairBackend { id: repair }
     UtilityBackend { id: diagnostic }
+    property string pendingService: ""
+    property string pendingAction: ""
+    property string pendingServiceTitle: ""
     property var services: [
         { id: "NetworkManager.service", title: qsTr("Rete") },
         { id: "bluetooth.service", title: qsTr("Bluetooth") },
@@ -35,10 +38,36 @@ Kirigami.ScrollablePage {
                         Layout.fillWidth: true
                         Controls.Label { Layout.fillWidth: true; text: modelData.title }
                         Controls.Label { Layout.preferredWidth: 120; text: SystemBackend.serviceStates[modelData.id] || qsTr("lettura…") }
-                        Controls.Button { text: qsTr("Avvia"); enabled: SystemBackend.serviceStates[modelData.id] !== "non disponibile"; onClicked: SystemBackend.startService(modelData.id) }
-                        Controls.Button { text: qsTr("Ferma"); enabled: SystemBackend.serviceStates[modelData.id] !== "non disponibile"; onClicked: SystemBackend.stopService(modelData.id) }
-                        Controls.Button { text: qsTr("Riavvia"); enabled: SystemBackend.serviceStates[modelData.id] !== "non disponibile"; onClicked: SystemBackend.restartService(modelData.id) }
-                        Controls.Button { text: qsTr("Reset"); visible: SystemBackend.serviceStates[modelData.id] === "failed"; onClicked: SystemBackend.resetFailedService(modelData.id) }
+                        Controls.Button {
+                            text: qsTr("Avvia")
+                            enabled: SystemBackend.serviceStates[modelData.id] !== "non disponibile"
+                            onClicked: { root.pendingService = modelData.id; root.pendingServiceTitle = modelData.title; root.pendingAction = "start"; serviceConfirmDialog.open() }
+                        }
+                        Controls.Button {
+                            text: qsTr("Ferma")
+                            enabled: SystemBackend.serviceStates[modelData.id] !== "non disponibile"
+                            onClicked: { root.pendingService = modelData.id; root.pendingServiceTitle = modelData.title; root.pendingAction = "stop"; serviceConfirmDialog.open() }
+                        }
+                        Controls.Button {
+                            text: qsTr("Riavvia")
+                            enabled: SystemBackend.serviceStates[modelData.id] !== "non disponibile"
+                            onClicked: {
+                                root.pendingService = modelData.id
+                                root.pendingServiceTitle = modelData.title
+                                root.pendingAction = "restart"
+                                serviceConfirmDialog.open()
+                            }
+                        }
+                        Controls.Button {
+                            text: qsTr("Reset")
+                            visible: SystemBackend.serviceStates[modelData.id] === "failed"
+                            onClicked: {
+                                root.pendingService = modelData.id
+                                root.pendingServiceTitle = modelData.title
+                                root.pendingAction = "reset"
+                                serviceConfirmDialog.open()
+                            }
+                        }
                     }
                 }
             }
@@ -84,6 +113,39 @@ Kirigami.ScrollablePage {
                 Controls.Button { text: qsTr("Svuota cache DNS"); enabled: !repair.busy; onClicked: repair.flushDns() }
                 Controls.Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: repair.output }
             }
+        }
+    }
+
+    Controls.Dialog {
+        id: serviceConfirmDialog
+        modal: true
+        parent: Controls.Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
+        title: root.pendingAction === "stop"
+               ? qsTr("Fermare %1?").arg(root.pendingServiceTitle)
+               : root.pendingAction === "restart"
+                 ? qsTr("Riavviare %1?").arg(root.pendingServiceTitle)
+                 : root.pendingAction === "reset"
+                   ? qsTr("Reimpostare lo stato fallito di %1?").arg(root.pendingServiceTitle)
+                   : qsTr("Avviare %1?").arg(root.pendingServiceTitle)
+        standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
+        contentItem: Controls.Label {
+            wrapMode: Text.WordWrap
+            text: root.pendingService === "sshd.service"
+                  && (root.pendingAction === "stop" || root.pendingAction === "restart")
+                  ? qsTr("Attenzione: fermare o riavviare SSH può interrompere immediatamente una sessione remota attiva.")
+                  : qsTr("Conferma l'operazione sul servizio selezionato.")
+        }
+        onAccepted: {
+            if (root.pendingAction === "stop")
+                SystemBackend.stopService(root.pendingService)
+            else if (root.pendingAction === "restart")
+                SystemBackend.restartService(root.pendingService)
+            else if (root.pendingAction === "reset")
+                SystemBackend.resetFailedService(root.pendingService)
+            else
+                SystemBackend.startService(root.pendingService)
         }
     }
 }

@@ -34,6 +34,12 @@ std::optional<AdminPolicy::Command> AdminPolicy::resolve(const QStringList &requ
         if (operation == QStringLiteral("rk-sync"))
             return Command{QStringLiteral("/usr/bin/rk"),
                            {QStringLiteral("sync")}, kLongTimeoutMs};
+        if (operation == QStringLiteral("journal-vacuum"))
+            return Command{QStringLiteral("/usr/bin/journalctl"),
+                           {QStringLiteral("--vacuum-size=100M")}, kShortTimeoutMs};
+        if (operation == QStringLiteral("dnf-clean"))
+            return Command{QStringLiteral("/usr/bin/dnf5"),
+                           {QStringLiteral("clean"), QStringLiteral("all")}, kRepositoryTimeoutMs};
         return std::nullopt;
     }
 

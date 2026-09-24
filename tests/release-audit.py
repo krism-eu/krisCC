@@ -292,6 +292,8 @@ require('cleanup-estimate' in utility_cpp
         and 'du -sh \\"$HOME/.local/share/Trash\\"' in utility_cpp
         and 'journal-vacuum' in tools_qml
         and 'dnf-clean' in tools_qml
+        and 'QStringLiteral("journal-vacuum")' in admin_policy
+        and 'QStringLiteral("dnf-clean")' in admin_policy
         and 'flatpak-unused' in tools_qml,
         "unified cleanup contract is incomplete")
 require("startService" in system_cpp and "stopService" in system_cpp
@@ -303,7 +305,7 @@ require("requestFirmwareReboot" in system_cpp
         and 'SetRebootToFirmwareSetup' in system_cpp
         and "kernelArguments" in system_cpp,
         "firmware reboot/read-only kernel contract is incomplete")
-require('text: qsTr("Cockpit")' in dashboard_qml
+require('qsTr("Cockpit")' in dashboard_qml
         and "openWebConsole()" in dashboard_qml,
         "Dashboard Cockpit shortcut is missing")
 require('parseDnfListJson("{}")' in contract_parsers_test,
@@ -332,4 +334,53 @@ require("release 0.5.1" not in read("i18n/README.md"), "i18n docs are stale")
 require("auth_admin_keep" not in read("data/org.kriscc.controlcenter.policy"),
         "Polkit retention is forbidden")
 
+require("archiveMemberPath" in read("src/Validators.cpp") and "archiveVerboseEntry" in read("src/Validators.cpp")
+        and 'QStringLiteral("-tvzf")' in system_cpp,
+        "restore preflight must validate archive member paths and types before extraction")
+require("QTimer::singleShot(15000, reply" in system_cpp,
+        "Control Center update check must have a network timeout")
+require("Validators::repositoryId" in read("src/SoftwareBackend.cpp") and "validRepositoryId" not in read("src/SoftwareBackend.h"),
+        "repository validation must use shared Validators")
+require("cockpitAvailable" in system_cpp and "SystemBackend.cockpitAvailable()" in dashboard_qml,
+        "Cockpit shortcut must be capability-gated")
+require("OperationLog::append" in repair_cpp,
+        "RepairBackend mutations must be recorded in operation history")
+
+require('root.pendingAction = "restart"' in services_qml
+        and 'SystemBackend.restartService(root.pendingService)' in services_qml,
+        "service restart must use the shared confirmation dialog")
+require('id: cleanupConfirmDialog' in tools_qml
+        and 'onClicked: cleanupConfirmDialog.open()' in tools_qml
+        and 'La pulizia dei cestini è irreversibile.' in tools_qml,
+        "unified cleanup must require explicit confirmation")
+require('QStringLiteral("ipv4.dns"), QString()' in repair_cpp
+        and 'QStringLiteral("ipv4.ignore-auto-dns"), QStringLiteral("no")' in repair_cpp,
+        "automatic DNS preset must reset manual DNS and re-enable automatic DNS")
+require('Reset stato fallito non riuscito' in system_cpp
+        and 'manager.asyncCall(QStringLiteral("ResetFailedUnit"), service), this' in system_cpp,
+        "ResetFailedUnit errors must be watched and surfaced")
+require('Impossibile eliminare il backup: %1.' in system_cpp
+        and 'La cartella backup non è disponibile o scrivibile.' in system_cpp,
+        "backup mutation failures must be surfaced through backup state")
+
+require('selectedInterface = iface.name();' in system_cpp
+        and 'selectedInterface = iface.humanReadableName()' not in system_cpp,
+        "NetworkManager mutations must use the kernel interface name")
+require('Interfaccia di rete non valida.' in repair_cpp
+        and 'bool RepairBackend::fail' in repair_cpp,
+        "network repair validation failures must be surfaced")
+require('root.pendingAction = "reset"' in services_qml
+        and 'SystemBackend.resetFailedService(root.pendingService)' in services_qml,
+        "failed-service reset must use the shared confirmation dialog")
+require('cleanupTotal = 0' in tools_qml and 'cleanupDone = 0' in tools_qml,
+        "cleanup queue must clear transient progress state after completion")
+require('QStringLiteral("cockpit.socket")' in system_cpp
+        and 'manager.asyncCall(QStringLiteral("StartUnit")' in system_cpp
+        and 'QStringLiteral("replace")' in system_cpp
+        and 'EnableUnitFiles' not in system_cpp,
+        "Cockpit launch must start cockpit.socket on demand without enabling it")
+require('Notification ownership stays in main.cpp for Polkit operations.' in system_cpp,
+        "Polkit maintenance notifications must have a single owner")
+
+# Final success marker: keep this after every contract check above.
 print(f"release audit OK: krisCC {VERSION}")

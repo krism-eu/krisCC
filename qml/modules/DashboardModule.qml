@@ -393,8 +393,9 @@ Kirigami.ScrollablePage {
                     }
                     Controls.Button {
                         Layout.fillWidth: true
-                        text: qsTr("Cockpit")
+                        text: SystemBackend.cockpitAvailable() ? qsTr("Cockpit") : qsTr("Cockpit · non installato")
                         icon.name: "applications-internet"
+                        enabled: SystemBackend.cockpitAvailable()
                         onClicked: SystemBackend.openWebConsole()
                     }
                 }

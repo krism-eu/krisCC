@@ -6,6 +6,21 @@ class ValidatorsTest final : public QObject
 {
     Q_OBJECT
 private slots:
+
+    void archiveMembers()
+    {
+        QVERIFY(Validators::archiveMemberPath(QStringLiteral(".config/app/file.ini")));
+        QVERIFY(!Validators::archiveMemberPath(QStringLiteral("/etc/passwd")));
+        QVERIFY(!Validators::archiveMemberPath(QStringLiteral("../escape")));
+        QVERIFY(!Validators::archiveMemberPath(QStringLiteral("safe/../escape")));
+        QVERIFY(Validators::archiveVerboseEntry(QStringLiteral("-rw------- user/group 12 2026-09-24 00:00 .config/a")));
+        QVERIFY(Validators::archiveVerboseEntry(QStringLiteral("drwx------ user/group 0 2026-09-24 00:00 .config/")));
+        QVERIFY(Validators::archiveVerboseEntry(QStringLiteral("lrwxrwxrwx user/group 0 2026-09-24 00:00 .config/link -> target")));
+        QVERIFY(!Validators::archiveVerboseEntry(QStringLiteral("hrw------- user/group 0 2026-09-24 00:00 hard link to x")));
+        QVERIFY(!Validators::archiveVerboseEntry(QStringLiteral("prw------- user/group 0 2026-09-24 00:00 fifo")));
+        QVERIFY(!Validators::archiveVerboseEntry(QStringLiteral("brw------- user/group 8,0 2026-09-24 00:00 dev")));
+        QVERIFY(!Validators::archiveVerboseEntry(QStringLiteral("lrwxrwxrwx user/group 0 2026-09-24 00:00 link -> ../escape")));
+    }
     void packageNames()
     {
         QVERIFY(Validators::packageName(QStringLiteral("tree")));
