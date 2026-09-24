@@ -35,6 +35,8 @@ RkBackend::RkBackend(PolkitHelper *polkit, QObject *parent)
             m_operationRunning = false;
             m_operationState = success ? QStringLiteral("success") : QStringLiteral("error");
             m_operationOutput = output;
+            if (m_operationLines.isEmpty() && !output.trimmed().isEmpty())
+                m_operationLines.append(output.trimmed());
             emit operationStateChanged();
             emit operationFinished(success, output);
             refreshStatus();

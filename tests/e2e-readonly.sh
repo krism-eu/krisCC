@@ -29,10 +29,6 @@ if grep -Fq 'Layout.preferredHeight: contentHeight' qml/modules/SoftwareModule.q
   echo "ERROR: Software list virtualization regressed" >&2
   exit 1
 fi
-if grep -Fq 'Layout.preferredHeight: contentHeight' qml/modules/FlatpakModule.qml; then
-  echo "ERROR: Flatpak list virtualization regressed" >&2
-  exit 1
-fi
 
 dnf5 config-manager --help >/dev/null
 dnf5 config-manager enable --help >/dev/null

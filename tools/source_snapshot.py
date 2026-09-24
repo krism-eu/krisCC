@@ -75,7 +75,6 @@ def main() -> int:
                     f"| sha256={sha256} | size={len(data)} =====\n"
                 ).encode("utf-8")
             )
-
             if mode == "120000":
                 target = data.decode("utf-8", errors="replace")
                 out.write(f"[[SYMLINK -> {target}]]\n\n".encode("utf-8"))
@@ -113,3 +112,4 @@ if __name__ == "__main__":
     except (OSError, subprocess.CalledProcessError, RuntimeError, UnicodeError) as exc:
         print(f"source_snapshot: {exc}", file=sys.stderr)
         raise SystemExit(1)
+

@@ -81,8 +81,8 @@ Kirigami.ScrollablePage {
             if (SystemBackend.networkInterface.length === 0)
                 return qsTr("Nessuna interfaccia attiva")
             if (SystemBackend.networkAddress.length === 0)
-                return SystemBackend.networkInterface + qsTr(" · nessun IP")
-            return SystemBackend.networkInterface + " · " + SystemBackend.networkAddress
+                return (SystemBackend.networkDisplayName || SystemBackend.networkInterface) + qsTr(" · nessun IP")
+            return (SystemBackend.networkDisplayName || SystemBackend.networkInterface) + " · " + SystemBackend.networkAddress
         }
         return qsTr("Storage dati")
     }
@@ -104,10 +104,11 @@ Kirigami.ScrollablePage {
                    ? qsTr("1 RPM persistente")
                    : qsTr("%1 RPM persistenti").arg(rpmCount)
         }
-        if (id === "flatpak")
-            return SystemBackend.programAvailable("flatpak") ? qsTr("Flatpak disponibile") : qsTr("Non disponibile")
-        if (id === "podman")
-            return SystemBackend.programAvailable("podman") ? qsTr("Podman disponibile") : qsTr("Non disponibile")
+        if (id === "flatpak") {
+            if (!SystemBackend.toolAvailable("discover"))
+                return qsTr("Discover non disponibile")
+            return qsTr("Gestisci applicazioni con Discover")
+        }
         return SystemBackend.osName
     }
 
@@ -117,7 +118,25 @@ Kirigami.ScrollablePage {
 
         RowLayout {
             Layout.fillWidth: true
-            Item { Layout.fillWidth: true }
+            Kirigami.AbstractCard {
+                Layout.fillWidth: true
+                contentItem: RowLayout {
+                    Kirigami.Icon { source: "system-reboot"; Layout.preferredWidth: 22; Layout.preferredHeight: 22 }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 0
+                        Controls.Label { text: qsTr("Prossimo avvio EFI"); font.bold: true }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                            text: SystemBackend.nextUefiBootLabel.length > 0
+                                  ? SystemBackend.nextUefiBootLabel
+                                  : qsTr("Non impostato / non disponibile")
+                            opacity: UiMetrics.secondaryOpacity
+                        }
+                    }
+                }
+            }
             Controls.Button {
                 text: qsTr("Aggiorna stato")
                 icon.name: "view-refresh"
@@ -151,6 +170,7 @@ Kirigami.ScrollablePage {
                     Layout.column: index
                     Layout.row: 0
                     Layout.fillWidth: true
+                    enabled: modelData.id !== "flatpak" || SystemBackend.toolAvailable("discover")
                     onClicked: root.openRequested(modelData.id)
                     contentItem: ColumnLayout {
                         spacing: Kirigami.Units.smallSpacing
@@ -353,6 +373,13 @@ Kirigami.ScrollablePage {
 
                     Controls.Button {
                         Layout.fillWidth: true
+                        text: SystemBackend.cockpitAvailable() ? qsTr("Cockpit") : qsTr("Cockpit · non installato")
+                        icon.name: "applications-internet"
+                        enabled: SystemBackend.cockpitAvailable()
+                        onClicked: SystemBackend.openWebConsole()
+                    }
+                    Controls.Button {
+                        Layout.fillWidth: true
                         text: qsTr("Svuota cestini")
                         icon.name: "user-trash"
                         enabled: MaintenanceBackend.available && !MaintenanceBackend.running
@@ -365,30 +392,9 @@ Kirigami.ScrollablePage {
                         enabled: SystemBackend.toolAvailable("kfind")
                         onClicked: SystemBackend.launchTool("kfind")
                     }
-                    Controls.Button {
-                        Layout.fillWidth: true
-                        text: qsTr("Temporanea")
-                        icon.name: "folder-temp"
-                        onClicked: SystemBackend.openTemporaryFolder()
-                    }
-                    Controls.Button {
-                        Layout.fillWidth: true
-                        text: qsTr("Home")
-                        icon.name: "user-home"
-                        onClicked: SystemBackend.openHomeFolder()
-                    }
-                    Controls.Button {
-                        Layout.fillWidth: true
-                        text: qsTr("Radice /")
-                        icon.name: "folder"
-                        onClicked: SystemBackend.openRootFolder()
-                    }
-                    Controls.Button {
-                        Layout.fillWidth: true
-                        text: qsTr("Terminale")
-                        icon.name: "utilities-terminal"
-                        onClicked: SystemBackend.launchTool("konsole")
-                    }
+                    Controls.Button { Layout.fillWidth: true; text: qsTr("Temporanea"); icon.name: "folder-temp"; onClicked: SystemBackend.openTemporaryFolder() }
+                    Controls.Button { Layout.fillWidth: true; text: qsTr("Home"); icon.name: "user-home"; onClicked: SystemBackend.openHomeFolder() }
+                    Controls.Button { Layout.fillWidth: true; text: qsTr("Radice /"); icon.name: "folder"; onClicked: SystemBackend.openRootFolder() }
                 }
                 Kirigami.InlineMessage {
                     Layout.fillWidth: true

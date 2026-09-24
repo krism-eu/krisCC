@@ -17,12 +17,12 @@ Kirigami.ApplicationWindow {
 
     readonly property var navigationModel: [
         { section: 0, label: qsTr("Dashboard"), icon: "go-home" },
-        { section: 1, label: qsTr("Software"), icon: "package-x-generic" },
-        { section: 2, label: qsTr("Flatpak"), icon: "applications-all" },
-        { section: 3, label: qsTr("Container"), icon: "package" },
-        { section: 4, label: qsTr("Sistema"), icon: "computer" },
-        { section: 5, label: qsTr("Backup e Recovery"), icon: "document-save-all" },
-        { section: 6, label: qsTr("Comandi"), icon: "utilities-terminal" }
+        { section: 1, label: qsTr("Software RPM"), icon: "package-x-generic" },
+        { section: 2, label: qsTr("Servizi & Rete"), icon: "network-connect" },
+        { section: 3, label: qsTr("Sistema & Boot"), icon: "computer" },
+        { section: 4, label: qsTr("Backup & Recovery"), icon: "document-save-all" },
+        { section: 5, label: qsTr("Comandi"), icon: "utilities-terminal" },
+        { section: 6, label: qsTr("Strumenti & Fix"), icon: "tools-wizard" }
     ]
 
     pageStack.globalToolBar.style: Kirigami.ApplicationHeaderStyle.None
@@ -50,11 +50,12 @@ Kirigami.ApplicationWindow {
 
     function openById(pageId) {
         if (pageId === "software") showIndex(1)
-        else if (pageId === "flatpak") showIndex(2)
-        else if (pageId === "podman") showIndex(3)
-        else if (pageId === "system" || pageId === "bootc" || pageId === "tools") showIndex(4)
-        else if (pageId === "recovery") showIndex(5)
-        else if (pageId === "commands") showIndex(6)
+        else if (pageId === "flatpak") SystemBackend.launchTool("discover")
+        else if (pageId === "services" || pageId === "network") showIndex(2)
+        else if (pageId === "system" || pageId === "bootc") showIndex(3)
+        else if (pageId === "recovery") showIndex(4)
+        else if (pageId === "commands" || pageId === "diagnostics") showIndex(5)
+        else if (pageId === "tools") showIndex(6)
         else showIndex(0)
     }
 
@@ -170,6 +171,15 @@ Kirigami.ApplicationWindow {
                     }
 
                     Item { Layout.fillHeight: true }
+
+                    Controls.ItemDelegate {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 42
+                        text: qsTr("Terminale")
+                        icon.name: "utilities-terminal"
+                        enabled: SystemBackend.toolAvailable("konsole")
+                        onClicked: SystemBackend.launchTool("konsole")
+                    }
 
                     Controls.ItemDelegate {
                         Layout.fillWidth: true
@@ -291,7 +301,7 @@ Kirigami.ApplicationWindow {
                         property bool visited: false
                         active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 2)
                         onLoaded: Qt.callLater(function() { visited = true })
-                        sourceComponent: Component { FlatpakModule { Layout.fillWidth: true; Layout.fillHeight: true } }
+                        sourceComponent: Component { ServicesNetworkModule { Layout.fillWidth: true; Layout.fillHeight: true } }
                     }
                     Loader {
                         Layout.fillWidth: true
@@ -299,7 +309,7 @@ Kirigami.ApplicationWindow {
                         property bool visited: false
                         active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 3)
                         onLoaded: Qt.callLater(function() { visited = true })
-                        sourceComponent: Component { PodmanModule { Layout.fillWidth: true; Layout.fillHeight: true } }
+                        sourceComponent: Component { SystemModule { Layout.fillWidth: true; Layout.fillHeight: true } }
                     }
                     Loader {
                         Layout.fillWidth: true
@@ -307,7 +317,7 @@ Kirigami.ApplicationWindow {
                         property bool visited: false
                         active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 4)
                         onLoaded: Qt.callLater(function() { visited = true })
-                        sourceComponent: Component { SystemModule { Layout.fillWidth: true; Layout.fillHeight: true } }
+                        sourceComponent: Component { RecoveryModule { Layout.fillWidth: true; Layout.fillHeight: true } }
                     }
                     Loader {
                         Layout.fillWidth: true
@@ -315,7 +325,7 @@ Kirigami.ApplicationWindow {
                         property bool visited: false
                         active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 5)
                         onLoaded: Qt.callLater(function() { visited = true })
-                        sourceComponent: Component { RecoveryModule { Layout.fillWidth: true; Layout.fillHeight: true } }
+                        sourceComponent: Component { CommandsModule { Layout.fillWidth: true; Layout.fillHeight: true } }
                     }
                     Loader {
                         Layout.fillWidth: true
@@ -323,11 +333,7 @@ Kirigami.ApplicationWindow {
                         property bool visited: false
                         active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 6)
                         onLoaded: Qt.callLater(function() { visited = true })
-                        sourceComponent: Component { CommandsModule {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            onOpenRequested: function(pageId) { root.openById(pageId) }
-                        } }
+                        sourceComponent: Component { ToolsModule { Layout.fillWidth: true; Layout.fillHeight: true } }
                     }
                 }
             }

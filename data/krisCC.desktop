@@ -10,6 +10,6 @@ Exec=krisCC
 Icon=krisCC
 Terminal=false
 Categories=Settings;System;
-Keywords=bootc;system;settings;software;recovery;fedora;krisos;control center;containers;podman;
+Keywords=bootc;system;settings;software;recovery;fedora;krisos;control center;
 StartupNotify=true
 StartupWMClass=krisCC

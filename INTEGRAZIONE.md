@@ -1,6 +1,6 @@
 # Integrazione krisCC in KrisOS / Fedora bootc
 
-krisCC 0.7.5 è un'applicazione standalone Qt 6/Kirigami pensata per uso personale su Fedora bootc. Non duplica Plasma System Settings: integra solo le funzioni specifiche del sistema e gli strumenti di manutenzione che è utile avere in un unico posto.
+krisCC 0.7.8 è un'applicazione standalone Qt 6/Kirigami pensata per uso personale su Fedora bootc. Non duplica Plasma System Settings: integra solo le funzioni specifiche del sistema e gli strumenti di manutenzione che è utile avere in un unico posto.
 
 ## Runtime
 
@@ -10,7 +10,7 @@ krisCC 0.7.5 è un'applicazione standalone Qt 6/Kirigami pensata per uso persona
 - `/usr/bin/rk` come helper del layer persistente KrisOS
 - systemd/logind per sessione e restart servizi
 
-Info Center, Partition Manager, KSystemLog, System Monitor, Konsole, Flatpak, Podman, `efibootmgr`, `grubby` e `grub2-reboot` sono opzionali: i relativi controlli vengono disabilitati o mostrano lo stato non disponibile se il programma non è presente.
+Info Center, Discover, Cockpit, Partition Manager, KSystemLog, System Monitor, Konsole, `vainfo`, `efibootmgr`, `grubby` e `grub2-reboot` sono integrazioni opzionali. Flatpak e container non sono gestiti direttamente da krisCC; il Control Center delega ai rispettivi strumenti dedicati.
 
 ## Compatibilità dati KrisOS
 
@@ -34,7 +34,6 @@ L'anteprima deve usare `rk plan <pacchetto>` e non un comando DNF5 parallelo: il
 krisCC legge lo stato del layer persistente esclusivamente tramite `rk status --json` con schema versione 1. Il formato umano resta per il terminale, ma non viene parsato dalla UI.
 
 ## Privilegi
-
 Non aggiungere wrapper shell generici. `rk sync/add/rm/forget` resta il gate privilegiato autonomo di KrisOS. Le mutazioni richieste dalla UI, incluse quelle rk, passano da `/usr/libexec/kriscc/admin`, che supervisiona il comando root con timeout reale e poi invoca `/usr/bin/rk` senza duplicarne la policy: `PolkitHelper` accetta soltanto operazioni semantiche enumerate, Polkit autorizza il percorso dell'helper con `auth_admin` senza retention e l'helper root rivalida operazione e argomenti completi, chiude stdin e avvia solo `rk`, `bootc`, `dnf5`, `efibootmgr` o `grub2-reboot` con argv fissi e timeout root-owned. Nessuna shell root è ammessa. La pulizia cestini è invece intenzionalmente user-level e l'helper rifiuta l'esecuzione come root. Il rollback BootC non è esposto.
 
 ## Pipeline immagine
@@ -74,7 +73,7 @@ rpm -q krisCC
 rpm -V krisCC
 ```
 
-Poi verificare manualmente `rk plan/add/rm/sync`, ricerca RPM, Flatpak, Podman, update BootC, backup create/verify/restore, cronologia locale e selezione one-shot UEFI/GRUB quando disponibile.
+Poi verificare manualmente `rk plan/add/rm/sync`, ricerca RPM, apertura e gestione Flatpak tramite Discover, gestione container esterna, Tools & Fix e Servizi & Rete, update BootC, backup create/verify/restore, cronologia locale e selezione one-shot UEFI/GRUB quando disponibile.
 
 Repository: https://github.com/krism-eu/krisCC
 

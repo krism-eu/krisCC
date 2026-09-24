@@ -9,6 +9,7 @@
 
 class QTimer;
 class QNetworkAccessManager;
+class QNetworkReply;
 
 class PolkitHelper;
 class ProcessRunner;
@@ -31,6 +32,7 @@ class SystemBackend : public QObject
     Q_PROPERTY(bool grubEntriesAvailable READ grubEntriesAvailable CONSTANT)
     Q_PROPERTY(bool grubNextBootAvailable READ grubNextBootAvailable CONSTANT)
     Q_PROPERTY(QVariantList uefiEntries READ uefiEntries NOTIFY bootEntriesChanged)
+    Q_PROPERTY(QString nextUefiBootLabel READ nextUefiBootLabel NOTIFY bootEntriesChanged)
     Q_PROPERTY(QVariantList grubEntries READ grubEntries NOTIFY bootEntriesChanged)
     Q_PROPERTY(bool bootEntriesBusy READ bootEntriesBusy NOTIFY bootEntriesChanged)
     Q_PROPERTY(QString bootEntriesError READ bootEntriesError NOTIFY bootEntriesChanged)
@@ -41,9 +43,12 @@ class SystemBackend : public QObject
     Q_PROPERTY(QVariantMap serviceStates READ serviceStates NOTIFY serviceStatesChanged)
     Q_PROPERTY(QVariantList topMemoryProcesses READ topMemoryProcesses NOTIFY topMemoryProcessesChanged)
     Q_PROPERTY(QString networkInterface READ networkInterface NOTIFY networkChanged)
+    Q_PROPERTY(QString networkDisplayName READ networkDisplayName NOTIFY networkChanged)
     Q_PROPERTY(QString networkAddress READ networkAddress NOTIFY networkChanged)
     Q_PROPERTY(QString networkState READ networkState NOTIFY networkChanged)
     Q_PROPERTY(QString networkKind READ networkKind NOTIFY networkChanged)
+    Q_PROPERTY(bool internetIdentityBusy READ internetIdentityBusy NOTIFY internetIdentityChanged)
+    Q_PROPERTY(QString internetIdentity READ internetIdentity NOTIFY internetIdentityChanged)
     Q_PROPERTY(bool backupBusy READ backupBusy NOTIFY backupBusyChanged)
     Q_PROPERTY(QString backupStatus READ backupStatus NOTIFY backupStatusChanged)
     Q_PROPERTY(QString backupPath READ backupPath NOTIFY backupStatusChanged)
@@ -74,6 +79,7 @@ public:
     bool grubEntriesAvailable() const;
     bool grubNextBootAvailable() const;
     const QVariantList &uefiEntries() const { return m_uefiEntries; }
+    const QString &nextUefiBootLabel() const { return m_nextUefiBootLabel; }
     const QVariantList &grubEntries() const { return m_grubEntries; }
     bool bootEntriesBusy() const { return m_bootEntriesBusy; }
     const QString &bootEntriesError() const { return m_bootEntriesError; }
@@ -84,9 +90,12 @@ public:
     const QVariantMap &serviceStates() const { return m_serviceStates; }
     const QVariantList &topMemoryProcesses() const { return m_topMemoryProcesses; }
     const QString &networkInterface() const { return m_networkInterface; }
+    const QString &networkDisplayName() const { return m_networkDisplayName; }
     const QString &networkAddress() const { return m_networkAddress; }
     const QString &networkState() const { return m_networkState; }
     const QString &networkKind() const { return m_networkKind; }
+    bool internetIdentityBusy() const { return m_internetIdentityBusy; }
+    const QString &internetIdentity() const { return m_internetIdentity; }
 
     bool backupBusy() const { return m_backupBusy; }
     const QString &backupStatus() const { return m_backupStatus; }
@@ -101,8 +110,6 @@ public:
 
     Q_INVOKABLE QString quickSystemInfo() const;
     Q_INVOKABLE void copyToClipboard(const QString &text) const;
-    Q_INVOKABLE QString flatpakIconPath(const QString &appId) const;
-    Q_INVOKABLE bool launchFlatpak(const QString &appId) const;
     Q_INVOKABLE void refreshDashboardState();
     Q_INVOKABLE bool toolAvailable(const QString &toolId) const;
     Q_INVOKABLE bool launchTool(const QString &toolId) const;
@@ -112,8 +119,19 @@ public:
     Q_INVOKABLE bool programAvailable(const QString &program) const;
     Q_INVOKABLE void checkControlCenterUpdate();
     Q_INVOKABLE void refreshServiceStates();
+    Q_INVOKABLE bool startService(const QString &service);
+    Q_INVOKABLE bool stopService(const QString &service);
     Q_INVOKABLE bool restartService(const QString &service);
+    Q_INVOKABLE bool resetFailedService(const QString &service);
     Q_INVOKABLE void requestReboot();
+    Q_INVOKABLE void requestFirmwareReboot();
+    Q_INVOKABLE QStringList kernelArguments() const;
+    Q_INVOKABLE bool cockpitAvailable() const;
+    Q_INVOKABLE bool openWebConsole();
+    Q_INVOKABLE bool vacuumJournal();
+    Q_INVOKABLE bool cleanDnfCache();
+    Q_INVOKABLE bool openNetworkSettings() const;
+    Q_INVOKABLE void checkInternetIdentity();
     Q_INVOKABLE void setResourceMonitoringEnabled(bool enabled);
     Q_INVOKABLE void refreshUefiEntries();
     Q_INVOKABLE void refreshGrubEntries();
@@ -131,7 +149,6 @@ public:
     Q_INVOKABLE bool openBackupFolder() const;
     Q_INVOKABLE QVariantList backupPreview(const QString &kind) const;
 
-    Q_INVOKABLE QString operationHistory() const;
     Q_INVOKABLE QVariantList operationHistoryEntries() const;
     Q_INVOKABLE bool clearOperationHistory();
 
@@ -148,7 +165,9 @@ signals:
     void storageSummaryChanged();
     void topMemoryProcessesChanged();
     void networkChanged();
+    void internetIdentityChanged();
     void controlCenterUpdateChanged();
+    void adminMaintenanceFinished(const QString &operation, bool success, const QString &output);
 
 private:
     QString readOsName() const;
@@ -169,10 +188,13 @@ private:
     PolkitHelper *m_polkit = nullptr;
     QNetworkAccessManager *m_networkAccess = nullptr;
     bool m_bootSelectionOwned = false;
+    bool m_adminMaintenanceOwned = false;
+    QString m_adminMaintenanceOperation;
     bool m_bootSelectionRunning = false;
     QString m_bootSelectionKind;
     QString m_bootSelectionState = QStringLiteral("idle");
     QVariantList m_uefiEntries;
+    QString m_nextUefiBootLabel;
     QVariantList m_grubEntries;
     QPointer<QProcess> m_bootEntriesProcess;
     bool m_bootEntriesBusy = false;
@@ -189,9 +211,13 @@ private:
     QVariantList m_topMemoryProcesses;
     qint64 m_lastTopMemoryRefreshMs = 0;
     QString m_networkInterface;
+    QString m_networkDisplayName;
     QString m_networkAddress;
     QString m_networkState = QStringLiteral("down");
     QString m_networkKind = QStringLiteral("ethernet");
+    bool m_internetIdentityBusy = false;
+    QString m_internetIdentity;
+    QPointer<QNetworkReply> m_internetIdentityReply;
     quint64 m_serviceRefreshGeneration = 0;
     bool m_controlCenterUpdateBusy = false;
     bool m_controlCenterUpdateAvailable = false;
