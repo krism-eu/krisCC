@@ -55,7 +55,9 @@ require('KRISCC_VERSION="${PROJECT_VERSION}"' in cmake,
 require('KrisCCVersion.cmake' in workflow
         and 'release="1"' in workflow
         and 'vr="${version}-${release}"' in workflow
-        and 'echo "rpm=krisCC-${vr}.fc44.x86_64.rpm"' in workflow,
+        and 'echo "rpm=krisCC-${vr}.fc45.x86_64.rpm"' in workflow
+        and workflow.count("container: fedora:45") == 3
+        and "container: fedora:44" not in workflow,
         "CI RPM identity is not derived from canonical X.Y.Z with fixed Release 1")
 require('echo "source_zip=krisCC-${vr}-source.zip"' in workflow
         and 'echo "source_txt=krisCC-${vr}-source.txt"' in workflow,
@@ -224,7 +226,8 @@ require("Aggiorna Control Center" not in dashboard_qml
         and "checkControlCenterUpdate()" in read("qml/modules/SystemModule.qml")
         and "checkControlCenterUpdate()" not in commands_qml
         and "updateControlCenter()" not in commands_qml
-        and "fc44.x86_64.rpm" not in system_cpp,
+        and "fc44.x86_64.rpm" not in system_cpp
+        and "fc45.x86_64.rpm" not in system_cpp,
         "Control Center release check must stay image-owned and in System & Boot")
 require("qml/modules/FlatpakModule.qml" not in cmake
         and "runFlatpak" not in utility_cpp

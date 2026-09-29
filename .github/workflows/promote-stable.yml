@@ -51,7 +51,7 @@ jobs:
           test "$compare_status" = "ahead" -o "$compare_status" = "identical"
 
           version="${TAG#v}"
-          rpm_file="krisCC-${version}-1.fc44.x86_64.rpm"
+          rpm_file="krisCC-${version}-1.fc45.x86_64.rpm"
           source_zip="krisCC-${version}-1-source.zip"
           source_txt="krisCC-${version}-1-source.txt"
 
@@ -72,7 +72,7 @@ jobs:
 
           test "$(rpm -qp --qf '%{NAME}' "$rpm_file")" = "krisCC"
           test "$(rpm -qp --qf '%{VERSION}' "$rpm_file")" = "$version"
-          test "$(rpm -qp --qf '%{RELEASE}' "$rpm_file")" = "1.fc44"
+          test "$(rpm -qp --qf '%{RELEASE}' "$rpm_file")" = "1.fc45"
 
       - name: Promote exact candidate to stable
         shell: bash

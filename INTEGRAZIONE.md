@@ -1,6 +1,6 @@
 # Integrazione krisCC in KrisOS / Fedora bootc
 
-krisCC 0.7.9 è un'applicazione standalone Qt 6/Kirigami pensata per uso personale su Fedora bootc. Non duplica Plasma System Settings: integra solo le funzioni specifiche del sistema e gli strumenti di manutenzione che è utile avere in un unico posto.
+krisCC 0.7.10 è un'applicazione standalone Qt 6/Kirigami pensata per uso personale su Fedora bootc. Non duplica Plasma System Settings: integra solo le funzioni specifiche del sistema e gli strumenti di manutenzione che è utile avere in un unico posto.
 
 ## Runtime
 
@@ -41,7 +41,7 @@ Non aggiungere wrapper shell generici. `rk sync/add/rm/forget` resta il gate pri
 Il repository produce esclusivamente l'RPM `krisCC`. Il flusso di release previsto è:
 
 ```text
-krisCC source -> CI/test -> RPM + SHA256 -> build KrisOS -> immagine BootC
+krisCC source -> Fedora 45 CI/test -> RPM fc45 + SHA256 -> build KrisOS45 -> immagine BootC
 ```
 
 KrisOS deve consumare l'artefatto RPM già testato e identificarlo con un digest/hash verificato. La build dell'OS non deve fare un `git fetch` di krisCC per ricostruire implicitamente un secondo artefatto a partire da un repository esterno.
