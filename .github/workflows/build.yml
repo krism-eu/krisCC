@@ -29,7 +29,7 @@ jobs:
       source_txt: ${{ steps.identity.outputs.source_txt }}
     steps:
       - name: Install checkout dependency
-        run: dnf -y install git
+        run: dnf -y --setopt=updates-testing.enabled=false install git
 
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
         with:
@@ -53,7 +53,7 @@ jobs:
 
       - name: Install build dependencies
         run: >-
-          dnf -y install gcc-c++ cmake ninja-build gzip python3
+          dnf -y --setopt=updates-testing.enabled=false install gcc-c++ cmake ninja-build gzip python3
           qt6-qtbase-devel qt6-qtdeclarative-devel kf6-kirigami-devel
           bootc dnf5 dnf5-plugins rpm rpm-build tar qqc2-breeze-style
 
@@ -355,7 +355,7 @@ jobs:
           test -f "$rpm_file"
           (cd "$GITHUB_WORKSPACE/artifacts/release" && sha256sum -c SHA256SUMS)
           grep -Fxq "# commit: $GITHUB_SHA" "$GITHUB_WORKSPACE/artifacts/release/$SOURCE_TXT"
-          dnf -y install "$rpm_file"
+          dnf -y --setopt=updates-testing.enabled=false install "$rpm_file"
           test "$(rpm -q --qf '%{VERSION}-%{RELEASE}\n' krisCC)" = "${EXPECTED}.fc45"
           rpm -V krisCC
           test -z "$(ldd /usr/bin/krisCC | awk '/not found/{print}')"
