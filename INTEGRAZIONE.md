@@ -7,8 +7,7 @@ krisCC 0.7.10 è un'applicazione standalone Qt 6/Kirigami pensata per uso person
 - Qt 6 Core/Gui/Qml/Quick/DBus
 - KF6 Kirigami
 - `bootc`, `rpm`, `dnf5`, `dnf5-plugins` (config-manager), `pkexec`, `tar`, `bash`
-- `coreutils` per il wrapper root-owned con `/usr/bin/timeout`
-- `systemd` per `systemctl`, `loginctl`, `resolvectl` e `journalctl`
+- CLI runtime richieste per percorso: `/usr/bin/timeout`, `systemctl`, `loginctl`, `resolvectl` e `journalctl`; lo spec non forza i nomi dei pacchetti provider
 - `/usr/bin/rk` come helper del layer persistente KrisOS
 
 Info Center, Discover, Cockpit, Partition Manager, KSystemLog, System Monitor, Konsole, `vainfo`, `efibootmgr`, `grubby` e `grub2-reboot` sono integrazioni opzionali. Flatpak e container non sono gestiti direttamente da krisCC; il Control Center delega ai rispettivi strumenti dedicati.
@@ -49,7 +48,7 @@ KrisOS deve consumare l'artefatto RPM già testato e identificarlo con un digest
 
 L'ordine resta importante: **`krisCC` deve essere installato prima che KrisOS generi `/usr/share/krisos/owned-packages.txt` e `owned-nevra.txt`**. In questo modo viene classificato correttamente come pacchetto della base immutabile e `rk` non proverà mai a trattarlo come pacchetto persistente dell'overlay.
 
-La build deve fallire se l'RPM richiesto non è disponibile, se l'hash non coincide o se l'RPM non si installa correttamente. Prima dell'integrazione nel payload completo si può eseguire `tests/f45-minimal-runtime.sh` contro l'RPM fc45: usa la base bootc Fedora 45 fissata per digest, disabilita `updates-testing`, impedisce la sostituzione degli RPM già posseduti dalla base e verifica dipendenze, binari runtime, QML smoke e `bootc container lint`. Dopo l'installazione eseguire almeno:
+La build deve fallire se l'RPM richiesto non è disponibile, se l'hash non coincide o se l'RPM non si installa correttamente. Prima dell'integrazione nel payload completo si può eseguire `tests/f45-minimal-runtime.sh` contro l'RPM fc45: durante Fedora 45 Branched usa `quay.io/bootc-devel/fedora-bootc-45-minimal:latest`, sincronizza la compose con i repository correnti tramite `dnf5 distro-sync`, impedisce alla transazione krisCC di sostituire RPM già presenti nella base sincronizzata e verifica dipendenze, architettura, binari runtime e QML smoke. Il digest della base verrà fissato quando Fedora 45 sarà stable. Dopo l'installazione eseguire almeno:
 
 ```bash
 rpm -q krisCC

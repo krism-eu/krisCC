@@ -24,8 +24,11 @@ Requires:       NetworkManager
 Requires:       bootc
 Requires:       tar
 Requires:       bash
-Requires:       coreutils
-Requires:       systemd
+Requires:       /usr/bin/timeout
+Requires:       /usr/bin/systemctl
+Requires:       /usr/bin/loginctl
+Requires:       /usr/bin/resolvectl
+Requires:       /usr/bin/journalctl
 
 %description
 krisCC is a compact personal Kirigami control center for KrisOS and Fedora bootc

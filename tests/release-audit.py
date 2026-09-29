@@ -50,9 +50,17 @@ contract_parsers_test = read("tests/test_contract_parsers.cpp")
 require(f'Version:        {VERSION}' in spec, "RPM Version differs from canonical version")
 require('Release:        1%{?dist}' in spec,
         "RPM Release must stay fixed at 1; bump X.Y.Z instead")
-require('Requires:       coreutils' in spec
-        and 'Requires:       systemd' in spec,
-        "Fedora 45 runtime contract must explicitly own timeout/systemd CLI dependencies")
+runtime_paths = (
+    "/usr/bin/timeout",
+    "/usr/bin/systemctl",
+    "/usr/bin/loginctl",
+    "/usr/bin/resolvectl",
+    "/usr/bin/journalctl",
+)
+require(all(f"Requires:       {path}" in spec for path in runtime_paths)
+        and 'Requires:       coreutils' not in spec
+        and 'Requires:       systemd' not in spec,
+        "Fedora 45 runtime contract must use executable-path requirements")
 require('KRISCC_VERSION="${PROJECT_VERSION}"' in cmake,
         "UI version must be exactly canonical X.Y.Z")
 require('KrisCCVersion.cmake' in workflow
@@ -96,11 +104,12 @@ require('run_git(root, "ls-tree", "-r", "-z", "--full-tree", commit)' in source_
 require(f'<release version="{VERSION}"' in read("data/org.kriscc.KrisCC.metainfo.xml"),
         "AppStream release is stale")
 f45_smoke = read("tests/f45-minimal-runtime.sh")
-require('fedora-bootc-45-minimal@sha256:9d010fe35ac8db7f0bcb8576b530ea443feed2d7c428a40a06c2f0c98aa86437' in f45_smoke
-        and '--setopt=updates-testing.enabled=false' in f45_smoke
-        and 'diff -u /tmp/base-nevra.before /tmp/base-nevra.after' in f45_smoke
-        and 'bootc container lint' in f45_smoke,
-        "Fedora 45 Minimal local smoke contract is incomplete")
+require('fedora-bootc-45-minimal:latest' in f45_smoke
+        and 'distro-sync' in f45_smoke
+        and "--exclude='*.i686'" in f45_smoke
+        and 'comm -23 /tmp/base.before /tmp/all.after' in f45_smoke
+        and '--pull=always' in f45_smoke,
+        "Fedora 45 Branched Minimal local smoke contract is incomplete")
 
 require("src/Validators.cpp src/Validators.h" in cmake, "shared validators not linked")
 require("src/AdminPolicy.cpp src/AdminPolicy.h" in cmake, "shared admin policy not linked")
