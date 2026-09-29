@@ -68,7 +68,7 @@ cmake --build build
 
 ## RPM e integrazione nell'immagine
 
-Lo spec RPM è `packaging/krisCC.spec` e produce **`krisCC-0.7.9-*.rpm`**. La CI Fedora 44 costruisce l'RPM, lo installa in un ambiente pulito, riesegue lo smoke test e produce `SHA256SUMS` dell'artefatto RPM.
+Lo spec RPM è `packaging/krisCC.spec` e produce **`krisCC-0.7.10-*.rpm`**. La CI Fedora 45 costruisce l'RPM, lo installa in un ambiente pulito, riesegue lo smoke test e produce `SHA256SUMS` dell'artefatto RPM.
 
 Il flusso previsto per KrisOS è:
 
@@ -82,8 +82,8 @@ Esempio manuale:
 
 ```bash
 mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-git archive --format=tar.gz --prefix=krisCC-0.7.9/ \
-  -o ~/rpmbuild/SOURCES/krisCC-0.7.9.tar.gz HEAD
+git archive --format=tar.gz --prefix=krisCC-0.7.10/ \
+  -o ~/rpmbuild/SOURCES/krisCC-0.7.10.tar.gz HEAD
 cp packaging/krisCC.spec ~/rpmbuild/SPECS/krisCC.spec
 rpmbuild -ba ~/rpmbuild/SPECS/krisCC.spec
 ```
@@ -92,4 +92,4 @@ Repository: https://github.com/krism-eu/krisCC
 
 ## Test reale
 
-La CI verifica compilazione, caricamento QML/Kirigami, controlli DNF5 locali, spec RPM, installazione di staging e installazione/smoke dell'RPM. Prima di considerare una release definitiva vanno comunque provati sulla macchina reale: `rk plan/add/rm/sync`, autenticazione Polkit, ricerca RPM, apertura/gestione Flatpak tramite Discover, applicazione container esterna, Tools & Fix, servizi/rete, `bootc upgrade --check`, download/apply BootC, creazione/verifica/ripristino backup e selezione one-shot UEFI/GRUB quando gli strumenti sono presenti.
+La CI verifica compilazione, caricamento QML/Kirigami, controlli DNF5 locali, spec RPM, installazione di staging e installazione/smoke dell'RPM. Per il pre-gate KrisOS45, durante Fedora 45 Branched `tests/f45-minimal-runtime.sh <rpm>` usa la base bootc Fedora 45 `:latest`, la sincronizza con i repository correnti e rifiuta qualsiasi sostituzione di un RPM già appartenente alla base sincronizzata; il digest verrà fissato alla stable. Prima di considerare una release definitiva vanno comunque provati sulla macchina reale: `rk plan/add/rm/sync`, autenticazione Polkit, ricerca RPM, apertura/gestione Flatpak tramite Discover, applicazione container esterna, Tools & Fix, servizi/rete, `bootc upgrade --check`, download/apply BootC, creazione/verifica/ripristino backup e selezione one-shot UEFI/GRUB quando gli strumenti sono presenti.

@@ -1,14 +1,14 @@
 # Integrazione krisCC in KrisOS / Fedora bootc
 
-krisCC 0.7.9 è un'applicazione standalone Qt 6/Kirigami pensata per uso personale su Fedora bootc. Non duplica Plasma System Settings: integra solo le funzioni specifiche del sistema e gli strumenti di manutenzione che è utile avere in un unico posto.
+krisCC 0.7.10 è un'applicazione standalone Qt 6/Kirigami pensata per uso personale su Fedora bootc. Non duplica Plasma System Settings: integra solo le funzioni specifiche del sistema e gli strumenti di manutenzione che è utile avere in un unico posto.
 
 ## Runtime
 
 - Qt 6 Core/Gui/Qml/Quick/DBus
 - KF6 Kirigami
-- `bootc`, `rpm`, `dnf5`, `dnf5-plugins` (config-manager), `pkexec`, `tar`
+- `bootc`, `rpm`, `dnf5`, `dnf5-plugins` (config-manager), `pkexec`, `tar`, `bash`
+- CLI runtime richieste per percorso: `/usr/bin/timeout`, `systemctl`, `loginctl`, `resolvectl` e `journalctl`; lo spec non forza i nomi dei pacchetti provider
 - `/usr/bin/rk` come helper del layer persistente KrisOS
-- systemd/logind per sessione e restart servizi
 
 Info Center, Discover, Cockpit, Partition Manager, KSystemLog, System Monitor, Konsole, `vainfo`, `efibootmgr`, `grubby` e `grub2-reboot` sono integrazioni opzionali. Flatpak e container non sono gestiti direttamente da krisCC; il Control Center delega ai rispettivi strumenti dedicati.
 
@@ -41,14 +41,14 @@ Non aggiungere wrapper shell generici. `rk sync/add/rm/forget` resta il gate pri
 Il repository produce esclusivamente l'RPM `krisCC`. Il flusso di release previsto è:
 
 ```text
-krisCC source -> CI/test -> RPM + SHA256 -> build KrisOS -> immagine BootC
+krisCC source -> Fedora 45 CI/test -> RPM fc45 + SHA256 -> build KrisOS45 -> immagine BootC
 ```
 
 KrisOS deve consumare l'artefatto RPM già testato e identificarlo con un digest/hash verificato. La build dell'OS non deve fare un `git fetch` di krisCC per ricostruire implicitamente un secondo artefatto a partire da un repository esterno.
 
 L'ordine resta importante: **`krisCC` deve essere installato prima che KrisOS generi `/usr/share/krisos/owned-packages.txt` e `owned-nevra.txt`**. In questo modo viene classificato correttamente come pacchetto della base immutabile e `rk` non proverà mai a trattarlo come pacchetto persistente dell'overlay.
 
-La build deve fallire se l'RPM richiesto non è disponibile, se l'hash non coincide o se l'RPM non si installa correttamente. Dopo l'installazione eseguire almeno:
+La build deve fallire se l'RPM richiesto non è disponibile, se l'hash non coincide o se l'RPM non si installa correttamente. Prima dell'integrazione nel payload completo si può eseguire `tests/f45-minimal-runtime.sh` contro l'RPM fc45: durante Fedora 45 Branched usa `quay.io/bootc-devel/fedora-bootc-45-minimal:latest`, sincronizza la compose con i repository correnti tramite `dnf5 distro-sync`, impedisce alla transazione krisCC di sostituire RPM già presenti nella base sincronizzata e verifica dipendenze, architettura, binari runtime e QML smoke. Il digest della base verrà fissato quando Fedora 45 sarà stable. Dopo l'installazione eseguire almeno:
 
 ```bash
 rpm -q krisCC

@@ -50,12 +50,25 @@ contract_parsers_test = read("tests/test_contract_parsers.cpp")
 require(f'Version:        {VERSION}' in spec, "RPM Version differs from canonical version")
 require('Release:        1%{?dist}' in spec,
         "RPM Release must stay fixed at 1; bump X.Y.Z instead")
+runtime_paths = (
+    "/usr/bin/timeout",
+    "/usr/bin/systemctl",
+    "/usr/bin/loginctl",
+    "/usr/bin/resolvectl",
+    "/usr/bin/journalctl",
+)
+require(all(f"Requires:       {path}" in spec for path in runtime_paths)
+        and 'Requires:       coreutils' not in spec
+        and 'Requires:       systemd' not in spec,
+        "Fedora 45 runtime contract must use executable-path requirements")
 require('KRISCC_VERSION="${PROJECT_VERSION}"' in cmake,
         "UI version must be exactly canonical X.Y.Z")
 require('KrisCCVersion.cmake' in workflow
         and 'release="1"' in workflow
         and 'vr="${version}-${release}"' in workflow
-        and 'echo "rpm=krisCC-${vr}.fc44.x86_64.rpm"' in workflow,
+        and 'echo "rpm=krisCC-${vr}.fc45.x86_64.rpm"' in workflow
+        and workflow.count("container: fedora:45") == 3
+        and "container: fedora:44" not in workflow,
         "CI RPM identity is not derived from canonical X.Y.Z with fixed Release 1")
 require('echo "source_zip=krisCC-${vr}-source.zip"' in workflow
         and 'echo "source_txt=krisCC-${vr}-source.txt"' in workflow,
@@ -90,6 +103,13 @@ require('run_git(root, "ls-tree", "-r", "-z", "--full-tree", commit)' in source_
         "source TXT generator does not snapshot and fingerprint the exact tracked Git tree")
 require(f'<release version="{VERSION}"' in read("data/org.kriscc.KrisCC.metainfo.xml"),
         "AppStream release is stale")
+f45_smoke = read("tests/f45-minimal-runtime.sh")
+require('fedora-bootc-45-minimal:latest' in f45_smoke
+        and 'distro-sync' in f45_smoke
+        and "--exclude='*.i686'" in f45_smoke
+        and 'comm -23 /tmp/base.before /tmp/all.after' in f45_smoke
+        and '--pull=always' in f45_smoke,
+        "Fedora 45 Branched Minimal local smoke contract is incomplete")
 
 require("src/Validators.cpp src/Validators.h" in cmake, "shared validators not linked")
 require("src/AdminPolicy.cpp src/AdminPolicy.h" in cmake, "shared admin policy not linked")
@@ -224,7 +244,8 @@ require("Aggiorna Control Center" not in dashboard_qml
         and "checkControlCenterUpdate()" in read("qml/modules/SystemModule.qml")
         and "checkControlCenterUpdate()" not in commands_qml
         and "updateControlCenter()" not in commands_qml
-        and "fc44.x86_64.rpm" not in system_cpp,
+        and "fc44.x86_64.rpm" not in system_cpp
+        and "fc45.x86_64.rpm" not in system_cpp,
         "Control Center release check must stay image-owned and in System & Boot")
 require("qml/modules/FlatpakModule.qml" not in cmake
         and "runFlatpak" not in utility_cpp
