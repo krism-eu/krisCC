@@ -44,6 +44,9 @@ private slots:
     {
         QVERIFY(Validators::bootToken(QStringLiteral("00AF")));
         QVERIFY(!Validators::bootToken(QStringLiteral("00AF00")));
+        QVERIFY(Validators::bootOrder(QStringLiteral("0001,00AF,0007")));
+        QVERIFY(!Validators::bootOrder(QStringLiteral("0001,0001")));
+        QVERIFY(!Validators::bootOrder(QStringLiteral("0001,-o")));
         QVERIFY(Validators::grubEntry(QStringLiteral("ostree-1")));
         QVERIFY(!Validators::grubEntry(QStringLiteral("--unrestricted")));
         QVERIFY(!Validators::grubEntry(QStringLiteral("bad\nentry")));
