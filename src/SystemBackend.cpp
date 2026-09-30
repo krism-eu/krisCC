@@ -797,6 +797,34 @@ QString SystemBackend::quickSystemInfo() const
     return text.trimmed();
 }
 
+QString SystemBackend::saveSupportReport(const QString &text) const
+{
+    if (text.trimmed().isEmpty() || text.size() > 2 * 1024 * 1024)
+        return {};
+
+    QString directory = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+    if (directory.isEmpty())
+        directory = QDir::homePath();
+    if (!QDir().mkpath(directory))
+        return {};
+
+    const QString fileName = QStringLiteral("krisCC-support-%1.txt")
+        .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss")));
+    const QString path = QDir(directory).filePath(fileName);
+
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::NewOnly))
+        return {};
+    if (!file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner))
+        return {};
+    const QByteArray data = text.toUtf8();
+    if (file.write(data) != data.size())
+        return {};
+    file.close();
+    notify(tr("Rapporto supporto salvato"), path);
+    return path;
+}
+
 void SystemBackend::copyToClipboard(const QString &text) const
 {
     if (QGuiApplication::clipboard())
