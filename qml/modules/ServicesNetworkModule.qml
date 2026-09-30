@@ -672,9 +672,9 @@ Kirigami.ScrollablePage {
         contentItem: Controls.Label {
             wrapMode: Text.WordWrap
             text: qsTr("%1 su %2 (%3).")
-                  .arg(root.pendingManagedAction,
-                       root.pendingManagedUnit,
-                       root.pendingManagedUserScope ? qsTr("utente") : qsTr("sistema"))
+                  .arg(root.pendingManagedAction)
+                  .arg(root.pendingManagedUnit)
+                  .arg(root.pendingManagedUserScope ? qsTr("utente") : qsTr("sistema"))
         }
         onAccepted: ServiceManagerBackend.controlUnit(
                         root.pendingManagedUnit,
