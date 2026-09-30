@@ -57,6 +57,7 @@ private:
                         const QByteArray &stdoutData, const QByteArray &stderrData,
                         const QString &errorString);
     bool validUnit(const QString &unit) const;
+    bool validJournalUnit(const QString &unit) const;
     QVariantList parseUnitsJson(const QByteArray &data, const QString &scope) const;
     void finish(const QString &state, const QString &message = QString());
     void startUnitFilesQuery();

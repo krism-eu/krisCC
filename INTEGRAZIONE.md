@@ -8,6 +8,7 @@ krisCC 0.8.0 è un'applicazione standalone Qt 6/Kirigami pensata per uso persona
 - KF6 Kirigami
 - `bootc`, `rpm`, `dnf5`, `dnf5-plugins` (config-manager), `pkexec`, `tar`, `bash`
 - CLI runtime richieste per percorso: `/usr/bin/timeout`, `systemctl`, `loginctl`, `resolvectl` e `journalctl`; lo spec non forza i nomi dei pacchetti provider
+- `systemctl` deve supportare l'output JSON tabellare usato da `list-units` e `list-unit-files` (`--output=json`); Fedora 45 soddisfa questo contratto
 - `/usr/bin/rk` come helper del layer persistente KrisOS
 
 Info Center, Discover, Cockpit, Partition Manager, KSystemLog, System Monitor, Konsole, `vainfo`, `efibootmgr`, `grubby` e `grub2-reboot` sono integrazioni opzionali. Flatpak e container non sono gestiti direttamente da krisCC; il Control Center delega ai rispettivi strumenti dedicati.

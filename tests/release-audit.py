@@ -44,6 +44,7 @@ commands_qml = read("qml/modules/CommandsModule.qml")
 tools_qml = read("qml/modules/ToolsModule.qml")
 services_qml = read("qml/modules/ServicesNetworkModule.qml")
 repair_cpp = read("src/RepairBackend.cpp")
+service_manager_cpp = read("src/ServiceManagerBackend.cpp")
 recovery_qml = read("qml/modules/RecoveryModule.qml")
 contract_parsers_h = read("src/ContractParsers.h")
 contract_parsers_cpp = read("src/ContractParsers.cpp")
@@ -337,6 +338,11 @@ require("qml/modules/ToolsModule.qml" in cmake
         and "qml/modules/ServicesNetworkModule.qml" in cmake
         and "src/RepairBackend.cpp src/RepairBackend.h" in cmake,
         "Swiss Army modules/backends are not wired into the build")
+require('bool ServiceManagerBackend::validJournalUnit' in service_manager_cpp
+        and r'\\.(?:service|socket|timer)$' in service_manager_cpp
+        and '!validJournalUnit(unit.trimmed())' in service_manager_cpp
+        and 'if (m_busy || !validUnit(unit))' in service_manager_cpp,
+        "journal must accept service/socket/timer without widening service controls")
 require('restartAudio()' in read("src/RepairBackend.h")
         and 'flushDns()' in read("src/RepairBackend.h")
         and 'reconnectNetwork' in repair_cpp,
@@ -381,6 +387,10 @@ for ignored in ("stage/", "artifacts/", "audit-build/", "*.rpm"):
     require(ignored in read(".gitignore"), f".gitignore missing {ignored}")
 
 require("0.6 è" not in read("INTEGRAZIONE.md"), "integration docs are stale")
+require("--output=json" in read("INTEGRAZIONE.md")
+        and "list-units" in read("INTEGRAZIONE.md")
+        and "list-unit-files" in read("INTEGRAZIONE.md"),
+        "integration docs must state the systemctl JSON runtime capability")
 require("release 0.5.1" not in read("i18n/README.md"), "i18n docs are stale")
 require("auth_admin_keep" not in read("data/org.kriscc.controlcenter.policy"),
         "Polkit retention is forbidden")

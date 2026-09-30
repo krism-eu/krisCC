@@ -35,6 +35,13 @@ bool ServiceManagerBackend::validUnit(const QString &unit) const
     return pattern.match(unit).hasMatch();
 }
 
+bool ServiceManagerBackend::validJournalUnit(const QString &unit) const
+{
+    static const QRegularExpression pattern(
+        QStringLiteral("^[A-Za-z0-9_.@:-]{1,120}\\.(?:service|socket|timer)$"));
+    return pattern.match(unit).hasMatch();
+}
+
 QVariantList ServiceManagerBackend::parseUnitsJson(const QByteArray &data,
                                                    const QString &scope) const
 {
@@ -176,7 +183,7 @@ bool ServiceManagerBackend::loadJournal(const QString &unit, bool userScope,
 {
     if (m_busy)
         return false;
-    if (!unit.trimmed().isEmpty() && !validUnit(unit.trimmed())) {
+    if (!unit.trimmed().isEmpty() && !validJournalUnit(unit.trimmed())) {
         finish(QStringLiteral("error"), tr("Nome unità non valido."));
         return false;
     }
