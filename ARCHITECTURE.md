@@ -170,6 +170,8 @@ La sezione **Miei comandi** è separata dal contratto amministrativo: conserva i
 
 Un'azione personale che diventa una funzione amministrativa stabile deve essere promossa a backend ufficiale con capability detection, allowlist e test; non va resa privilegiata dentro il meccanismo custom.
 
+La sezione **Cron** della stessa pagina è un inventario read-only, non un editor. Il backend può leggere `crontab -l` quando il comando è disponibile e le fonti di sistema ordinariamente leggibili (`/etc/crontab`, `/etc/cron.d`), ma non deve usare Polkit, modificare spool cron o scrivere in `/etc`. Il parsing resta nel backend/C++, il QML riceve campi strutturati e le pianificazioni complesse non riconosciute vengono mostrate nel formato cron originale. Un job utente può essere copiato in **Miei comandi** come azione indipendente, senza modificare il job pianificato.
+
 ## 10. Test come contratto di compatibilità
 
 La CI deve proteggere sia il comportamento sia i confini architetturali.
