@@ -107,14 +107,6 @@ void PackageSearch::loadUpgrades()
     startListQuery(QStringLiteral("--upgrades"), true);
 }
 
-void PackageSearch::loadRecent()
-{
-    refreshPersistentSet();
-    ++m_generation;
-    stopActiveProcess();
-    startListQuery(QStringLiteral("--recent"), false);
-}
-
 void PackageSearch::startInstalledQuery(const QString &term)
 {
     const quint64 generation = m_generation;
