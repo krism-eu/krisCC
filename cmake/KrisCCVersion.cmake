@@ -1,1 +1,1 @@
-set(KRISCC_VERSION "0.7.10")
+set(KRISCC_VERSION "0.8.0")
