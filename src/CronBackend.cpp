@@ -6,6 +6,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QRegularExpression>
 #include <QStandardPaths>
 #include <QVariantMap>
 
@@ -70,7 +71,11 @@ void CronBackend::loadSystemJobs()
     QDir cronDirectory(QStringLiteral("/etc/cron.d"));
     const QFileInfoList files = cronDirectory.entryInfoList(
         QDir::Files | QDir::Readable | QDir::NoDotAndDotDot, QDir::Name);
+    static const QRegularExpression cronFileName(
+        QStringLiteral("^[A-Za-z0-9_-]+$"));
     for (const QFileInfo &info : files) {
+        if (!cronFileName.match(info.fileName()).hasMatch())
+            continue;
         if (readableCronFile(info))
             appendFile(info.absoluteFilePath());
     }
@@ -152,10 +157,10 @@ void CronBackend::finishUserCron(const QByteArray &standardOutput,
         return;
     }
 
-    const bool noCrontab = exitCode == 1
-        && stderrText.contains(QStringLiteral("no crontab"), Qt::CaseInsensitive);
-    if (result == ProcessRunner::ExitError && noCrontab) {
-        m_userCronStatus = tr("Nessun job cron utente.");
+    const bool noUserCrontab = result == ProcessRunner::ExitError
+        && exitCode == 1 && standardOutput.trimmed().isEmpty();
+    if (noUserCrontab) {
+        m_userCronStatus = tr("Nessun crontab utente disponibile.");
         return;
     }
 
