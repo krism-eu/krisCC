@@ -21,6 +21,8 @@ qt_add_executable(krisCC
     src/main.cpp
     src/BootcBackend.cpp src/BootcBackend.h
     src/CustomActionsBackend.cpp src/CustomActionsBackend.h
+    src/CronBackend.cpp src/CronBackend.h
+    src/CronParser.cpp src/CronParser.h
     src/SystemBackend.cpp src/SystemBackend.h
     src/SoftwareBackend.cpp src/SoftwareBackend.h
     src/PackageSearch.cpp src/PackageSearch.h
@@ -116,6 +118,14 @@ if(BUILD_TESTING)
     target_include_directories(kriscc-test-parsers PRIVATE src)
     target_link_libraries(kriscc-test-parsers PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME parsers COMMAND kriscc-test-parsers)
+
+    add_executable(kriscc-test-cron-parser
+        tests/test_cron_parser.cpp
+        src/CronParser.cpp src/CronParser.h
+    )
+    target_include_directories(kriscc-test-cron-parser PRIVATE src)
+    target_link_libraries(kriscc-test-cron-parser PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME cron-parser COMMAND kriscc-test-cron-parser)
 endif()
 
 add_executable(kriscc-maintenance
