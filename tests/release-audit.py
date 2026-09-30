@@ -50,6 +50,12 @@ contract_parsers_cpp = read("src/ContractParsers.cpp")
 contract_parsers_test = read("tests/test_contract_parsers.cpp")
 cron_parser_test = read("tests/test_cron_parser.cpp")
 
+command_ids = set(re.findall(r'\{\s*id:\s*"([^"]+)"', commands_qml))
+bookmark_ids = set(re.findall(r'id == QStringLiteral\("([^"]+)"\)', utility_cpp))
+require(command_ids <= bookmark_ids,
+        "CommandsModule contains bookmark IDs not implemented by UtilityBackend: "
+        + ", ".join(sorted(command_ids - bookmark_ids)))
+
 require(f'Version:        {VERSION}' in spec, "RPM Version differs from canonical version")
 require('Release:        1%{?dist}' in spec,
         "RPM Release must stay fixed at 1; bump X.Y.Z instead")
