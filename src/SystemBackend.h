@@ -114,6 +114,7 @@ public:
     const QString &controlCenterUpdateStatus() const { return m_controlCenterUpdateStatus; }
 
     Q_INVOKABLE QString quickSystemInfo() const;
+    Q_INVOKABLE QString saveSupportReport(const QString &text) const;
     Q_INVOKABLE void copyToClipboard(const QString &text) const;
     Q_INVOKABLE void refreshDashboardState();
     Q_INVOKABLE bool toolAvailable(const QString &toolId) const;
