@@ -28,6 +28,11 @@ private slots:
         QVERIFY(uefi.has_value());
         QCOMPARE(uefi->arguments.last(), QStringLiteral("00AF"));
 
+        auto readUefi = AdminPolicy::resolve({QStringLiteral("boot-read-uefi")});
+        QVERIFY(readUefi.has_value());
+        QCOMPARE(readUefi->program, QStringLiteral("/usr/bin/efibootmgr"));
+        QVERIFY(readUefi->arguments.isEmpty());
+
         auto clearNext = AdminPolicy::resolve({QStringLiteral("boot-clear-next-uefi")});
         QVERIFY(clearNext.has_value());
         QCOMPARE(clearNext->arguments, QStringList({QStringLiteral("-N")}));
