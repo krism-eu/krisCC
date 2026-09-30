@@ -39,6 +39,8 @@ public:
 
 signals:
     void stateChanged();
+    void controlFinished(bool userScope, const QString &unit,
+                         const QString &action, bool success);
 
 private:
     enum class Task {
