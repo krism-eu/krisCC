@@ -44,7 +44,6 @@ set_source_files_properties(qml/components/UiMetrics.qml PROPERTIES QT_QML_SINGL
 
 set(KRISCC_QML_FILES
     qml/components/UiMetrics.qml
-    qml/components/PageIntro.qml
     qml/components/OutputCard.qml
     qml/Main.qml
     qml/modules/DashboardModule.qml
