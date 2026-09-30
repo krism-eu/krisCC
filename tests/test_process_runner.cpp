@@ -100,6 +100,27 @@ private slots:
         QVERIFY(output.size() <= 64);
         QVERIFY(!output.isEmpty());
     }
+
+    void streamingOutputIsCompleteWhenAggregateIsBounded()
+    {
+        ProcessRunner runner;
+        QSignalSpy finishedSpy(&runner, &ProcessRunner::finished);
+        QByteArray streamed;
+        connect(&runner, &ProcessRunner::outputReady, &runner,
+                [&streamed](const QByteArray &data) { streamed.append(data); });
+
+        ProcessRunner::Options options;
+        options.program = QStringLiteral("/usr/bin/bash");
+        options.arguments = {QStringLiteral("-c"), QStringLiteral("printf '%01024d' 0")};
+        options.maxOutputBytes = 64;
+        options.timeoutMs = 1000;
+        QVERIFY(runner.start(options));
+        QVERIFY(finishedSpy.wait(2000));
+
+        QCOMPARE(finishedSpy.at(0).at(0).value<ProcessRunner::Outcome>(), ProcessRunner::Success);
+        QCOMPARE(streamed.size(), 1024);
+        QVERIFY(finishedSpy.at(0).at(2).toByteArray().size() <= 64);
+    }
 };
 
 QTEST_GUILESS_MAIN(ProcessRunnerTest)
