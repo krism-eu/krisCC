@@ -18,6 +18,7 @@
 
 namespace {
 constexpr qsizetype kMaxActions = 100;
+constexpr qsizetype kMaxQuickActions = 4;
 constexpr qsizetype kMaxName = 80;
 constexpr qsizetype kMaxDescription = 240;
 constexpr qsizetype kMaxScript = 64 * 1024;
@@ -126,7 +127,9 @@ void CustomActionsBackend::reload()
             || !object.value(QStringLiteral("name")).isString()
             || !object.value(QStringLiteral("description")).isString()
             || !object.value(QStringLiteral("script")).isString()
-            || !object.value(QStringLiteral("confirm")).isBool()) {
+            || !object.value(QStringLiteral("confirm")).isBool()
+            || (object.contains(QStringLiteral("quick"))
+                && !object.value(QStringLiteral("quick")).isBool())) {
             m_storageValid = false;
             break;
         }
@@ -149,6 +152,7 @@ void CustomActionsBackend::reload()
         action.insert(QStringLiteral("description"), description);
         action.insert(QStringLiteral("script"), script);
         action.insert(QStringLiteral("confirm"), object.value(QStringLiteral("confirm")).toBool());
+        action.insert(QStringLiteral("quick"), object.value(QStringLiteral("quick")).toBool(false));
         loaded.append(action);
     }
 
@@ -219,6 +223,7 @@ bool CustomActionsBackend::persist()
         object.insert(QStringLiteral("description"), action.value(QStringLiteral("description")).toString());
         object.insert(QStringLiteral("script"), action.value(QStringLiteral("script")).toString());
         object.insert(QStringLiteral("confirm"), action.value(QStringLiteral("confirm")).toBool());
+        object.insert(QStringLiteral("quick"), action.value(QStringLiteral("quick")).toBool());
         array.append(object);
     }
 
@@ -274,12 +279,16 @@ bool CustomActionsBackend::saveAction(const QString &id, const QString &name,
         actionId = requestedId;
     }
 
+    const bool wasQuick = index >= 0
+        && m_actions.at(index).toMap().value(QStringLiteral("quick")).toBool();
+
     QVariantMap action;
     action.insert(QStringLiteral("id"), actionId);
     action.insert(QStringLiteral("name"), name.trimmed());
     action.insert(QStringLiteral("description"), description.trimmed());
     action.insert(QStringLiteral("script"), script);
     action.insert(QStringLiteral("confirm"), confirmBeforeRun);
+    action.insert(QStringLiteral("quick"), wasQuick);
 
     const QVariantList previous = m_actions;
     if (index >= 0)
@@ -296,6 +305,20 @@ bool CustomActionsBackend::saveAction(const QString &id, const QString &name,
     return true;
 }
 
+QVariantList CustomActionsBackend::quickActions() const
+{
+    QVariantList result;
+    for (const QVariant &value : m_actions) {
+        const QVariantMap action = value.toMap();
+        if (!action.value(QStringLiteral("quick")).toBool())
+            continue;
+        result.append(action);
+        if (result.size() >= kMaxQuickActions)
+            break;
+    }
+    return result;
+}
+
 bool CustomActionsBackend::removeAction(const QString &id)
 {
     if (m_running || !m_storageValid)
@@ -306,6 +329,38 @@ bool CustomActionsBackend::removeAction(const QString &id)
 
     const QVariantList previous = m_actions;
     m_actions.removeAt(index);
+    if (!persist()) {
+        m_actions = previous;
+        return false;
+    }
+    emit actionsChanged();
+    return true;
+}
+
+bool CustomActionsBackend::setQuickAction(const QString &id, bool quick)
+{
+    if (m_running || !m_storageValid)
+        return false;
+    const int index = indexForId(id);
+    if (index < 0)
+        return false;
+
+    if (quick) {
+        qsizetype count = 0;
+        for (const QVariant &value : m_actions)
+            count += value.toMap().value(QStringLiteral("quick")).toBool() ? 1 : 0;
+        if (count >= kMaxQuickActions
+            && !m_actions.at(index).toMap().value(QStringLiteral("quick")).toBool()) {
+            m_errorText = tr("Puoi assegnare al massimo %1 azioni rapide.").arg(kMaxQuickActions);
+            emit stateChanged();
+            return false;
+        }
+    }
+
+    const QVariantList previous = m_actions;
+    QVariantMap action = m_actions.at(index).toMap();
+    action.insert(QStringLiteral("quick"), quick);
+    m_actions[index] = action;
     if (!persist()) {
         m_actions = previous;
         return false;
