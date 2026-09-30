@@ -11,6 +11,7 @@ class CustomActionsBackend : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QVariantList actions READ actions NOTIFY actionsChanged)
+    Q_PROPERTY(QVariantList quickActions READ quickActions NOTIFY actionsChanged)
     Q_PROPERTY(bool running READ running NOTIFY stateChanged)
     Q_PROPERTY(QString runningId READ runningId NOTIFY stateChanged)
     Q_PROPERTY(QString output READ output NOTIFY stateChanged)
@@ -22,6 +23,7 @@ public:
     ~CustomActionsBackend() override;
 
     const QVariantList &actions() const { return m_actions; }
+    QVariantList quickActions() const;
     bool running() const { return m_running; }
     const QString &runningId() const { return m_runningId; }
     const QString &output() const { return m_output; }
@@ -33,6 +35,7 @@ public:
                                 const QString &description, const QString &script,
                                 bool confirmBeforeRun);
     Q_INVOKABLE bool removeAction(const QString &id);
+    Q_INVOKABLE bool setQuickAction(const QString &id, bool quick);
     Q_INVOKABLE bool runAction(const QString &id);
     Q_INVOKABLE void cancel();
 
