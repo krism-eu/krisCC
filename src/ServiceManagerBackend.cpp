@@ -295,6 +295,11 @@ void ServiceManagerBackend::handleFinished(Task task, int exitCode, int outcome,
             OperationLog::append(QStringLiteral("Servizi"),
                                  m_controlAction + QStringLiteral(" ") + m_controlUnit,
                                  QStringLiteral("error"), text.left(200));
+            const QString failedAction = m_controlAction;
+            const QString failedUnit = m_controlUnit;
+            m_controlAction.clear();
+            m_controlUnit.clear();
+            emit controlFinished(m_userScope, failedUnit, failedAction, false);
         }
         if (result == ProcessRunner::Cancelled)
             finish(QStringLiteral("cancelled"), tr("Operazione annullata."));
@@ -361,9 +366,11 @@ void ServiceManagerBackend::handleFinished(Task task, int exitCode, int outcome,
         OperationLog::append(QStringLiteral("Servizi"),
                              m_controlAction + QStringLiteral(" ") + m_controlUnit,
                              QStringLiteral("success"));
+        const QString action = m_controlAction;
         const QString unit = m_controlUnit;
         m_controlAction.clear();
         m_controlUnit.clear();
+        emit controlFinished(m_userScope, unit, action, true);
         finish(QStringLiteral("success"), tr("Operazione completata su %1.").arg(unit));
         return;
     }
