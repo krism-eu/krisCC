@@ -211,12 +211,13 @@ Kirigami.ScrollablePage {
                                     }
                                 }
                                 Controls.Button {
-                                    visible: actualService !== "wifi"
                                     flat: true
                                     icon.name: "utilities-log-viewer"
                                     text: qsTr("Log")
                                     display: Controls.AbstractButton.IconOnly
-                                    Controls.ToolTip.visible: hovered
+                                    opacity: actualService === "wifi" ? 0 : 1
+                                    enabled: actualService !== "wifi"
+                                    Controls.ToolTip.visible: hovered && enabled
                                     Controls.ToolTip.text: text
                                     onClicked: root.openJournal(actualService, false)
                                 }

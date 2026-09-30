@@ -70,7 +70,7 @@ cmake --build build
 
 ## RPM e integrazione nell'immagine
 
-Lo spec RPM è `packaging/krisCC.spec` e produce **`krisCC-0.8.0-*.rpm`**. La CI Fedora 45 costruisce l'RPM, lo installa in un ambiente pulito, riesegue lo smoke test e produce `SHA256SUMS` dell'artefatto RPM.
+Lo spec RPM è `packaging/krisCC.spec` e produce **`krisCC-0.8.1-*.rpm`**. La CI Fedora 45 costruisce l'RPM, lo installa in un ambiente pulito, riesegue lo smoke test e produce `SHA256SUMS` dell'artefatto RPM.
 
 Il flusso previsto per KrisOS è:
 
@@ -84,8 +84,8 @@ Esempio manuale:
 
 ```bash
 mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-git archive --format=tar.gz --prefix=krisCC-0.8.0/ \
-  -o ~/rpmbuild/SOURCES/krisCC-0.8.0.tar.gz HEAD
+git archive --format=tar.gz --prefix=krisCC-0.8.1/ \
+  -o ~/rpmbuild/SOURCES/krisCC-0.8.1.tar.gz HEAD
 cp packaging/krisCC.spec ~/rpmbuild/SPECS/krisCC.spec
 rpmbuild -ba ~/rpmbuild/SPECS/krisCC.spec
 ```
