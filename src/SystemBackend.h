@@ -4,6 +4,7 @@
 #include <QPointer>
 #include <QProcess>
 #include <QString>
+#include <QStringList>
 #include <QVariantList>
 #include <QVariantMap>
 
@@ -33,6 +34,8 @@ class SystemBackend : public QObject
     Q_PROPERTY(bool grubNextBootAvailable READ grubNextBootAvailable CONSTANT)
     Q_PROPERTY(QVariantList uefiEntries READ uefiEntries NOTIFY bootEntriesChanged)
     Q_PROPERTY(QString nextUefiBootLabel READ nextUefiBootLabel NOTIFY bootEntriesChanged)
+    Q_PROPERTY(QString currentUefiBootCode READ currentUefiBootCode NOTIFY bootEntriesChanged)
+    Q_PROPERTY(QStringList uefiBootOrder READ uefiBootOrder NOTIFY bootEntriesChanged)
     Q_PROPERTY(QVariantList grubEntries READ grubEntries NOTIFY bootEntriesChanged)
     Q_PROPERTY(bool bootEntriesBusy READ bootEntriesBusy NOTIFY bootEntriesChanged)
     Q_PROPERTY(QString bootEntriesError READ bootEntriesError NOTIFY bootEntriesChanged)
@@ -80,6 +83,8 @@ public:
     bool grubNextBootAvailable() const;
     const QVariantList &uefiEntries() const { return m_uefiEntries; }
     const QString &nextUefiBootLabel() const { return m_nextUefiBootLabel; }
+    const QString &currentUefiBootCode() const { return m_currentUefiBootCode; }
+    const QStringList &uefiBootOrder() const { return m_uefiBootOrder; }
     const QVariantList &grubEntries() const { return m_grubEntries; }
     bool bootEntriesBusy() const { return m_bootEntriesBusy; }
     const QString &bootEntriesError() const { return m_bootEntriesError; }
@@ -109,6 +114,7 @@ public:
     const QString &controlCenterUpdateStatus() const { return m_controlCenterUpdateStatus; }
 
     Q_INVOKABLE QString quickSystemInfo() const;
+    Q_INVOKABLE QString saveSupportReport(const QString &text) const;
     Q_INVOKABLE void copyToClipboard(const QString &text) const;
     Q_INVOKABLE void refreshDashboardState();
     Q_INVOKABLE bool toolAvailable(const QString &toolId) const;
@@ -132,8 +138,12 @@ public:
     Q_INVOKABLE void checkInternetIdentity();
     Q_INVOKABLE void setResourceMonitoringEnabled(bool enabled);
     Q_INVOKABLE void refreshUefiEntries();
+    Q_INVOKABLE void refreshUefiEntriesPrivileged();
     Q_INVOKABLE void refreshGrubEntries();
     Q_INVOKABLE bool selectNextUefi(const QString &token);
+    Q_INVOKABLE bool clearNextUefi();
+    Q_INVOKABLE bool deleteUefiEntry(const QString &token);
+    Q_INVOKABLE bool moveUefiEntry(const QString &token, int direction);
     Q_INVOKABLE bool selectNextGrub(const QString &entry);
     Q_INVOKABLE void notify(const QString &summary, const QString &body = QString()) const;
 
@@ -183,10 +193,13 @@ private:
     void refreshTopMemoryProcesses();
     void refreshNetworkState();
     double readCpuTemperature() const;
+    bool applyUefiBootOrder(const QStringList &order);
+    void applyUefiEntriesOutput(const QString &output);
 
     PolkitHelper *m_polkit = nullptr;
     QNetworkAccessManager *m_networkAccess = nullptr;
     bool m_bootSelectionOwned = false;
+    bool m_bootReadOwned = false;
     bool m_adminMaintenanceOwned = false;
     QString m_adminMaintenanceOperation;
     bool m_bootSelectionRunning = false;
@@ -194,6 +207,8 @@ private:
     QString m_bootSelectionState = QStringLiteral("idle");
     QVariantList m_uefiEntries;
     QString m_nextUefiBootLabel;
+    QString m_currentUefiBootCode;
+    QStringList m_uefiBootOrder;
     QVariantList m_grubEntries;
     QPointer<QProcess> m_bootEntriesProcess;
     bool m_bootEntriesBusy = false;

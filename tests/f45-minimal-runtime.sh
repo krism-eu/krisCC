@@ -42,7 +42,7 @@ COPY krisCC.rpm /tmp/krisCC.rpm
 RUN set -eux; \
     test "$(rpm -qp --qf '%{NAME}' /tmp/krisCC.rpm)" = krisCC; \
     test "$(rpm -qp --qf '%{VERSION}-%{RELEASE}.%{ARCH}' /tmp/krisCC.rpm)" = \
-      '0.7.10-1.fc45.x86_64'; \
+      '0.8.1-1.fc45.x86_64'; \
     for req in \
       /usr/bin/timeout \
       /usr/bin/systemctl \
@@ -120,7 +120,7 @@ podman run --rm \
     set -euxo pipefail
     rpm -V krisCC
     test "$(rpm -q --qf "%{VERSION}-%{RELEASE}.%{ARCH}" krisCC)" = \
-      "0.7.10-1.fc45.x86_64"
+      "0.8.1-1.fc45.x86_64"
     test -z "$(ldd /usr/bin/krisCC | awk "/not found/{print}")"
   '
 

@@ -38,6 +38,7 @@
 #include <QSet>
 #include <QStandardPaths>
 #include <QSettings>
+#include <QSharedPointer>
 #include <QStorageInfo>
 #include <QSysInfo>
 #include <QTextStream>
@@ -51,6 +52,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <functional>
 
 namespace {
 constexpr int kBackupVerifyTimeoutMs = 10 * 60 * 1000;
@@ -107,6 +109,59 @@ const QStringList &backupHomeExcludes()
     };
     return entries;
 }
+
+constexpr qsizetype kArchiveValidationLineLimit = 64 * 1024;
+
+bool consumeArchiveListing(QByteArray &buffer, const QByteArray &data, bool flushPartial,
+                           const std::function<bool(const QString &)> &validator,
+                           QString *rejectedLine)
+{
+    if (!data.isEmpty())
+        buffer.append(data);
+
+    auto validateRawLine = [&](QByteArray raw) {
+        if (!raw.isEmpty() && raw.endsWith('\r'))
+            raw.chop(1);
+        if (raw.isEmpty())
+            return true;
+        if (raw.size() > kArchiveValidationLineLimit) {
+            if (rejectedLine)
+                *rejectedLine = QCoreApplication::translate(
+                    "SystemBackend", "riga listing archivio troppo lunga");
+            return false;
+        }
+        const QString line = QString::fromUtf8(raw);
+        if (!validator(line)) {
+            if (rejectedLine)
+                *rejectedLine = line.left(160);
+            return false;
+        }
+        return true;
+    };
+
+    qsizetype newline = -1;
+    while ((newline = buffer.indexOf('\n')) >= 0) {
+        const QByteArray raw = buffer.left(newline);
+        buffer.remove(0, newline + 1);
+        if (!validateRawLine(raw))
+            return false;
+    }
+
+    if (buffer.size() > kArchiveValidationLineLimit) {
+        if (rejectedLine)
+            *rejectedLine = QCoreApplication::translate(
+                "SystemBackend", "riga listing archivio troppo lunga");
+        return false;
+    }
+
+    if (flushPartial && !buffer.isEmpty()) {
+        const QByteArray raw = buffer;
+        buffer.clear();
+        if (!validateRawLine(raw))
+            return false;
+    }
+    return true;
+}
 }
 
 SystemBackend::SystemBackend(PolkitHelper *polkit, QObject *parent)
@@ -117,6 +172,23 @@ SystemBackend::SystemBackend(PolkitHelper *polkit, QObject *parent)
         connect(m_polkit, &PolkitHelper::runningChanged, this, &SystemBackend::bootSelectionStateChanged);
         connect(m_polkit, &PolkitHelper::finished, this,
                 [this](bool success, const QString &output) {
+            if (m_bootReadOwned) {
+                m_bootReadOwned = false;
+                m_bootEntriesBusy = false;
+                if (success) {
+                    applyUefiEntriesOutput(output);
+                } else {
+                    m_uefiEntries.clear();
+                    m_nextUefiBootLabel.clear();
+                    m_currentUefiBootCode.clear();
+                    m_uefiBootOrder.clear();
+                    m_bootEntriesError = output.isEmpty()
+                        ? tr("Impossibile leggere le voci UEFI con autorizzazione amministrativa.")
+                        : output;
+                }
+                emit bootEntriesChanged();
+                return;
+            }
             if (m_adminMaintenanceOwned) {
                 const QString operation = m_adminMaintenanceOperation;
                 m_adminMaintenanceOwned = false;
@@ -214,37 +286,15 @@ void SystemBackend::refreshUefiEntries()
         if (timedOut || status != QProcess::NormalExit || exitCode != 0) {
             m_uefiEntries.clear();
             m_nextUefiBootLabel.clear();
+            m_currentUefiBootCode.clear();
+            m_uefiBootOrder.clear();
             m_bootEntriesError = timedOut ? tr("Tempo massimo superato leggendo le voci UEFI.")
-                                          : tr("Impossibile leggere le voci UEFI.");
+                                          : tr("Impossibile leggere le voci UEFI senza privilegi. Usa “Leggi con autorizzazione” per riprovare.");
             emit bootEntriesChanged();
             return;
         }
 
-        const auto parsed = ContractParsers::parseUefiEntries(output.toUtf8());
-        m_uefiEntries = parsed.values;
-        m_nextUefiBootLabel.clear();
-
-        QString preferredCode;
-        const QRegularExpression bootNextPattern(QStringLiteral("(?m)^BootNext:\\s*([0-9A-Fa-f]{4})\\s*$"));
-        const QRegularExpression bootOrderPattern(QStringLiteral("(?m)^BootOrder:\\s*([0-9A-Fa-f]{4})"));
-        QRegularExpressionMatch match = bootNextPattern.match(output);
-        if (match.hasMatch())
-            preferredCode = match.captured(1).toUpper();
-        else {
-            match = bootOrderPattern.match(output);
-            if (match.hasMatch())
-                preferredCode = match.captured(1).toUpper();
-        }
-        for (const QVariant &value : m_uefiEntries) {
-            const QVariantMap row = value.toMap();
-            if (row.value(QStringLiteral("code")).toString() == preferredCode) {
-                m_nextUefiBootLabel = row.value(QStringLiteral("label")).toString();
-                break;
-            }
-        }
-        if (m_nextUefiBootLabel.isEmpty() && !preferredCode.isEmpty())
-            m_nextUefiBootLabel = preferredCode;
-        m_bootEntriesError.clear();
+        applyUefiEntriesOutput(output);
         emit bootEntriesChanged();
     });
 
@@ -257,6 +307,8 @@ void SystemBackend::refreshUefiEntries()
         m_bootEntriesBusy = false;
         m_uefiEntries.clear();
         m_nextUefiBootLabel.clear();
+        m_currentUefiBootCode.clear();
+        m_uefiBootOrder.clear();
         m_bootEntriesError = tr("Impossibile avviare efibootmgr.");
         emit bootEntriesChanged();
     });
@@ -272,6 +324,76 @@ void SystemBackend::refreshUefiEntries()
                 guard->kill();
         });
     });
+}
+
+void SystemBackend::applyUefiEntriesOutput(const QString &output)
+{
+    const auto parsed = ContractParsers::parseUefiEntries(output.toUtf8());
+    m_nextUefiBootLabel.clear();
+    m_currentUefiBootCode.clear();
+    m_uefiBootOrder.clear();
+
+    const QRegularExpression bootCurrentPattern(
+        QStringLiteral("(?m)^BootCurrent:\\s*([0-9A-Fa-f]{4})\\s*$"));
+    const QRegularExpression bootNextPattern(
+        QStringLiteral("(?m)^BootNext:\\s*([0-9A-Fa-f]{4})\\s*$"));
+    const QRegularExpression bootOrderPattern(
+        QStringLiteral("(?m)^BootOrder:\\s*([0-9A-Fa-f]{4}(?:,[0-9A-Fa-f]{4})*)\\s*$"));
+
+    const QRegularExpressionMatch currentMatch = bootCurrentPattern.match(output);
+    if (currentMatch.hasMatch())
+        m_currentUefiBootCode = currentMatch.captured(1).toUpper();
+
+    QString nextCode;
+    const QRegularExpressionMatch nextMatch = bootNextPattern.match(output);
+    if (nextMatch.hasMatch())
+        nextCode = nextMatch.captured(1).toUpper();
+
+    const QRegularExpressionMatch orderMatch = bootOrderPattern.match(output);
+    if (orderMatch.hasMatch()) {
+        for (const QString &token : orderMatch.captured(1).split(QLatin1Char(',')))
+            m_uefiBootOrder.append(token.toUpper());
+    }
+
+    QHash<QString, QVariantMap> byCode;
+    for (const QVariant &value : parsed.values) {
+        QVariantMap row = value.toMap();
+        const QString code = row.value(QStringLiteral("code")).toString();
+        row.insert(QStringLiteral("current"), code == m_currentUefiBootCode);
+        row.insert(QStringLiteral("next"), code == nextCode);
+        row.insert(QStringLiteral("orderIndex"), m_uefiBootOrder.indexOf(code));
+        byCode.insert(code, row);
+        if (code == nextCode)
+            m_nextUefiBootLabel = row.value(QStringLiteral("label")).toString();
+    }
+
+    QVariantList ordered;
+    for (const QString &code : m_uefiBootOrder) {
+        if (byCode.contains(code))
+            ordered.append(byCode.take(code));
+    }
+    QStringList remaining = byCode.keys();
+    remaining.sort();
+    for (const QString &code : remaining)
+        ordered.append(byCode.value(code));
+    m_uefiEntries = ordered;
+
+    if (m_nextUefiBootLabel.isEmpty() && !nextCode.isEmpty())
+        m_nextUefiBootLabel = nextCode;
+    m_bootEntriesError.clear();
+}
+
+void SystemBackend::refreshUefiEntriesPrivileged()
+{
+    if (m_bootEntriesBusy || !m_polkit || m_polkit->running() || !uefiBootAvailable())
+        return;
+
+    m_bootReadOwned = true;
+    m_bootEntriesBusy = true;
+    m_bootEntriesError.clear();
+    emit bootEntriesChanged();
+    m_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin"),
+                      {QStringLiteral("boot-read-uefi")});
 }
 
 void SystemBackend::refreshGrubEntries()
@@ -361,6 +483,95 @@ bool SystemBackend::selectNextUefi(const QString &value)
     m_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin"),
                       {QStringLiteral("boot-next-uefi"), token});
     return true;
+}
+
+bool SystemBackend::clearNextUefi()
+{
+    if (!m_polkit || m_polkit->running() || !uefiBootAvailable())
+        return false;
+
+    m_bootSelectionOwned = true;
+    m_bootSelectionRunning = true;
+    m_bootSelectionKind = QStringLiteral("uefi");
+    m_bootSelectionState = QStringLiteral("running");
+    emit bootSelectionStateChanged();
+    m_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin"),
+                      {QStringLiteral("boot-clear-next-uefi")});
+    return true;
+}
+
+bool SystemBackend::deleteUefiEntry(const QString &value)
+{
+    if (!m_polkit || m_polkit->running() || !uefiBootAvailable())
+        return false;
+    const QString token = value.trimmed().toUpper();
+    if (!Validators::bootToken(token) || token == m_currentUefiBootCode)
+        return false;
+
+    bool exists = false;
+    for (const QVariant &entry : m_uefiEntries) {
+        if (entry.toMap().value(QStringLiteral("code")).toString() == token) {
+            exists = true;
+            break;
+        }
+    }
+    if (!exists)
+        return false;
+
+    m_bootSelectionOwned = true;
+    m_bootSelectionRunning = true;
+    m_bootSelectionKind = QStringLiteral("uefi");
+    m_bootSelectionState = QStringLiteral("running");
+    emit bootSelectionStateChanged();
+    m_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin"),
+                      {QStringLiteral("boot-delete-uefi"), token});
+    return true;
+}
+
+bool SystemBackend::applyUefiBootOrder(const QStringList &requestedOrder)
+{
+    if (!m_polkit || m_polkit->running() || !uefiBootAvailable())
+        return false;
+
+    QStringList order;
+    for (const QString &value : requestedOrder)
+        order.append(value.trimmed().toUpper());
+
+    if (order.size() != m_uefiBootOrder.size())
+        return false;
+
+    QSet<QString> requested(order.cbegin(), order.cend());
+    QSet<QString> current(m_uefiBootOrder.cbegin(), m_uefiBootOrder.cend());
+    if (requested != current)
+        return false;
+
+    const QString serialized = order.join(QLatin1Char(','));
+    if (!Validators::bootOrder(serialized))
+        return false;
+
+    m_bootSelectionOwned = true;
+    m_bootSelectionRunning = true;
+    m_bootSelectionKind = QStringLiteral("uefi");
+    m_bootSelectionState = QStringLiteral("running");
+    emit bootSelectionStateChanged();
+    m_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin"),
+                      {QStringLiteral("boot-order-uefi"), serialized});
+    return true;
+}
+
+bool SystemBackend::moveUefiEntry(const QString &value, int direction)
+{
+    if (direction != -1 && direction != 1)
+        return false;
+    const QString token = value.trimmed().toUpper();
+    const int index = m_uefiBootOrder.indexOf(token);
+    const int target = index + direction;
+    if (index < 0 || target < 0 || target >= m_uefiBootOrder.size())
+        return false;
+
+    QStringList order = m_uefiBootOrder;
+    order.swapItemsAt(index, target);
+    return applyUefiBootOrder(order);
 }
 
 bool SystemBackend::selectNextGrub(const QString &value)
@@ -674,6 +885,34 @@ QString SystemBackend::quickSystemInfo() const
     out << tr("Modalità di avvio: ") << (QFileInfo::exists(QStringLiteral("/sys/firmware/efi")) ? "UEFI" : "BIOS") << '\n';
     out << "Qt: " << qVersion() << '\n';
     return text.trimmed();
+}
+
+QString SystemBackend::saveSupportReport(const QString &text) const
+{
+    if (text.trimmed().isEmpty() || text.size() > 2 * 1024 * 1024)
+        return {};
+
+    QString directory = QStandardPaths::writableLocation(QStandardPaths::DownloadLocation);
+    if (directory.isEmpty())
+        directory = QDir::homePath();
+    if (!QDir().mkpath(directory))
+        return {};
+
+    const QString fileName = QStringLiteral("krisCC-support-%1.txt")
+        .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss")));
+    const QString path = QDir(directory).filePath(fileName);
+
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::NewOnly))
+        return {};
+    if (!file.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner))
+        return {};
+    const QByteArray data = text.toUtf8();
+    if (file.write(data) != data.size())
+        return {};
+    file.close();
+    notify(tr("Rapporto supporto salvato"), path);
+    return path;
 }
 
 void SystemBackend::copyToClipboard(const QString &text) const
@@ -1556,63 +1795,125 @@ bool SystemBackend::restoreSnapshot(const QString &path)
 
     auto *preflight = new ProcessRunner(this);
     m_backupRunner = preflight;
+    const auto memberBuffer = QSharedPointer<QByteArray>::create();
+    const auto memberValid = QSharedPointer<bool>::create(true);
+    const auto rejectedMember = QSharedPointer<QString>::create();
+
+    connect(preflight, &ProcessRunner::outputReady, this,
+            [preflight, memberBuffer, memberValid, rejectedMember](const QByteArray &data) {
+        if (!*memberValid)
+            return;
+        const bool valid = consumeArchiveListing(
+            *memberBuffer, data, false,
+            [](const QString &line) {
+                return Validators::archiveMemberPath(line.trimmed());
+            },
+            rejectedMember.data());
+        if (!valid) {
+            *memberValid = false;
+            preflight->cancel();
+        }
+    });
+
     connect(preflight, &ProcessRunner::finished, this,
-            [this, preflight, canonical, startRestore](ProcessRunner::Outcome outcome, int,
-                                                       const QByteArray &stdoutData,
-                                                       const QByteArray &stderrData,
-                                                       const QString &errorString) {
+            [this, preflight, canonical, startRestore,
+             memberBuffer, memberValid, rejectedMember](ProcessRunner::Outcome outcome, int,
+                                                        const QByteArray &,
+                                                        const QByteArray &stderrData,
+                                                        const QString &errorString) {
         if (preflight != m_backupRunner)
             return;
         m_backupRunner = nullptr;
         preflight->deleteLater();
 
+        if (*memberValid && outcome == ProcessRunner::Success) {
+            *memberValid = consumeArchiveListing(
+                *memberBuffer, QByteArray(), true,
+                [](const QString &line) {
+                    return Validators::archiveMemberPath(line.trimmed());
+                },
+                rejectedMember.data());
+        }
+
+        if (!*memberValid) {
+            setBackupBusy(false);
+            setBackupResult(tr("Ripristino bloccato: percorso archivio non sicuro: %1")
+                                .arg(rejectedMember->left(160)),
+                            canonical, QStringLiteral("error"));
+            OperationLog::append(QStringLiteral("Backup"), QStringLiteral("restore"),
+                                 QStringLiteral("error"), QFileInfo(canonical).fileName());
+            return;
+        }
+
         if (outcome == ProcessRunner::Success) {
-            const QStringList members = QString::fromUtf8(stdoutData).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
-            for (const QString &member : members) {
-                if (!Validators::archiveMemberPath(member.trimmed())) {
+            auto *typeCheck = new ProcessRunner(this);
+            m_backupRunner = typeCheck;
+            const auto typeBuffer = QSharedPointer<QByteArray>::create();
+            const auto typeValid = QSharedPointer<bool>::create(true);
+            const auto rejectedType = QSharedPointer<QString>::create();
+
+            connect(typeCheck, &ProcessRunner::outputReady, this,
+                    [typeCheck, typeBuffer, typeValid, rejectedType](const QByteArray &data) {
+                if (!*typeValid)
+                    return;
+                const bool valid = consumeArchiveListing(
+                    *typeBuffer, data, false,
+                    [](const QString &line) {
+                        return Validators::archiveVerboseEntry(line);
+                    },
+                    rejectedType.data());
+                if (!valid) {
+                    *typeValid = false;
+                    typeCheck->cancel();
+                }
+            });
+
+            connect(typeCheck, &ProcessRunner::finished, this,
+                    [this, typeCheck, canonical, startRestore,
+                     typeBuffer, typeValid, rejectedType](ProcessRunner::Outcome typeOutcome, int,
+                                                          const QByteArray &,
+                                                          const QByteArray &typeStderr,
+                                                          const QString &typeError) {
+                if (typeCheck != m_backupRunner)
+                    return;
+                m_backupRunner = nullptr;
+                typeCheck->deleteLater();
+
+                if (*typeValid && typeOutcome == ProcessRunner::Success) {
+                    *typeValid = consumeArchiveListing(
+                        *typeBuffer, QByteArray(), true,
+                        [](const QString &line) {
+                            return Validators::archiveVerboseEntry(line);
+                        },
+                        rejectedType.data());
+                }
+
+                if (!*typeValid) {
                     setBackupBusy(false);
-                    setBackupResult(tr("Ripristino bloccato: percorso archivio non sicuro: %1").arg(member.left(160)),
+                    setBackupResult(tr("Ripristino bloccato: tipo o collegamento archivio non sicuro: %1")
+                                        .arg(rejectedType->left(160)),
                                     canonical, QStringLiteral("error"));
                     OperationLog::append(QStringLiteral("Backup"), QStringLiteral("restore"),
                                          QStringLiteral("error"), QFileInfo(canonical).fileName());
                     return;
                 }
-            }
 
-            auto *typeCheck = new ProcessRunner(this);
-            m_backupRunner = typeCheck;
-            connect(typeCheck, &ProcessRunner::finished, this,
-                    [this, typeCheck, canonical, startRestore](ProcessRunner::Outcome typeOutcome, int,
-                                                               const QByteArray &typeStdout,
-                                                               const QByteArray &typeStderr,
-                                                               const QString &typeError) {
-                if (typeCheck != m_backupRunner)
-                    return;
-                m_backupRunner = nullptr;
-                typeCheck->deleteLater();
                 if (typeOutcome == ProcessRunner::Success) {
-                    const QStringList entries = QString::fromUtf8(typeStdout).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
-                    for (const QString &entry : entries) {
-                        if (!Validators::archiveVerboseEntry(entry)) {
-                            setBackupBusy(false);
-                            setBackupResult(tr("Ripristino bloccato: tipo o collegamento archivio non sicuro."),
-                                            canonical, QStringLiteral("error"));
-                            OperationLog::append(QStringLiteral("Backup"), QStringLiteral("restore"),
-                                                 QStringLiteral("error"), QFileInfo(canonical).fileName());
-                            return;
-                        }
-                    }
                     startRestore();
                     return;
                 }
+
                 setBackupBusy(false);
                 const QString details = QString::fromUtf8(typeStderr).trimmed();
-                setBackupResult(details.isEmpty() ? tr("Ripristino bloccato: impossibile validare i tipi dei membri dell'archivio.")
-                                                  : details,
+                setBackupResult(details.isEmpty()
+                                    ? tr("Ripristino bloccato: impossibile validare i tipi dei membri dell'archivio.")
+                                    : details,
                                 canonical, QStringLiteral("error"));
                 if (typeOutcome == ProcessRunner::FailedToStart && !typeError.isEmpty())
-                    setBackupResult(tr("Impossibile avviare la verifica dei tipi: %1").arg(typeError), canonical, QStringLiteral("error"));
+                    setBackupResult(tr("Impossibile avviare la verifica dei tipi: %1").arg(typeError),
+                                    canonical, QStringLiteral("error"));
             });
+
             ProcessRunner::Options typeOptions;
             typeOptions.program = resolveExecutable(QStringLiteral("tar"));
             typeOptions.arguments = {QStringLiteral("-tvzf"), canonical, QStringLiteral("--numeric-owner")};
@@ -1624,7 +1925,8 @@ bool SystemBackend::restoreSnapshot(const QString &path)
                 m_backupRunner = nullptr;
                 typeCheck->deleteLater();
                 setBackupBusy(false);
-                setBackupResult(tr("Impossibile inizializzare la verifica dei tipi dell'archivio."), canonical, QStringLiteral("error"));
+                setBackupResult(tr("Impossibile inizializzare la verifica dei tipi dell'archivio."),
+                                canonical, QStringLiteral("error"));
             }
             return;
         }

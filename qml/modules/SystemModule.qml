@@ -13,6 +13,8 @@ Kirigami.ScrollablePage {
 
     property var historyEntries: []
     property bool rebootAfterDownloadedApply: false
+    property string pendingUefiDeleteToken: ""
+    property string pendingUefiDeleteLabel: ""
 
     function bootedDeployment() {
         var entries = BootcBackend.deployments
@@ -387,36 +389,162 @@ Kirigami.ScrollablePage {
                 Kirigami.AbstractCard {
                     Layout.fillWidth: true
                     contentItem: ColumnLayout {
-                        Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Prossimo avvio UEFI") }
+                        spacing: Kirigami.Units.smallSpacing
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Kirigami.Heading {
+                                Layout.fillWidth: true
+                                level: 2
+                                font.bold: true
+                                text: qsTr("Gestione UEFI NVRAM")
+                            }
+                            Controls.Button {
+                                text: qsTr("Aggiorna")
+                                icon.name: "view-refresh"
+                                enabled: !SystemBackend.bootEntriesBusy
+                                      && SystemBackend.uefiBootAvailable
+                                onClicked: SystemBackend.refreshUefiEntries()
+                            }
+                            Controls.Button {
+                                visible: SystemBackend.bootEntriesError.length > 0
+                                text: qsTr("Leggi con autorizzazione")
+                                icon.name: "security-high"
+                                enabled: !SystemBackend.bootEntriesBusy
+                                      && SystemBackend.canSelectNextBoot
+                                      && SystemBackend.uefiBootAvailable
+                                onClicked: SystemBackend.refreshUefiEntriesPrivileged()
+                            }
+                        }
+
                         Controls.Label {
                             Layout.fillWidth: true
                             wrapMode: Text.WordWrap
                             opacity: UiMetrics.secondaryOpacity
-                            text: qsTr("BootNext vale per un solo riavvio e non cambia il BootOrder permanente.")
+                            text: qsTr("Gestisce BootNext e l'ordine delle voci EFI senza modificare file GRUB/BLS. La voce BootCurrent non può essere eliminata.")
                         }
-                        RowLayout {
+
+                        GridLayout {
                             Layout.fillWidth: true
-                            Controls.Button {
-                                text: qsTr("Leggi voci UEFI")
-                                icon.name: "view-refresh"
-                                enabled: !SystemBackend.bootEntriesBusy && SystemBackend.uefiBootAvailable
-                                onClicked: SystemBackend.refreshUefiEntries()
+                            columns: 2
+                            columnSpacing: Kirigami.Units.largeSpacing
+                            Controls.Label {
+                                text: qsTr("BootCurrent")
+                                opacity: UiMetrics.secondaryOpacity
                             }
-                            Controls.ComboBox {
-                                id: uefiCombo
+                            Controls.Label {
+                                text: SystemBackend.currentUefiBootCode.length > 0
+                                      ? SystemBackend.currentUefiBootCode
+                                      : qsTr("non disponibile")
+                            }
+                            Controls.Label {
+                                text: qsTr("BootNext")
+                                opacity: UiMetrics.secondaryOpacity
+                            }
+                            RowLayout {
                                 Layout.fillWidth: true
-                                model: SystemBackend.uefiEntries
-                                textRole: "label"
-                                valueRole: "code"
-                                enabled: count > 0
+                                Controls.Label {
+                                    Layout.fillWidth: true
+                                    text: SystemBackend.nextUefiBootLabel.length > 0
+                                          ? SystemBackend.nextUefiBootLabel
+                                          : qsTr("non impostato")
+                                    elide: Text.ElideMiddle
+                                }
+                                Controls.Button {
+                                    visible: SystemBackend.nextUefiBootLabel.length > 0
+                                    text: qsTr("Annulla BootNext")
+                                    enabled: SystemBackend.canSelectNextBoot
+                                    onClicked: clearUefiNextDialog.open()
+                                }
                             }
-                            Controls.Button { icon.name: "go-next";
-                                text: qsTr("Usa al prossimo avvio")
-                                enabled: uefiCombo.count > 0 && SystemBackend.canSelectNextBoot
-                                onClicked: {
-                                    nextUefiDialog.token = uefiCombo.currentValue
-                                    nextUefiDialog.label = uefiCombo.currentText
-                                    nextUefiDialog.open()
+                        }
+
+                        Kirigami.InlineMessage {
+                            Layout.fillWidth: true
+                            visible: SystemBackend.bootEntriesError.length > 0
+                            type: Kirigami.MessageType.Warning
+                            text: SystemBackend.bootEntriesError
+                        }
+
+                        Repeater {
+                            model: SystemBackend.uefiEntries
+                            delegate: Kirigami.AbstractCard {
+                                required property var modelData
+                                Layout.fillWidth: true
+                                contentItem: RowLayout {
+                                    spacing: Kirigami.Units.smallSpacing
+                                    Controls.Label {
+                                        Layout.preferredWidth: 60
+                                        font.family: Kirigami.Theme.fixedWidthFont.family
+                                        font.bold: modelData.current
+                                        text: modelData.code
+                                    }
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 0
+                                        Controls.Label {
+                                            Layout.fillWidth: true
+                                            text: modelData.label
+                                            elide: Text.ElideMiddle
+                                        }
+                                        Controls.Label {
+                                            visible: modelData.current || modelData.next
+                                            opacity: UiMetrics.secondaryOpacity
+                                            text: (modelData.current ? qsTr("corrente") : "")
+                                                  + (modelData.current && modelData.next ? " · " : "")
+                                                  + (modelData.next ? qsTr("prossimo avvio") : "")
+                                        }
+                                    }
+                                    Controls.Button {
+                                        flat: true
+                                        icon.name: "go-up"
+                                        text: qsTr("Sposta su")
+                                        display: Controls.AbstractButton.IconOnly
+                                        Controls.ToolTip.visible: hovered
+                                        Controls.ToolTip.text: text
+                                        enabled: SystemBackend.canSelectNextBoot
+                                              && modelData.orderIndex > 0
+                                        onClicked: SystemBackend.moveUefiEntry(modelData.code, -1)
+                                    }
+                                    Controls.Button {
+                                        flat: true
+                                        icon.name: "go-down"
+                                        text: qsTr("Sposta giù")
+                                        display: Controls.AbstractButton.IconOnly
+                                        Controls.ToolTip.visible: hovered
+                                        Controls.ToolTip.text: text
+                                        enabled: SystemBackend.canSelectNextBoot
+                                              && modelData.orderIndex >= 0
+                                              && modelData.orderIndex < SystemBackend.uefiBootOrder.length - 1
+                                        onClicked: SystemBackend.moveUefiEntry(modelData.code, 1)
+                                    }
+                                    Controls.Button {
+                                        text: qsTr("BootNext")
+                                        enabled: SystemBackend.canSelectNextBoot
+                                              && !modelData.next
+                                        onClicked: {
+                                            nextUefiDialog.token = modelData.code
+                                            nextUefiDialog.label = modelData.label
+                                            nextUefiDialog.open()
+                                        }
+                                    }
+                                    Controls.Button {
+                                        flat: true
+                                        icon.name: "edit-delete"
+                                        text: qsTr("Elimina")
+                                        display: Controls.AbstractButton.IconOnly
+                                        Controls.ToolTip.visible: hovered
+                                        Controls.ToolTip.text: modelData.current
+                                            ? qsTr("La voce corrente non può essere eliminata")
+                                            : text
+                                        enabled: SystemBackend.canSelectNextBoot
+                                              && !modelData.current
+                                        onClicked: {
+                                            root.pendingUefiDeleteToken = modelData.code
+                                            root.pendingUefiDeleteLabel = modelData.label
+                                            deleteUefiDialog.open()
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -578,6 +706,41 @@ Kirigami.ScrollablePage {
             SystemBackend.clearOperationHistory()
             root.historyEntries = SystemBackend.operationHistoryEntries()
         }
+    }
+
+    Controls.Dialog {
+        id: clearUefiNextDialog
+        modal: true
+        parent: Controls.Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30,
+                        parent ? parent.width - Kirigami.Units.largeSpacing * 2
+                               : Kirigami.Units.gridUnit * 30)
+        title: qsTr("Annullare BootNext?")
+        standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
+        contentItem: Controls.Label {
+            wrapMode: Text.WordWrap
+            text: qsTr("Rimuove soltanto la selezione one-shot del prossimo avvio. Il BootOrder permanente non cambia.")
+        }
+        onAccepted: SystemBackend.clearNextUefi()
+    }
+
+    Controls.Dialog {
+        id: deleteUefiDialog
+        modal: true
+        parent: Controls.Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 32,
+                        parent ? parent.width - Kirigami.Units.largeSpacing * 2
+                               : Kirigami.Units.gridUnit * 32)
+        title: qsTr("Eliminare la voce EFI?")
+        standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
+        contentItem: Controls.Label {
+            wrapMode: Text.WordWrap
+            text: qsTr("Verrà eliminata dalla NVRAM la voce %1. L'operazione non elimina file dalle partizioni EFI.")
+                  .arg(root.pendingUefiDeleteLabel)
+        }
+        onAccepted: SystemBackend.deleteUefiEntry(root.pendingUefiDeleteToken)
     }
 
     Controls.Dialog {

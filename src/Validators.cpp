@@ -2,6 +2,7 @@
 
 #include <QDir>
 #include <QRegularExpression>
+#include <QSet>
 #include <QUrl>
 
 namespace Validators {
@@ -41,6 +42,22 @@ bool bootToken(const QString &value)
 {
     static const QRegularExpression pattern(QStringLiteral("^[0-9A-Fa-f]{4}$"));
     return pattern.match(value).hasMatch();
+}
+
+bool bootOrder(const QString &value)
+{
+    const QStringList tokens = value.split(QLatin1Char(','), Qt::SkipEmptyParts);
+    if (tokens.isEmpty() || tokens.size() > 64)
+        return false;
+
+    QSet<QString> seen;
+    for (const QString &token : tokens) {
+        const QString normalized = token.trimmed().toUpper();
+        if (!bootToken(normalized) || seen.contains(normalized))
+            return false;
+        seen.insert(normalized);
+    }
+    return true;
 }
 
 bool archiveMemberPath(const QString &value)

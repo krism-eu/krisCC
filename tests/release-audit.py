@@ -31,6 +31,8 @@ admin_cpp = read("src/AdminHelper.cpp")
 admin_policy = read("src/AdminPolicy.cpp")
 rk_cpp = read("src/RkBackend.cpp")
 custom_cpp = read("src/CustomActionsBackend.cpp")
+cron_cpp = read("src/CronBackend.cpp")
+cron_parser_cpp = read("src/CronParser.cpp")
 utility_cpp = read("src/UtilityBackend.cpp")
 package_cpp = read("src/PackageSearch.cpp")
 system_cpp = read("src/SystemBackend.cpp")
@@ -42,10 +44,18 @@ commands_qml = read("qml/modules/CommandsModule.qml")
 tools_qml = read("qml/modules/ToolsModule.qml")
 services_qml = read("qml/modules/ServicesNetworkModule.qml")
 repair_cpp = read("src/RepairBackend.cpp")
+service_manager_cpp = read("src/ServiceManagerBackend.cpp")
 recovery_qml = read("qml/modules/RecoveryModule.qml")
 contract_parsers_h = read("src/ContractParsers.h")
 contract_parsers_cpp = read("src/ContractParsers.cpp")
 contract_parsers_test = read("tests/test_contract_parsers.cpp")
+cron_parser_test = read("tests/test_cron_parser.cpp")
+
+command_ids = set(re.findall(r'\{\s*id:\s*"([^"]+)"', commands_qml))
+bookmark_ids = set(re.findall(r'id == QStringLiteral\("([^"]+)"\)', utility_cpp))
+require(command_ids <= bookmark_ids,
+        "CommandsModule contains bookmark IDs not implemented by UtilityBackend: "
+        + ", ".join(sorted(command_ids - bookmark_ids)))
 
 require(f'Version:        {VERSION}' in spec, "RPM Version differs from canonical version")
 require('Release:        1%{?dist}' in spec,
@@ -116,12 +126,34 @@ require("src/AdminPolicy.cpp src/AdminPolicy.h" in cmake, "shared admin policy n
 require("kriscc-test-validators" in cmake
         and "kriscc-test-admin-policy" in cmake
         and "kriscc-test-process-runner" in cmake
-        and "kriscc-test-parsers" in cmake,
+        and "kriscc-test-parsers" in cmake
+        and "kriscc-test-cron-parser" in cmake,
         "semantic unit tests are not wired into CTest")
 require("src/ProcessRunner.cpp src/ProcessRunner.h" in cmake,
         "shared user-level ProcessRunner not linked")
 require("src/ContractParsers.cpp src/ContractParsers.h" in cmake,
         "shared contract parsers not linked")
+require("src/CronBackend.cpp src/CronBackend.h" in cmake
+        and "src/CronParser.cpp src/CronParser.h" in cmake,
+        "cron viewer backend/parser not linked")
+require('QStringLiteral("-l")' in cron_cpp
+        and 'QIODevice::ReadOnly' in cron_cpp
+        and 'QStringLiteral("/etc/crontab")' in cron_cpp
+        and 'QStringLiteral("/etc/cron.d")' in cron_cpp
+        and "pkexec" not in cron_cpp
+        and "Polkit" not in cron_cpp
+        and "crontab -e" not in cron_cpp,
+        "cron viewer must remain capability-driven and read-only")
+require('qsTr("Cron")' in commands_qml
+        and "CronBackend.jobs" in commands_qml
+        and "CronBackend.reload()" in commands_qml
+        and "openFromCron" in commands_qml,
+        "Cron tab is not wired into the Commands UI")
+require("parsesUserCrontab" in cron_parser_test
+        and "parsesSystemCrontab" in cron_parser_test
+        and "describesCommonSchedules" in cron_parser_test
+        and "QRegularExpression" in cron_parser_cpp,
+        "cron parser contract/tests are incomplete")
 
 require("AdminPolicy::resolve" in admin_cpp and "AdminPolicy::resolve" in polkit_cpp,
         "client/root privileged allowlist does not share AdminPolicy")
@@ -306,6 +338,11 @@ require("qml/modules/ToolsModule.qml" in cmake
         and "qml/modules/ServicesNetworkModule.qml" in cmake
         and "src/RepairBackend.cpp src/RepairBackend.h" in cmake,
         "Swiss Army modules/backends are not wired into the build")
+require('bool ServiceManagerBackend::validJournalUnit' in service_manager_cpp
+        and r'\\.(?:service|socket|timer)$' in service_manager_cpp
+        and '!validJournalUnit(unit.trimmed())' in service_manager_cpp
+        and 'if (m_busy || !validUnit(unit))' in service_manager_cpp,
+        "journal must accept service/socket/timer without widening service controls")
 require('restartAudio()' in read("src/RepairBackend.h")
         and 'flushDns()' in read("src/RepairBackend.h")
         and 'reconnectNetwork' in repair_cpp,
@@ -350,6 +387,10 @@ for ignored in ("stage/", "artifacts/", "audit-build/", "*.rpm"):
     require(ignored in read(".gitignore"), f".gitignore missing {ignored}")
 
 require("0.6 è" not in read("INTEGRAZIONE.md"), "integration docs are stale")
+require("--output=json" in read("INTEGRAZIONE.md")
+        and "list-units" in read("INTEGRAZIONE.md")
+        and "list-unit-files" in read("INTEGRAZIONE.md"),
+        "integration docs must state the systemctl JSON runtime capability")
 require("release 0.5.1" not in read("i18n/README.md"), "i18n docs are stale")
 require("auth_admin_keep" not in read("data/org.kriscc.controlcenter.policy"),
         "Polkit retention is forbidden")
@@ -429,8 +470,16 @@ require('emitted < 20' in system_cpp and 'recent(int limit = 20)' in read("src/O
 
 
 require(r'QStringLiteral("(?m)^BootNext:\\s*([0-9A-Fa-f]{4})\\s*$")' in system_cpp
-        and r'QStringLiteral("(?m)^BootOrder:\\s*([0-9A-Fa-f]{4})")' in system_cpp,
+        and r'QStringLiteral("(?m)^BootOrder:\\s*([0-9A-Fa-f]{4}(?:,[0-9A-Fa-f]{4})*)\\s*$")' in system_cpp,
         "UEFI BootNext/BootOrder regex must use valid escaped whitespace")
+require('boot-read-uefi' in admin_policy
+        and 'refreshUefiEntriesPrivileged' in system_cpp
+        and 'refreshUefiEntriesPrivileged()' in system_qml,
+        "UEFI read must offer an explicit privileged fallback when direct access is denied")
+require('consumeArchiveListing' in system_cpp
+        and system_cpp.count('&ProcessRunner::outputReady') >= 2
+        and 'QString::fromUtf8(stdoutData).split' not in system_cpp,
+        "backup restore preflight must validate the complete tar listing as a stream")
 require("applyDnsPreset" not in repair_cpp and "applyDnsPreset" not in read("src/RepairBackend.h"),
         "removed DNS preset UI must not leave a dead backend API")
 require('networkDisplayName' in read("src/SystemBackend.h")

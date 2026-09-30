@@ -89,6 +89,7 @@ Kirigami.ScrollablePage {
             palette.highlight: Kirigami.Theme.highlightColor
             Controls.TabButton { text: qsTr("Predefiniti"); font.bold: true }
             Controls.TabButton { text: qsTr("Miei comandi"); font.bold: true }
+            Controls.TabButton { text: qsTr("Cron"); font.bold: true }
         }
 
         StackLayout {
@@ -235,6 +236,51 @@ Kirigami.ScrollablePage {
                     }
                 }
 
+                Kirigami.AbstractCard {
+                    Layout.fillWidth: true
+                    contentItem: ColumnLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Kirigami.Heading {
+                                Layout.fillWidth: true
+                                level: 3
+                                font.bold: true
+                                text: qsTr("Azioni rapide")
+                            }
+                            Controls.Label {
+                                opacity: UiMetrics.secondaryOpacity
+                                text: qsTr("%1 / 4 assegnate").arg(CustomActionsBackend.quickActions.length)
+                            }
+                        }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            visible: CustomActionsBackend.quickActions.length === 0
+                            wrapMode: Text.WordWrap
+                            opacity: UiMetrics.secondaryOpacity
+                            text: qsTr("Assegna fino a quattro comandi salvati come pulsanti rapidi usando la stella sulle schede qui sotto.")
+                        }
+                        GridLayout {
+                            Layout.fillWidth: true
+                            columns: width > 820 ? 4 : width > 480 ? 2 : 1
+                            uniformCellWidths: true
+                            columnSpacing: Kirigami.Units.smallSpacing
+                            rowSpacing: Kirigami.Units.smallSpacing
+                            Repeater {
+                                model: CustomActionsBackend.quickActions
+                                delegate: Controls.Button {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    text: modelData.name
+                                    icon.name: "media-playback-start"
+                                    enabled: !CustomActionsBackend.running
+                                    onClicked: root.runCustom(modelData)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Kirigami.InlineMessage {
                     Layout.fillWidth: true
                     visible: CustomActionsBackend.errorText.length > 0
@@ -286,6 +332,16 @@ Kirigami.ScrollablePage {
                                             opacity: UiMetrics.secondaryOpacity
                                             text: modelData.description
                                         }
+                                    }
+                                    Controls.Button {
+                                        flat: true
+                                        icon.name: modelData.quick ? "rating" : "rating-unrated"
+                                        text: modelData.quick ? qsTr("Rimuovi dalle azioni rapide") : qsTr("Aggiungi alle azioni rapide")
+                                        display: Controls.AbstractButton.IconOnly
+                                        Controls.ToolTip.visible: hovered
+                                        Controls.ToolTip.text: text
+                                        enabled: !CustomActionsBackend.running
+                                        onClicked: CustomActionsBackend.setQuickAction(modelData.id, !modelData.quick)
                                     }
                                     Controls.Button {
                                         flat: true
@@ -370,6 +426,142 @@ Kirigami.ScrollablePage {
                     }
                 }
             }
+
+            ColumnLayout {
+                spacing: Kirigami.Units.largeSpacing
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Attività Cron") }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            opacity: UiMetrics.secondaryOpacity
+                            text: qsTr("Vista in sola lettura dei job cron dell'utente e delle fonti di sistema leggibili. Non modifica crontab né file in /etc.")
+                        }
+                    }
+                    Controls.Button {
+                        text: qsTr("Aggiorna")
+                        icon.name: "view-refresh"
+                        enabled: !CronBackend.busy
+                        onClicked: CronBackend.reload()
+                    }
+                }
+
+                Kirigami.InlineMessage {
+                    Layout.fillWidth: true
+                    visible: CronBackend.userCronStatus.length > 0
+                          && CronBackend.errorText.length === 0
+                    type: Kirigami.MessageType.Information
+                    text: CronBackend.userCronStatus
+                }
+
+                Kirigami.InlineMessage {
+                    Layout.fillWidth: true
+                    visible: CronBackend.errorText.length > 0
+                    type: Kirigami.MessageType.Warning
+                    text: CronBackend.errorText
+                }
+
+                Controls.BusyIndicator {
+                    visible: CronBackend.busy
+                    running: visible
+                    Layout.alignment: Qt.AlignHCenter
+                }
+
+                Kirigami.InlineMessage {
+                    Layout.fillWidth: true
+                    visible: !CronBackend.busy && CronBackend.jobs.length === 0
+                    type: Kirigami.MessageType.Information
+                    text: qsTr("Nessun job cron trovato nelle fonti disponibili.")
+                }
+
+                GridLayout {
+                    Layout.fillWidth: true
+                    columns: width > 820 ? 2 : 1
+                    columnSpacing: Kirigami.Units.largeSpacing
+                    rowSpacing: Kirigami.Units.smallSpacing
+
+                    Repeater {
+                        model: CronBackend.jobs
+                        delegate: Kirigami.AbstractCard {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: root.width > 820
+                                                   ? (root.width - Kirigami.Units.largeSpacing) / 2
+                                                   : root.width
+                            contentItem: ColumnLayout {
+                                spacing: Kirigami.Units.smallSpacing
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 0
+                                        Controls.Label {
+                                            Layout.fillWidth: true
+                                            font.bold: false
+                                            font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
+                                            text: modelData.summary
+                                            elide: Text.ElideRight
+                                        }
+                                        Controls.Label {
+                                            Layout.fillWidth: true
+                                            opacity: UiMetrics.secondaryOpacity
+                                            text: modelData.scope === "user"
+                                                  ? qsTr("Utente")
+                                                  : (modelData.user.length > 0
+                                                     ? qsTr("Sistema · utente %1").arg(modelData.user)
+                                                     : qsTr("Sistema"))
+                                        }
+                                    }
+                                    Controls.Button {
+                                        flat: true
+                                        icon.name: "edit-copy"
+                                        text: qsTr("Copia comando")
+                                        display: Controls.AbstractButton.IconOnly
+                                        Controls.ToolTip.visible: hovered
+                                        Controls.ToolTip.text: text
+                                        onClicked: SystemBackend.copyToClipboard(modelData.command)
+                                    }
+                                    Controls.Button {
+                                        visible: modelData.scope === "user"
+                                        text: qsTr("Salva")
+                                        icon.name: "document-save"
+                                        Controls.ToolTip.visible: hovered
+                                        Controls.ToolTip.text: qsTr("Salva una copia in Miei comandi")
+                                        enabled: !CustomActionsBackend.running
+                                        onClicked: editActionDialog.openFromCron(modelData)
+                                    }
+                                }
+
+                                Controls.Label {
+                                    Layout.fillWidth: true
+                                    font.family: Kirigami.Theme.fixedWidthFont.family
+                                    opacity: UiMetrics.secondaryOpacity
+                                    text: modelData.schedule
+                                }
+
+                                Controls.Label {
+                                    Layout.fillWidth: true
+                                    font.family: Kirigami.Theme.fixedWidthFont.family
+                                    wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+                                    text: modelData.command
+                                }
+
+                                Controls.Label {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+                                    opacity: UiMetrics.secondaryOpacity
+                                    text: modelData.source
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -389,6 +581,15 @@ Kirigami.ScrollablePage {
             actionName.text = ""
             actionDescription.text = ""
             actionScript.text = ""
+            actionConfirm.checked = true
+            open()
+        }
+
+        function openFromCron(job) {
+            actionId = ""
+            actionName.text = qsTr("Cron: %1").arg(job.summary).substring(0, 80)
+            actionDescription.text = qsTr("Importato dal cron utente (%1). Verifica ambiente e variabili prima dell'esecuzione manuale.").arg(job.schedule)
+            actionScript.text = job.command
             actionConfirm.checked = true
             open()
         }

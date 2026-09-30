@@ -40,6 +40,12 @@ std::optional<AdminPolicy::Command> AdminPolicy::resolve(const QStringList &requ
         if (operation == QStringLiteral("dnf-clean"))
             return Command{QStringLiteral("/usr/bin/dnf5"),
                            {QStringLiteral("clean"), QStringLiteral("all")}, kRepositoryTimeoutMs};
+        if (operation == QStringLiteral("boot-read-uefi"))
+            return Command{QStringLiteral("/usr/bin/efibootmgr"),
+                           {}, kShortTimeoutMs};
+        if (operation == QStringLiteral("boot-clear-next-uefi"))
+            return Command{QStringLiteral("/usr/bin/efibootmgr"),
+                           {QStringLiteral("-N")}, kShortTimeoutMs};
         return std::nullopt;
     }
 
@@ -77,6 +83,17 @@ std::optional<AdminPolicy::Command> AdminPolicy::resolve(const QStringList &requ
     if (operation == QStringLiteral("boot-next-uefi") && Validators::bootToken(value)) {
         return Command{QStringLiteral("/usr/bin/efibootmgr"),
                        {QStringLiteral("-n"), value.toUpper()}, kShortTimeoutMs};
+    }
+
+    if (operation == QStringLiteral("boot-delete-uefi") && Validators::bootToken(value)) {
+        return Command{QStringLiteral("/usr/bin/efibootmgr"),
+                       {QStringLiteral("-b"), value.toUpper(), QStringLiteral("-B")},
+                       kShortTimeoutMs};
+    }
+
+    if (operation == QStringLiteral("boot-order-uefi") && Validators::bootOrder(value)) {
+        return Command{QStringLiteral("/usr/bin/efibootmgr"),
+                       {QStringLiteral("-o"), value.toUpper()}, kShortTimeoutMs};
     }
 
     if (operation == QStringLiteral("boot-next-grub") && Validators::grubEntry(value)) {

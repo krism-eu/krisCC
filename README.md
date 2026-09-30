@@ -8,20 +8,21 @@ Le regole di stabilità, compatibilità e integrazione sono definite in [ARCHITE
 
 ## Cosa gestisce
 
-- **Panoramica**: stato essenziale di sistema, aggiornamenti, storage, CPU, RAM usata senza swap, temperatura CPU e Quick System Info.
-- **Software RPM**: ricerca, installati, aggiornabili, provenienza Base/Persistente/Layer non richiesti e piano della transazione tramite la stessa policy `rk` usata per installare.
-- **Flatpak**: la tile Dashboard apre KDE Discover, che resta il proprietario della ricerca, installazione, rimozione e aggiornamento delle applicazioni Flatpak.
-- **Container**: gestione delegata a un'applicazione dedicata; krisCC non mantiene più un frontend Podman.
-- **Strumenti & Fix**: ultima pagina operativa del Control Center, con riparazione audio, pulizia unificata e mirata, diagnostica grafica/sistema e collegamenti agli strumenti esterni.
-- **Servizi & Rete**: controlli Start/Stop/Restart/Reset sui servizi comuni, unità fallite, NetworkManager, flush DNS e verifica su richiesta di IP pubblico e DNS effettivamente in uso.
-- **Sistema & Boot**: BootC/rk, stato Control Center, cronologia recente limitata, reboot firmware e il tab **Avvio e dischi** completo con kernel arguments, UEFI/GRUB e storage.
-- **Comandi**: controlli read-only su systemd, journal, rete, storage e avvio, più **Miei comandi** per salvare comandi o script Bash multilinea personali in `~/.config/krisCC/custom-actions.json`. Il file è privato (`0600`), versionato e fail-closed; le azioni girano soltanto con i privilegi dell'utente corrente, con stdin chiuso, e Annulla/timeout termina l'intero gruppo di processi dello script.
-- **Backup e recovery**: creazione, anteprima precisa di inclusioni/esclusioni, elenco, verifica e ripristino degli snapshot `tar.gz`, più stato RK strutturato, sync e forget di recovery. Il backup home esclude runtime/app Flatpak e storage Podman ricostruibili, mantenendo i dati Flatpak in `~/.var/app`.
-- **Cronologia**: registro locale privato e limitato delle operazioni mutanti eseguite da krisCC. Non vengono salvati output completi né argomenti sensibili delle operazioni amministrative.
+La navigazione principale ha sette sezioni operative:
+
+- **Dashboard**: stato essenziale di sistema, aggiornamenti, storage, CPU, RAM, temperatura, servizi chiave e Quick System Info.
+- **Software RPM**: ricerca, installati, aggiornabili, provenienza Base/Persistente/Layer non richiesti e piano delle transazioni tramite `rk`.
+- **Servizi & Rete**: servizi system/user, unità fallite, journal minimale filtrabile, controlli dei servizi comuni, NetworkManager, reconnect, flush DNS e identità Internet su richiesta.
+- **Sistema & Boot**: BootC/rk, stato Control Center, cronologia locale, reboot firmware, kernel arguments, gestione UEFI NVRAM/BootOrder, GRUB/BLS e viste storage.
+- **Backup & Recovery**: creazione, anteprima, verifica e ripristino degli snapshot `tar.gz`, più stato e recovery `rk`. Il restore valida in streaming tutti i membri e i tipi prima dell'estrazione.
+- **Comandi**: bookmark diagnostici read-only, azioni rapide, script Bash personali rootless e vista Cron in sola lettura.
+- **Strumenti & Fix**: riparazione audio, pulizia, diagnostica, support report e collegamenti agli strumenti esterni.
+
+Flatpak resta delegato a **KDE Discover** e la gestione container a un'applicazione dedicata: non sono sezioni proprietarie di krisCC. Il registro **Cronologia** è una funzione interna e limitata, non una pagina top-level.
 
 ## Sicurezza
 
-Le mutazioni KrisOS passano da pochi confini espliciti. `rk sync/add/rm/forget` resta il contratto privilegiato proprietario di KrisOS e il gate finale della policy RPM. Le invocazioni provenienti da krisCC, insieme a BootC, repository e selezione one-shot del prossimo boot, passano da `/usr/libexec/kriscc/admin`: Polkit autorizza l'helper e l'helper root valida l'operazione semantica e **tutti** gli argomenti prima di eseguire un binario a percorso fisso, senza shell. La policy usa `auth_admin` senza retention (`auth_admin_keep` è vietato).
+Le mutazioni privilegiate usano il proprietario naturale del dominio quando esiste un'API stabile: systemd, logind e NetworkManager vengono chiamati tramite D-Bus con autorizzazione Polkit e allowlist locale. `rk sync/add/rm/forget` resta il contratto privilegiato proprietario di KrisOS e il gate finale della policy RPM. BootC, repository e operazioni UEFI/GRUB che non hanno un'API proprietaria adeguata passano da `/usr/libexec/kriscc/admin`: Polkit autorizza l'helper e l'helper root valida l'operazione semantica e **tutti** gli argomenti prima di eseguire un binario a percorso fisso, senza shell libera. La policy usa `auth_admin` senza retention (`auth_admin_keep` è vietato).
 
 La pulizia dei cestini non è privilegiata: l'helper `maintenance` gira come utente e rifiuta esplicitamente l'esecuzione come root. La gestione repository accetta soltanto URL HTTPS validati e ID validi. L'anteprima e ogni installazione/rimozione RPM persistente continuano a passare da `rk plan/add/rm`; rk resta il gate finale della policy KrisOS. I comandi personali restano rootless nel profilo utente; Flatpak e container sono gestiti da applicazioni dedicate.
 
@@ -41,8 +42,9 @@ krisCC è parte della base immutabile di KrisOS: le release normali del control 
 
 La versione pubblica di krisCC usa esclusivamente `X.Y.Z`. Ogni candidata successiva incrementa `Z`; non usiamo suffissi pubblici come `-2`, `-5` o simili. Il campo RPM `Release` resta fissato a `1` come metadato tecnico del formato RPM e non viene mostrato dall'app né usato nei tag. I tag candidati/stable sono quindi `vX.Y.Z`.
 
-- `0.7` è il ramo di integrazione/acceptance della linea 0.7;
-- `main` è la linea ufficiale corrente; dalla 0.7 contiene l'architettura strutturata di krisCC.
+- `0.8` è il ramo di sviluppo/acceptance della linea 0.8, derivato da 0.7.10;
+- `0.7` resta il ramo di integrazione/acceptance della linea 0.7;
+- `main` è la linea ufficiale corrente e riceve `0.8` solo dopo CI e acceptance test.
 - `stable/0.6` è una fotografia congelata della precedente linea 0.6 e punta a `v0.6.0-2`. Non riceve sviluppo ordinario né backport automatici.
 - ogni push e pull request verso `main` costruisce e verifica l'RPM in CI senza pubblicarlo automaticamente; un candidato prerelease viene pubblicato solo con dispatch esplicito sul `main` validato;
 - la promozione a stable avviene esplicitamente solo dopo l'acceptance test su un host KrisOS reale e riusa esattamente lo stesso RPM già verificato, senza rebuild.
@@ -68,7 +70,7 @@ cmake --build build
 
 ## RPM e integrazione nell'immagine
 
-Lo spec RPM è `packaging/krisCC.spec` e produce **`krisCC-0.7.10-*.rpm`**. La CI Fedora 45 costruisce l'RPM, lo installa in un ambiente pulito, riesegue lo smoke test e produce `SHA256SUMS` dell'artefatto RPM.
+Lo spec RPM è `packaging/krisCC.spec` e produce **`krisCC-0.8.1-*.rpm`**. La CI Fedora 45 costruisce l'RPM, lo installa in un ambiente pulito, riesegue lo smoke test e produce `SHA256SUMS` dell'artefatto RPM.
 
 Il flusso previsto per KrisOS è:
 
@@ -82,8 +84,8 @@ Esempio manuale:
 
 ```bash
 mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-git archive --format=tar.gz --prefix=krisCC-0.7.10/ \
-  -o ~/rpmbuild/SOURCES/krisCC-0.7.10.tar.gz HEAD
+git archive --format=tar.gz --prefix=krisCC-0.8.1/ \
+  -o ~/rpmbuild/SOURCES/krisCC-0.8.1.tar.gz HEAD
 cp packaging/krisCC.spec ~/rpmbuild/SPECS/krisCC.spec
 rpmbuild -ba ~/rpmbuild/SPECS/krisCC.spec
 ```
