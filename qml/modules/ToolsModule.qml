@@ -157,6 +157,7 @@ Kirigami.ScrollablePage {
                             uniformCellWidths: true
                             columnSpacing: Kirigami.Units.smallSpacing
                             rowSpacing: Kirigami.Units.smallSpacing
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("Rapporto supporto"); icon.name: "document-preview"; enabled: !utility.busy; onClicked: utility.runBookmark("support-report") }
                             Controls.Button { Layout.fillWidth: true; text: qsTr("Sicurezza"); enabled: !utility.busy; onClicked: utility.runBookmark("security") }
                             Controls.Button { Layout.fillWidth: true; text: qsTr("Errori avvio"); enabled: !utility.busy; onClicked: utility.runBookmark("journal-errors") }
                             Controls.Button { Layout.fillWidth: true; text: qsTr("Warning kernel"); enabled: !utility.busy; onClicked: utility.runBookmark("kernel-errors") }
@@ -195,6 +196,12 @@ Kirigami.ScrollablePage {
                             Layout.fillWidth: true
                             Kirigami.Heading { Layout.fillWidth: true; level: 3; text: utility.title; font.bold: true }
                             Controls.Button { text: qsTr("Copia"); icon.name: "edit-copy"; onClicked: SystemBackend.copyToClipboard(utility.output) }
+                            Controls.Button {
+                                visible: utility.operationId === "support-report"
+                                text: qsTr("Salva")
+                                icon.name: "document-save"
+                                onClicked: SystemBackend.saveSupportReport(utility.output)
+                            }
                         }
                         Controls.ScrollView {
                             Layout.fillWidth: true
