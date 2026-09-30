@@ -38,6 +38,7 @@
 #include <QSet>
 #include <QStandardPaths>
 #include <QSettings>
+#include <QSharedPointer>
 #include <QStorageInfo>
 #include <QSysInfo>
 #include <QTextStream>
@@ -51,6 +52,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <functional>
 
 namespace {
 constexpr int kBackupVerifyTimeoutMs = 10 * 60 * 1000;
@@ -106,6 +108,59 @@ const QStringList &backupHomeExcludes()
         QStringLiteral("K-ControlC Backups")
     };
     return entries;
+}
+
+constexpr qsizetype kArchiveValidationLineLimit = 64 * 1024;
+
+bool consumeArchiveListing(QByteArray &buffer, const QByteArray &data, bool flushPartial,
+                           const std::function<bool(const QString &)> &validator,
+                           QString *rejectedLine)
+{
+    if (!data.isEmpty())
+        buffer.append(data);
+
+    auto validateRawLine = [&](QByteArray raw) {
+        if (!raw.isEmpty() && raw.endsWith('\r'))
+            raw.chop(1);
+        if (raw.isEmpty())
+            return true;
+        if (raw.size() > kArchiveValidationLineLimit) {
+            if (rejectedLine)
+                *rejectedLine = QCoreApplication::translate(
+                    "SystemBackend", "riga listing archivio troppo lunga");
+            return false;
+        }
+        const QString line = QString::fromUtf8(raw);
+        if (!validator(line)) {
+            if (rejectedLine)
+                *rejectedLine = line.left(160);
+            return false;
+        }
+        return true;
+    };
+
+    qsizetype newline = -1;
+    while ((newline = buffer.indexOf('\n')) >= 0) {
+        const QByteArray raw = buffer.left(newline);
+        buffer.remove(0, newline + 1);
+        if (!validateRawLine(raw))
+            return false;
+    }
+
+    if (buffer.size() > kArchiveValidationLineLimit) {
+        if (rejectedLine)
+            *rejectedLine = QCoreApplication::translate(
+                "SystemBackend", "riga listing archivio troppo lunga");
+        return false;
+    }
+
+    if (flushPartial && !buffer.isEmpty()) {
+        const QByteArray raw = buffer;
+        buffer.clear();
+        if (!validateRawLine(raw))
+            return false;
+    }
+    return true;
 }
 }
 
@@ -1705,63 +1760,125 @@ bool SystemBackend::restoreSnapshot(const QString &path)
 
     auto *preflight = new ProcessRunner(this);
     m_backupRunner = preflight;
+    const auto memberBuffer = QSharedPointer<QByteArray>::create();
+    const auto memberValid = QSharedPointer<bool>::create(true);
+    const auto rejectedMember = QSharedPointer<QString>::create();
+
+    connect(preflight, &ProcessRunner::outputReady, this,
+            [preflight, memberBuffer, memberValid, rejectedMember](const QByteArray &data) {
+        if (!*memberValid)
+            return;
+        const bool valid = consumeArchiveListing(
+            *memberBuffer, data, false,
+            [](const QString &line) {
+                return Validators::archiveMemberPath(line.trimmed());
+            },
+            rejectedMember.data());
+        if (!valid) {
+            *memberValid = false;
+            preflight->cancel();
+        }
+    });
+
     connect(preflight, &ProcessRunner::finished, this,
-            [this, preflight, canonical, startRestore](ProcessRunner::Outcome outcome, int,
-                                                       const QByteArray &stdoutData,
-                                                       const QByteArray &stderrData,
-                                                       const QString &errorString) {
+            [this, preflight, canonical, startRestore,
+             memberBuffer, memberValid, rejectedMember](ProcessRunner::Outcome outcome, int,
+                                                        const QByteArray &,
+                                                        const QByteArray &stderrData,
+                                                        const QString &errorString) {
         if (preflight != m_backupRunner)
             return;
         m_backupRunner = nullptr;
         preflight->deleteLater();
 
+        if (*memberValid && outcome == ProcessRunner::Success) {
+            *memberValid = consumeArchiveListing(
+                *memberBuffer, QByteArray(), true,
+                [](const QString &line) {
+                    return Validators::archiveMemberPath(line.trimmed());
+                },
+                rejectedMember.data());
+        }
+
+        if (!*memberValid) {
+            setBackupBusy(false);
+            setBackupResult(tr("Ripristino bloccato: percorso archivio non sicuro: %1")
+                                .arg(rejectedMember->left(160)),
+                            canonical, QStringLiteral("error"));
+            OperationLog::append(QStringLiteral("Backup"), QStringLiteral("restore"),
+                                 QStringLiteral("error"), QFileInfo(canonical).fileName());
+            return;
+        }
+
         if (outcome == ProcessRunner::Success) {
-            const QStringList members = QString::fromUtf8(stdoutData).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
-            for (const QString &member : members) {
-                if (!Validators::archiveMemberPath(member.trimmed())) {
+            auto *typeCheck = new ProcessRunner(this);
+            m_backupRunner = typeCheck;
+            const auto typeBuffer = QSharedPointer<QByteArray>::create();
+            const auto typeValid = QSharedPointer<bool>::create(true);
+            const auto rejectedType = QSharedPointer<QString>::create();
+
+            connect(typeCheck, &ProcessRunner::outputReady, this,
+                    [typeCheck, typeBuffer, typeValid, rejectedType](const QByteArray &data) {
+                if (!*typeValid)
+                    return;
+                const bool valid = consumeArchiveListing(
+                    *typeBuffer, data, false,
+                    [](const QString &line) {
+                        return Validators::archiveVerboseEntry(line);
+                    },
+                    rejectedType.data());
+                if (!valid) {
+                    *typeValid = false;
+                    typeCheck->cancel();
+                }
+            });
+
+            connect(typeCheck, &ProcessRunner::finished, this,
+                    [this, typeCheck, canonical, startRestore,
+                     typeBuffer, typeValid, rejectedType](ProcessRunner::Outcome typeOutcome, int,
+                                                          const QByteArray &,
+                                                          const QByteArray &typeStderr,
+                                                          const QString &typeError) {
+                if (typeCheck != m_backupRunner)
+                    return;
+                m_backupRunner = nullptr;
+                typeCheck->deleteLater();
+
+                if (*typeValid && typeOutcome == ProcessRunner::Success) {
+                    *typeValid = consumeArchiveListing(
+                        *typeBuffer, QByteArray(), true,
+                        [](const QString &line) {
+                            return Validators::archiveVerboseEntry(line);
+                        },
+                        rejectedType.data());
+                }
+
+                if (!*typeValid) {
                     setBackupBusy(false);
-                    setBackupResult(tr("Ripristino bloccato: percorso archivio non sicuro: %1").arg(member.left(160)),
+                    setBackupResult(tr("Ripristino bloccato: tipo o collegamento archivio non sicuro: %1")
+                                        .arg(rejectedType->left(160)),
                                     canonical, QStringLiteral("error"));
                     OperationLog::append(QStringLiteral("Backup"), QStringLiteral("restore"),
                                          QStringLiteral("error"), QFileInfo(canonical).fileName());
                     return;
                 }
-            }
 
-            auto *typeCheck = new ProcessRunner(this);
-            m_backupRunner = typeCheck;
-            connect(typeCheck, &ProcessRunner::finished, this,
-                    [this, typeCheck, canonical, startRestore](ProcessRunner::Outcome typeOutcome, int,
-                                                               const QByteArray &typeStdout,
-                                                               const QByteArray &typeStderr,
-                                                               const QString &typeError) {
-                if (typeCheck != m_backupRunner)
-                    return;
-                m_backupRunner = nullptr;
-                typeCheck->deleteLater();
                 if (typeOutcome == ProcessRunner::Success) {
-                    const QStringList entries = QString::fromUtf8(typeStdout).split(QLatin1Char('\n'), Qt::SkipEmptyParts);
-                    for (const QString &entry : entries) {
-                        if (!Validators::archiveVerboseEntry(entry)) {
-                            setBackupBusy(false);
-                            setBackupResult(tr("Ripristino bloccato: tipo o collegamento archivio non sicuro."),
-                                            canonical, QStringLiteral("error"));
-                            OperationLog::append(QStringLiteral("Backup"), QStringLiteral("restore"),
-                                                 QStringLiteral("error"), QFileInfo(canonical).fileName());
-                            return;
-                        }
-                    }
                     startRestore();
                     return;
                 }
+
                 setBackupBusy(false);
                 const QString details = QString::fromUtf8(typeStderr).trimmed();
-                setBackupResult(details.isEmpty() ? tr("Ripristino bloccato: impossibile validare i tipi dei membri dell'archivio.")
-                                                  : details,
+                setBackupResult(details.isEmpty()
+                                    ? tr("Ripristino bloccato: impossibile validare i tipi dei membri dell'archivio.")
+                                    : details,
                                 canonical, QStringLiteral("error"));
                 if (typeOutcome == ProcessRunner::FailedToStart && !typeError.isEmpty())
-                    setBackupResult(tr("Impossibile avviare la verifica dei tipi: %1").arg(typeError), canonical, QStringLiteral("error"));
+                    setBackupResult(tr("Impossibile avviare la verifica dei tipi: %1").arg(typeError),
+                                    canonical, QStringLiteral("error"));
             });
+
             ProcessRunner::Options typeOptions;
             typeOptions.program = resolveExecutable(QStringLiteral("tar"));
             typeOptions.arguments = {QStringLiteral("-tvzf"), canonical, QStringLiteral("--numeric-owner")};
@@ -1773,7 +1890,8 @@ bool SystemBackend::restoreSnapshot(const QString &path)
                 m_backupRunner = nullptr;
                 typeCheck->deleteLater();
                 setBackupBusy(false);
-                setBackupResult(tr("Impossibile inizializzare la verifica dei tipi dell'archivio."), canonical, QStringLiteral("error"));
+                setBackupResult(tr("Impossibile inizializzare la verifica dei tipi dell'archivio."),
+                                canonical, QStringLiteral("error"));
             }
             return;
         }
