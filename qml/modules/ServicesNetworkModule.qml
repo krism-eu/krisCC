@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as Controls
+import QtQuick.Controls.Basic as Basic
 import org.kde.kirigami as Kirigami
 import org.kriscc
 
@@ -615,7 +616,7 @@ Kirigami.ScrollablePage {
                 Controls.ScrollView {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 520
-                    Controls.TextArea {
+                    Basic.TextArea {
                         readOnly: true
                         selectByMouse: true
                         wrapMode: TextEdit.WrapAtWordBoundaryOrAnywhere
