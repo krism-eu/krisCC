@@ -69,7 +69,7 @@ void PolkitHelper::onProcessFinished(int exitCode, QProcess::ExitStatus status)
         else if (status == QProcess::NormalExit && exitCode == 126)
             output = tr("Autenticazione annullata dall'utente.");
         else if (status == QProcess::NormalExit && exitCode == 127)
-            output = tr("Autenticazione amministrativa non disponibile o non autorizzata.");
+            output = tr("Autorizzazione amministrativa non ottenuta oppure errore di pkexec.");
         else if (output.isEmpty())
             output = tr("Operazione terminata con codice %1.").arg(exitCode);
     }
