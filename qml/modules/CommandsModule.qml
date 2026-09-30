@@ -236,6 +236,51 @@ Kirigami.ScrollablePage {
                     }
                 }
 
+                Kirigami.AbstractCard {
+                    Layout.fillWidth: true
+                    contentItem: ColumnLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Kirigami.Heading {
+                                Layout.fillWidth: true
+                                level: 3
+                                font.bold: true
+                                text: qsTr("Azioni rapide")
+                            }
+                            Controls.Label {
+                                opacity: UiMetrics.secondaryOpacity
+                                text: qsTr("%1 / 4 assegnate").arg(CustomActionsBackend.quickActions.length)
+                            }
+                        }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            visible: CustomActionsBackend.quickActions.length === 0
+                            wrapMode: Text.WordWrap
+                            opacity: UiMetrics.secondaryOpacity
+                            text: qsTr("Assegna fino a quattro comandi salvati come pulsanti rapidi usando la stella sulle schede qui sotto.")
+                        }
+                        GridLayout {
+                            Layout.fillWidth: true
+                            columns: width > 820 ? 4 : width > 480 ? 2 : 1
+                            uniformCellWidths: true
+                            columnSpacing: Kirigami.Units.smallSpacing
+                            rowSpacing: Kirigami.Units.smallSpacing
+                            Repeater {
+                                model: CustomActionsBackend.quickActions
+                                delegate: Controls.Button {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    text: modelData.name
+                                    icon.name: "media-playback-start"
+                                    enabled: !CustomActionsBackend.running
+                                    onClicked: root.runCustom(modelData)
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Kirigami.InlineMessage {
                     Layout.fillWidth: true
                     visible: CustomActionsBackend.errorText.length > 0
@@ -287,6 +332,16 @@ Kirigami.ScrollablePage {
                                             opacity: UiMetrics.secondaryOpacity
                                             text: modelData.description
                                         }
+                                    }
+                                    Controls.Button {
+                                        flat: true
+                                        icon.name: modelData.quick ? "rating" : "rating-unrated"
+                                        text: modelData.quick ? qsTr("Rimuovi dalle azioni rapide") : qsTr("Aggiungi alle azioni rapide")
+                                        display: Controls.AbstractButton.IconOnly
+                                        Controls.ToolTip.visible: hovered
+                                        Controls.ToolTip.text: text
+                                        enabled: !CustomActionsBackend.running
+                                        onClicked: CustomActionsBackend.setQuickAction(modelData.id, !modelData.quick)
                                     }
                                     Controls.Button {
                                         flat: true
