@@ -37,7 +37,6 @@ public:
     Q_INVOKABLE void search(const QString &term);
     Q_INVOKABLE void loadInstalled(const QString &filter = QString());
     Q_INVOKABLE void loadUpgrades();
-    Q_INVOKABLE void loadRecent();
     Q_INVOKABLE void setLocalFilter(const QString &text);
     bool searching() const { return m_searching; }
     int count() const { return m_results.size(); }
