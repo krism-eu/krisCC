@@ -454,8 +454,12 @@ require('emitted < 20' in system_cpp and 'recent(int limit = 20)' in read("src/O
 
 
 require(r'QStringLiteral("(?m)^BootNext:\\s*([0-9A-Fa-f]{4})\\s*$")' in system_cpp
-        and r'QStringLiteral("(?m)^BootOrder:\\s*([0-9A-Fa-f]{4})")' in system_cpp,
+        and r'QStringLiteral("(?m)^BootOrder:\\s*([0-9A-Fa-f]{4}(?:,[0-9A-Fa-f]{4})*)\\s*$")' in system_cpp,
         "UEFI BootNext/BootOrder regex must use valid escaped whitespace")
+require('consumeArchiveListing' in system_cpp
+        and system_cpp.count('&ProcessRunner::outputReady') >= 2
+        and 'QString::fromUtf8(stdoutData).split' not in system_cpp,
+        "backup restore preflight must validate the complete tar listing as a stream")
 require("applyDnsPreset" not in repair_cpp and "applyDnsPreset" not in read("src/RepairBackend.h"),
         "removed DNS preset UI must not leave a dead backend API")
 require('networkDisplayName' in read("src/SystemBackend.h")
