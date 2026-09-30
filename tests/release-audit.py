@@ -462,6 +462,10 @@ require('emitted < 20' in system_cpp and 'recent(int limit = 20)' in read("src/O
 require(r'QStringLiteral("(?m)^BootNext:\\s*([0-9A-Fa-f]{4})\\s*$")' in system_cpp
         and r'QStringLiteral("(?m)^BootOrder:\\s*([0-9A-Fa-f]{4}(?:,[0-9A-Fa-f]{4})*)\\s*$")' in system_cpp,
         "UEFI BootNext/BootOrder regex must use valid escaped whitespace")
+require('boot-read-uefi' in admin_policy
+        and 'refreshUefiEntriesPrivileged' in system_cpp
+        and 'refreshUefiEntriesPrivileged()' in system_qml,
+        "UEFI read must offer an explicit privileged fallback when direct access is denied")
 require('consumeArchiveListing' in system_cpp
         and system_cpp.count('&ProcessRunner::outputReady') >= 2
         and 'QString::fromUtf8(stdoutData).split' not in system_cpp,
