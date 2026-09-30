@@ -406,6 +406,15 @@ Kirigami.ScrollablePage {
                                       && SystemBackend.uefiBootAvailable
                                 onClicked: SystemBackend.refreshUefiEntries()
                             }
+                            Controls.Button {
+                                visible: SystemBackend.bootEntriesError.length > 0
+                                text: qsTr("Leggi con autorizzazione")
+                                icon.name: "security-high"
+                                enabled: !SystemBackend.bootEntriesBusy
+                                      && SystemBackend.canSelectNextBoot
+                                      && SystemBackend.uefiBootAvailable
+                                onClicked: SystemBackend.refreshUefiEntriesPrivileged()
+                            }
                         }
 
                         Controls.Label {
