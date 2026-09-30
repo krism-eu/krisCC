@@ -138,6 +138,7 @@ public:
     Q_INVOKABLE void checkInternetIdentity();
     Q_INVOKABLE void setResourceMonitoringEnabled(bool enabled);
     Q_INVOKABLE void refreshUefiEntries();
+    Q_INVOKABLE void refreshUefiEntriesPrivileged();
     Q_INVOKABLE void refreshGrubEntries();
     Q_INVOKABLE bool selectNextUefi(const QString &token);
     Q_INVOKABLE bool clearNextUefi();
@@ -193,10 +194,12 @@ private:
     void refreshNetworkState();
     double readCpuTemperature() const;
     bool applyUefiBootOrder(const QStringList &order);
+    void applyUefiEntriesOutput(const QString &output);
 
     PolkitHelper *m_polkit = nullptr;
     QNetworkAccessManager *m_networkAccess = nullptr;
     bool m_bootSelectionOwned = false;
+    bool m_bootReadOwned = false;
     bool m_adminMaintenanceOwned = false;
     QString m_adminMaintenanceOperation;
     bool m_bootSelectionRunning = false;
