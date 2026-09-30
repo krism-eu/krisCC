@@ -33,7 +33,8 @@ QML / Kirigami
       v
 Backend krisCC
       |
-      +--> API read-only di sistema
+      +--> API di sistema proprietarie (read-only o D-Bus mutanti)
+      |      \--> systemd / logind / NetworkManager con Polkit e allowlist locale
       |
       +--> Polkit -> rk oppure /usr/libexec/kriscc/admin con operazioni semantiche allowlisted
       |
@@ -46,7 +47,7 @@ Regole:
 - QML non implementa logica di sistema.
 - QML non costruisce comandi privilegiati.
 - Un backend possiede un solo dominio funzionale.
-- Le mutazioni root passano esclusivamente da `rk` oppure dal piccolo helper `/usr/libexec/kriscc/admin`.
+- Le mutazioni privilegiate passano attraverso l'API proprietaria del servizio quando esiste un contratto D-Bus stabile (per esempio systemd, logind o NetworkManager), con autorizzazione Polkit e allowlist locale; le operazioni KrisOS senza API proprietaria adeguata passano da `rk` oppure dal piccolo helper `/usr/libexec/kriscc/admin`.
 - Polkit autorizza l'entry point; la validazione completa degli argomenti avviene anche nel processo privilegiato, non solo nella policy.
 - Nessun helper privilegiato accetta shell libera, pipeline o path arbitrari forniti dalla UI.
 - Operazioni che non richiedono davvero root, come la pulizia dei cestini, il reset PipeWire, il flush DNS e le riparazioni NetworkManager autorizzate dalla sessione, restano fuori dall'helper root.
