@@ -1,5 +1,5 @@
 Name:           krisCC
-Version:        0.7.10
+Version:        0.8.0
 Release:        1%{?dist}
 Summary:        krisCC personal control center for KrisOS and Fedora bootc
 License:        MIT
@@ -61,6 +61,11 @@ delegated to a dedicated external application.
 %{_datadir}/icons/hicolor/scalable/apps/krisCC.svg
 
 %changelog
+* Wed Sep 30 2026 krism-eu - 0.8.0-1
+- Expand krisCC into an operational control center with service, journal, EFI and command workflows
+- Add read-only Cron inspection, quick custom actions and support reporting
+- Harden backup restore preflight and align Fedora 45 runtime validation
+
 * Tue Sep 29 2026 krism-eu - 0.7.10-1
 - Rebuild and validate krisCC on Fedora 45 for KrisOS45 integration
 - Keep the 0.7.9 application behavior while moving the RPM runtime contract to Fedora 45
