@@ -23,6 +23,7 @@ qt_add_executable(krisCC
     src/CustomActionsBackend.cpp src/CustomActionsBackend.h
     src/CronBackend.cpp src/CronBackend.h
     src/CronParser.cpp src/CronParser.h
+    src/ServiceManagerBackend.cpp src/ServiceManagerBackend.h
     src/SystemBackend.cpp src/SystemBackend.h
     src/SoftwareBackend.cpp src/SoftwareBackend.h
     src/PackageSearch.cpp src/PackageSearch.h
