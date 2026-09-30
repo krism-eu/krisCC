@@ -62,7 +62,7 @@ void CronBackend::loadSystemJobs()
             return;
 
         const QString text = QString::fromUtf8(file.readAll());
-        m_jobs.append(jobsFromText(text, true, QStringLiteral("system"), path));
+        m_jobs += jobsFromText(text, true, QStringLiteral("system"), path);
     };
 
     appendFile(QStringLiteral("/etc/crontab"));
@@ -143,11 +143,12 @@ void CronBackend::finishUserCron(const QByteArray &standardOutput,
         QVariantList userJobs = jobsFromText(QString::fromUtf8(standardOutput), false,
                                              QStringLiteral("user"),
                                              tr("Crontab utente"));
-        userJobs.append(m_jobs);
+        const bool hasUserJobs = !userJobs.isEmpty();
+        userJobs += m_jobs;
         m_jobs = userJobs;
-        m_userCronStatus = userJobs.isEmpty()
-            ? tr("Nessun job cron utente.")
-            : tr("Crontab utente letto.");
+        m_userCronStatus = hasUserJobs
+            ? tr("Crontab utente letto.")
+            : tr("Nessun job cron utente.");
         return;
     }
 
