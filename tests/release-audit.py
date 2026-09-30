@@ -31,6 +31,8 @@ admin_cpp = read("src/AdminHelper.cpp")
 admin_policy = read("src/AdminPolicy.cpp")
 rk_cpp = read("src/RkBackend.cpp")
 custom_cpp = read("src/CustomActionsBackend.cpp")
+cron_cpp = read("src/CronBackend.cpp")
+cron_parser_cpp = read("src/CronParser.cpp")
 utility_cpp = read("src/UtilityBackend.cpp")
 package_cpp = read("src/PackageSearch.cpp")
 system_cpp = read("src/SystemBackend.cpp")
@@ -46,6 +48,7 @@ recovery_qml = read("qml/modules/RecoveryModule.qml")
 contract_parsers_h = read("src/ContractParsers.h")
 contract_parsers_cpp = read("src/ContractParsers.cpp")
 contract_parsers_test = read("tests/test_contract_parsers.cpp")
+cron_parser_test = read("tests/test_cron_parser.cpp")
 
 require(f'Version:        {VERSION}' in spec, "RPM Version differs from canonical version")
 require('Release:        1%{?dist}' in spec,
@@ -116,12 +119,34 @@ require("src/AdminPolicy.cpp src/AdminPolicy.h" in cmake, "shared admin policy n
 require("kriscc-test-validators" in cmake
         and "kriscc-test-admin-policy" in cmake
         and "kriscc-test-process-runner" in cmake
-        and "kriscc-test-parsers" in cmake,
+        and "kriscc-test-parsers" in cmake
+        and "kriscc-test-cron-parser" in cmake,
         "semantic unit tests are not wired into CTest")
 require("src/ProcessRunner.cpp src/ProcessRunner.h" in cmake,
         "shared user-level ProcessRunner not linked")
 require("src/ContractParsers.cpp src/ContractParsers.h" in cmake,
         "shared contract parsers not linked")
+require("src/CronBackend.cpp src/CronBackend.h" in cmake
+        and "src/CronParser.cpp src/CronParser.h" in cmake,
+        "cron viewer backend/parser not linked")
+require('QStringLiteral("-l")' in cron_cpp
+        and 'QIODevice::ReadOnly' in cron_cpp
+        and 'QStringLiteral("/etc/crontab")' in cron_cpp
+        and 'QStringLiteral("/etc/cron.d")' in cron_cpp
+        and "pkexec" not in cron_cpp
+        and "Polkit" not in cron_cpp
+        and "crontab -e" not in cron_cpp,
+        "cron viewer must remain capability-driven and read-only")
+require('qsTr("Cron")' in commands_qml
+        and "CronBackend.jobs" in commands_qml
+        and "CronBackend.reload()" in commands_qml
+        and "openFromCron" in commands_qml,
+        "Cron tab is not wired into the Commands UI")
+require("parsesUserCrontab" in cron_parser_test
+        and "parsesSystemCrontab" in cron_parser_test
+        and "describesCommonSchedules" in cron_parser_test
+        and "QRegularExpression" in cron_parser_cpp,
+        "cron parser contract/tests are incomplete")
 
 require("AdminPolicy::resolve" in admin_cpp and "AdminPolicy::resolve" in polkit_cpp,
         "client/root privileged allowlist does not share AdminPolicy")
