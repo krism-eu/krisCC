@@ -4,6 +4,7 @@
 #include "ProcessRunner.h"
 #include "Validators.h"
 
+#include <QCoreApplication>
 #include <QDebug>
 #include <QFileInfo>
 #include <QRegularExpression>
@@ -223,6 +224,38 @@ bool UtilityBackend::runBookmark(const QString &id)
                      tr("RPM non necessari"), QStringLiteral("bookmark.unneeded-rpms"), kRepositoryQueryTimeoutMs);
     if (id == QStringLiteral("fstab-order"))
         return start(QStringLiteral("findmnt"), {QStringLiteral("--fstab"), QStringLiteral("--evaluate"), QStringLiteral("-o"), QStringLiteral("TARGET,SOURCE,FSTYPE,OPTIONS")}, tr("Ordine mount configurato"), QStringLiteral("bookmark.fstab-order"), kShortQueryTimeoutMs);
+
+    if (id == QStringLiteral("support-report")) {
+        const QString version = QCoreApplication::applicationVersion();
+        const QString script = QStringLiteral(
+            "set +e; "
+            "sanitize() { sed -e \"s|$HOME|~|g\" -e \"s|$(id -un)|<user>|g\"; }; "
+            "printf '=== KrisOS / sistema ===\\n'; "
+            "if [ -r /etc/os-release ]; then . /etc/os-release; printf 'OS: %s\\n' \"$PRETTY_NAME\"; fi; "
+            "printf 'krisCC: %1\\n'; "
+            "printf 'Kernel: '; uname -r; "
+            "printf 'Architettura: '; uname -m; "
+            "printf 'SELinux: '; if command -v getenforce >/dev/null; then getenforce; else echo 'n/d'; fi; "
+            "if [ -d /sys/firmware/efi ]; then echo 'Boot mode: UEFI'; else echo 'Boot mode: BIOS'; fi; "
+            "printf '\\n=== BootC ===\\n'; "
+            "if command -v bootc >/dev/null; then bootc status --format json --format-version=1 2>&1 | sanitize; else echo 'bootc non disponibile'; fi; "
+            "printf '\\n=== rk ===\\n'; "
+            "if [ -x /usr/bin/rk ]; then /usr/bin/rk status 2>&1 | sanitize; else echo 'rk non disponibile'; fi; "
+            "printf '\\n=== EFI ===\\n'; "
+            "if command -v efibootmgr >/dev/null; then efibootmgr 2>&1 | sed -E 's/[[:space:]]+HD\\(.*$/ <percorso omesso>/' | sanitize; else echo 'efibootmgr non disponibile'; fi; "
+            "printf '\\n=== Storage ===\\n'; "
+            "lsblk -e 7 -o NAME,SIZE,FSTYPE,LABEL,MOUNTPOINTS 2>&1 | sanitize; "
+            "printf '\\n=== Rete ===\\n'; "
+            "if command -v nmcli >/dev/null; then nmcli -t -f DEVICE,TYPE,STATE device status 2>&1 | sanitize; else echo 'nmcli non disponibile'; fi; "
+            "printf '\\n=== Unità fallite ===\\n'; "
+            "systemctl --failed --no-pager --plain 2>&1 | sanitize; "
+            "printf '\\n=== Warning/error avvio corrente ===\\n'; "
+            "journalctl -b -p warning --no-pager -n 80 2>&1 | sanitize"
+        ).arg(version);
+        return start(QStringLiteral("/usr/bin/bash"), {QStringLiteral("-c"), script},
+                     tr("Rapporto supporto KrisOS"), QStringLiteral("support-report"),
+                     kRepositoryQueryTimeoutMs);
+    }
 
     if (id == QStringLiteral("health")) {
         const QString script = QStringLiteral(
