@@ -27,6 +27,21 @@ private slots:
                                           QStringLiteral("00af")});
         QVERIFY(uefi.has_value());
         QCOMPARE(uefi->arguments.last(), QStringLiteral("00AF"));
+
+        auto clearNext = AdminPolicy::resolve({QStringLiteral("boot-clear-next-uefi")});
+        QVERIFY(clearNext.has_value());
+        QCOMPARE(clearNext->arguments, QStringList({QStringLiteral("-N")}));
+
+        auto deleteEntry = AdminPolicy::resolve({QStringLiteral("boot-delete-uefi"),
+                                                 QStringLiteral("0007")});
+        QVERIFY(deleteEntry.has_value());
+        QCOMPARE(deleteEntry->arguments,
+                 QStringList({QStringLiteral("-b"), QStringLiteral("0007"), QStringLiteral("-B")}));
+
+        auto bootOrder = AdminPolicy::resolve({QStringLiteral("boot-order-uefi"),
+                                               QStringLiteral("0001,00af,0007")});
+        QVERIFY(bootOrder.has_value());
+        QCOMPARE(bootOrder->arguments.last(), QStringLiteral("0001,00AF,0007"));
     }
     void rejectsUnexpectedInput()
     {
@@ -35,6 +50,8 @@ private slots:
         QVERIFY(!AdminPolicy::resolve({QStringLiteral("rk-add"), QStringLiteral("foo:bar")}).has_value());
         QVERIFY(!AdminPolicy::resolve({QStringLiteral("repo-add"), QStringLiteral("http://example.org/test.repo")}).has_value());
         QVERIFY(!AdminPolicy::resolve({QStringLiteral("boot-next-uefi"), QStringLiteral("-o")}).has_value());
+        QVERIFY(!AdminPolicy::resolve({QStringLiteral("boot-delete-uefi"), QStringLiteral("00001")}).has_value());
+        QVERIFY(!AdminPolicy::resolve({QStringLiteral("boot-order-uefi"), QStringLiteral("0001,0001")}).has_value());
         QVERIFY(!AdminPolicy::resolve({QStringLiteral("boot-next-grub"), QStringLiteral("--unrestricted")}).has_value());
         QVERIFY(!AdminPolicy::resolve({QStringLiteral("bootc-check"), QStringLiteral("--extra")}).has_value());
     }
