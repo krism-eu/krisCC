@@ -19,6 +19,7 @@
 #include "PolkitHelper.h"
 #include "RkBackend.h"
 #include "RepairBackend.h"
+#include "ServiceManagerBackend.h"
 #include "MaintenanceBackend.h"
 #include "SoftwareBackend.h"
 #include "SystemBackend.h"
@@ -84,6 +85,7 @@ int main(int argc, char *argv[])
     SystemBackend systemBackend(&polkitHelper);
     CustomActionsBackend customActionsBackend;
     CronBackend cronBackend;
+    ServiceManagerBackend serviceManagerBackend;
 
     QObject::connect(&rkBackend, &RkBackend::operationFinished, &bootcBackend,
                      [&bootcBackend](bool, const QString &) {
@@ -106,6 +108,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty(QStringLiteral("SystemBackend"), &systemBackend);
     engine.rootContext()->setContextProperty(QStringLiteral("CustomActionsBackend"), &customActionsBackend);
     engine.rootContext()->setContextProperty(QStringLiteral("CronBackend"), &cronBackend);
+    engine.rootContext()->setContextProperty(QStringLiteral("ServiceManagerBackend"), &serviceManagerBackend);
     engine.rootContext()->setContextProperty(QStringLiteral("KrisccStartHidden"), startHidden);
     const bool smokeTest = qEnvironmentVariableIsSet("KRISCC_SMOKE_TEST");
     engine.rootContext()->setContextProperty(QStringLiteral("KrisccSmokeTest"), smokeTest);
