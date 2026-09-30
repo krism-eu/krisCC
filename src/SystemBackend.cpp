@@ -172,6 +172,23 @@ SystemBackend::SystemBackend(PolkitHelper *polkit, QObject *parent)
         connect(m_polkit, &PolkitHelper::runningChanged, this, &SystemBackend::bootSelectionStateChanged);
         connect(m_polkit, &PolkitHelper::finished, this,
                 [this](bool success, const QString &output) {
+            if (m_bootReadOwned) {
+                m_bootReadOwned = false;
+                m_bootEntriesBusy = false;
+                if (success) {
+                    applyUefiEntriesOutput(output);
+                } else {
+                    m_uefiEntries.clear();
+                    m_nextUefiBootLabel.clear();
+                    m_currentUefiBootCode.clear();
+                    m_uefiBootOrder.clear();
+                    m_bootEntriesError = output.isEmpty()
+                        ? tr("Impossibile leggere le voci UEFI con autorizzazione amministrativa.")
+                        : output;
+                }
+                emit bootEntriesChanged();
+                return;
+            }
             if (m_adminMaintenanceOwned) {
                 const QString operation = m_adminMaintenanceOperation;
                 m_adminMaintenanceOwned = false;
@@ -272,64 +289,12 @@ void SystemBackend::refreshUefiEntries()
             m_currentUefiBootCode.clear();
             m_uefiBootOrder.clear();
             m_bootEntriesError = timedOut ? tr("Tempo massimo superato leggendo le voci UEFI.")
-                                          : tr("Impossibile leggere le voci UEFI.");
+                                          : tr("Impossibile leggere le voci UEFI senza privilegi. Usa “Leggi con autorizzazione” per riprovare.");
             emit bootEntriesChanged();
             return;
         }
 
-        const auto parsed = ContractParsers::parseUefiEntries(output.toUtf8());
-        m_nextUefiBootLabel.clear();
-        m_currentUefiBootCode.clear();
-        m_uefiBootOrder.clear();
-
-        const QRegularExpression bootCurrentPattern(
-            QStringLiteral("(?m)^BootCurrent:\\s*([0-9A-Fa-f]{4})\\s*$"));
-        const QRegularExpression bootNextPattern(
-            QStringLiteral("(?m)^BootNext:\\s*([0-9A-Fa-f]{4})\\s*$"));
-        const QRegularExpression bootOrderPattern(
-            QStringLiteral("(?m)^BootOrder:\\s*([0-9A-Fa-f]{4}(?:,[0-9A-Fa-f]{4})*)\\s*$"));
-
-        const QRegularExpressionMatch currentMatch = bootCurrentPattern.match(output);
-        if (currentMatch.hasMatch())
-            m_currentUefiBootCode = currentMatch.captured(1).toUpper();
-
-        QString nextCode;
-        const QRegularExpressionMatch nextMatch = bootNextPattern.match(output);
-        if (nextMatch.hasMatch())
-            nextCode = nextMatch.captured(1).toUpper();
-
-        const QRegularExpressionMatch orderMatch = bootOrderPattern.match(output);
-        if (orderMatch.hasMatch()) {
-            for (const QString &token : orderMatch.captured(1).split(QLatin1Char(',')))
-                m_uefiBootOrder.append(token.toUpper());
-        }
-
-        QHash<QString, QVariantMap> byCode;
-        for (const QVariant &value : parsed.values) {
-            QVariantMap row = value.toMap();
-            const QString code = row.value(QStringLiteral("code")).toString();
-            row.insert(QStringLiteral("current"), code == m_currentUefiBootCode);
-            row.insert(QStringLiteral("next"), code == nextCode);
-            row.insert(QStringLiteral("orderIndex"), m_uefiBootOrder.indexOf(code));
-            byCode.insert(code, row);
-            if (code == nextCode)
-                m_nextUefiBootLabel = row.value(QStringLiteral("label")).toString();
-        }
-
-        QVariantList ordered;
-        for (const QString &code : m_uefiBootOrder) {
-            if (byCode.contains(code))
-                ordered.append(byCode.take(code));
-        }
-        QStringList remaining = byCode.keys();
-        remaining.sort();
-        for (const QString &code : remaining)
-            ordered.append(byCode.value(code));
-        m_uefiEntries = ordered;
-
-        if (m_nextUefiBootLabel.isEmpty() && !nextCode.isEmpty())
-            m_nextUefiBootLabel = nextCode;
-        m_bootEntriesError.clear();
+        applyUefiEntriesOutput(output);
         emit bootEntriesChanged();
     });
 
@@ -359,6 +324,76 @@ void SystemBackend::refreshUefiEntries()
                 guard->kill();
         });
     });
+}
+
+void SystemBackend::applyUefiEntriesOutput(const QString &output)
+{
+    const auto parsed = ContractParsers::parseUefiEntries(output.toUtf8());
+    m_nextUefiBootLabel.clear();
+    m_currentUefiBootCode.clear();
+    m_uefiBootOrder.clear();
+
+    const QRegularExpression bootCurrentPattern(
+        QStringLiteral("(?m)^BootCurrent:\\s*([0-9A-Fa-f]{4})\\s*$"));
+    const QRegularExpression bootNextPattern(
+        QStringLiteral("(?m)^BootNext:\\s*([0-9A-Fa-f]{4})\\s*$"));
+    const QRegularExpression bootOrderPattern(
+        QStringLiteral("(?m)^BootOrder:\\s*([0-9A-Fa-f]{4}(?:,[0-9A-Fa-f]{4})*)\\s*$"));
+
+    const QRegularExpressionMatch currentMatch = bootCurrentPattern.match(output);
+    if (currentMatch.hasMatch())
+        m_currentUefiBootCode = currentMatch.captured(1).toUpper();
+
+    QString nextCode;
+    const QRegularExpressionMatch nextMatch = bootNextPattern.match(output);
+    if (nextMatch.hasMatch())
+        nextCode = nextMatch.captured(1).toUpper();
+
+    const QRegularExpressionMatch orderMatch = bootOrderPattern.match(output);
+    if (orderMatch.hasMatch()) {
+        for (const QString &token : orderMatch.captured(1).split(QLatin1Char(',')))
+            m_uefiBootOrder.append(token.toUpper());
+    }
+
+    QHash<QString, QVariantMap> byCode;
+    for (const QVariant &value : parsed.values) {
+        QVariantMap row = value.toMap();
+        const QString code = row.value(QStringLiteral("code")).toString();
+        row.insert(QStringLiteral("current"), code == m_currentUefiBootCode);
+        row.insert(QStringLiteral("next"), code == nextCode);
+        row.insert(QStringLiteral("orderIndex"), m_uefiBootOrder.indexOf(code));
+        byCode.insert(code, row);
+        if (code == nextCode)
+            m_nextUefiBootLabel = row.value(QStringLiteral("label")).toString();
+    }
+
+    QVariantList ordered;
+    for (const QString &code : m_uefiBootOrder) {
+        if (byCode.contains(code))
+            ordered.append(byCode.take(code));
+    }
+    QStringList remaining = byCode.keys();
+    remaining.sort();
+    for (const QString &code : remaining)
+        ordered.append(byCode.value(code));
+    m_uefiEntries = ordered;
+
+    if (m_nextUefiBootLabel.isEmpty() && !nextCode.isEmpty())
+        m_nextUefiBootLabel = nextCode;
+    m_bootEntriesError.clear();
+}
+
+void SystemBackend::refreshUefiEntriesPrivileged()
+{
+    if (m_bootEntriesBusy || !m_polkit || m_polkit->running() || !uefiBootAvailable())
+        return;
+
+    m_bootReadOwned = true;
+    m_bootEntriesBusy = true;
+    m_bootEntriesError.clear();
+    emit bootEntriesChanged();
+    m_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin"),
+                      {QStringLiteral("boot-read-uefi")});
 }
 
 void SystemBackend::refreshGrubEntries()
