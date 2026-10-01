@@ -29,6 +29,8 @@ private slots:
                         const QString &oldOwner, const QString &newOwner);
 
 private:
+    friend class SystemdJobCoordinatorTest;
+
     void ensureSubscribedAndSend();
     void sendRequest();
     void acceptJobPath(const QString &path);
