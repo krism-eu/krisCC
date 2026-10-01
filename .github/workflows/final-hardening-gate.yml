@@ -89,8 +89,9 @@ jobs:
           tar --exclude='./.git' --exclude='./audit-build' --exclude='./stage' --transform="s,^./,krisCC-${version}/," -czf "$HOME/rpmbuild/SOURCES/krisCC-${version}.tar.gz" .
           cp packaging/krisCC.spec "$HOME/rpmbuild/SPECS/krisCC.spec"
           rpmbuild -ba "$HOME/rpmbuild/SPECS/krisCC.spec"
-          rpm_file="$(find "$HOME/rpmbuild/RPMS" -type f -name 'krisCC-*.rpm' | head -n1)"
+          rpm_file="$(find "$HOME/rpmbuild/RPMS" -type f -name "krisCC-${version}-*.x86_64.rpm" -print -quit)"
           test -n "$rpm_file"
-          rpm -qpl "$rpm_file" | grep -Fxq '/usr/bin/krisCC'
-          rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/archive'
-          rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/cleanup-estimate'
+          rpm -qpl "$rpm_file" > /tmp/kriscc-rpm-files
+          grep -Fxq '/usr/bin/krisCC' /tmp/kriscc-rpm-files
+          grep -Fxq '/usr/libexec/kriscc/archive' /tmp/kriscc-rpm-files
+          grep -Fxq '/usr/libexec/kriscc/cleanup-estimate' /tmp/kriscc-rpm-files
