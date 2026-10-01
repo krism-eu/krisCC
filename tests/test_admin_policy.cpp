@@ -1,5 +1,9 @@
 #include <QtTest>
 
+#include <QFile>
+#include <QHash>
+#include <QXmlStreamReader>
+
 #include "AdminPolicy.h"
 
 class AdminPolicyTest final : public QObject
@@ -48,6 +52,78 @@ private slots:
         QVERIFY(bootOrder.has_value());
         QCOMPARE(bootOrder->arguments.last(), QStringLiteral("0001,00AF,0007"));
     }
+
+    void polkitUefiCoverage()
+    {
+        struct Action {
+            QString executable;
+            QString argv1;
+            QString allowAny;
+            QString allowInactive;
+            QString allowActive;
+        };
+
+        const QString policyPath = QFINDTESTDATA("../data/org.kriscc.controlcenter.policy");
+        QVERIFY2(!policyPath.isEmpty(), "Polkit policy test data not found");
+        QFile file(policyPath);
+        QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
+
+        QHash<QString, Action> actions;
+        QXmlStreamReader xml(&file);
+        QString actionId;
+        while (!xml.atEnd()) {
+            xml.readNext();
+            if (xml.isStartElement() && xml.name() == QStringLiteral("action")) {
+                actionId = xml.attributes().value(QStringLiteral("id")).toString();
+                actions.insert(actionId, Action{});
+                continue;
+            }
+            if (xml.isEndElement() && xml.name() == QStringLiteral("action")) {
+                actionId.clear();
+                continue;
+            }
+            if (!xml.isStartElement() || actionId.isEmpty())
+                continue;
+
+            Action &action = actions[actionId];
+            if (xml.name() == QStringLiteral("annotate")) {
+                const QString key = xml.attributes().value(QStringLiteral("key")).toString();
+                const QString value = xml.readElementText().trimmed();
+                if (key == QStringLiteral("org.freedesktop.policykit.exec.path"))
+                    action.executable = value;
+                else if (key == QStringLiteral("org.freedesktop.policykit.exec.argv1"))
+                    action.argv1 = value;
+            } else if (xml.name() == QStringLiteral("allow_any")) {
+                action.allowAny = xml.readElementText().trimmed();
+            } else if (xml.name() == QStringLiteral("allow_inactive")) {
+                action.allowInactive = xml.readElementText().trimmed();
+            } else if (xml.name() == QStringLiteral("allow_active")) {
+                action.allowActive = xml.readElementText().trimmed();
+            }
+        }
+        QVERIFY2(!xml.hasError(), qPrintable(xml.errorString()));
+
+        const QHash<QString, QString> expected = {
+            {QStringLiteral("org.kriscc.controlcenter.boot.read-uefi"), QStringLiteral("boot-read-uefi")},
+            {QStringLiteral("org.kriscc.controlcenter.bootnext.clear-uefi"), QStringLiteral("boot-clear-next-uefi")},
+            {QStringLiteral("org.kriscc.controlcenter.boot.delete-uefi"), QStringLiteral("boot-delete-uefi")},
+            {QStringLiteral("org.kriscc.controlcenter.boot.order-uefi"), QStringLiteral("boot-order-uefi")}
+        };
+
+        for (auto it = expected.cbegin(); it != expected.cend(); ++it) {
+            QVERIFY2(actions.contains(it.key()), qPrintable(QStringLiteral("Missing action %1").arg(it.key())));
+            const Action action = actions.value(it.key());
+            QCOMPARE(action.executable, QStringLiteral("/usr/libexec/kriscc/admin"));
+            QCOMPARE(action.argv1, it.value());
+            QCOMPARE(action.allowAny, QStringLiteral("no"));
+            QCOMPARE(action.allowInactive, QStringLiteral("no"));
+            QCOMPARE(action.allowActive, QStringLiteral("auth_admin"));
+        }
+
+        for (const Action &action : actions)
+            QVERIFY(action.allowActive != QStringLiteral("auth_admin_keep"));
+    }
+
     void rejectsUnexpectedInput()
     {
         QVERIFY(!AdminPolicy::resolve({}).has_value());

@@ -14,6 +14,8 @@ Kirigami.ApplicationWindow {
     visible: !KrisccStartHidden
     title: qsTr("krisCC")
     property int currentSection: 0
+    property bool closeAfterBackupCancel: false
+    property bool allowClose: false
 
     readonly property var navigationModel: [
         { section: 0, label: qsTr("Dashboard"), icon: "go-home" },
@@ -31,9 +33,42 @@ Kirigami.ApplicationWindow {
         SystemBackend.setResourceMonitoringEnabled(root.visible && root.currentSection === 0)
     }
 
+    function nonBackupMutationActive() {
+        return BootcBackend.operationRunning
+            || RkBackend.operationRunning
+            || MaintenanceBackend.running
+            || ServiceManagerBackend.busy
+            || SystemBackend.mutationRunning
+    }
+
     onVisibleChanged: syncResourceMonitoring()
     onCurrentSectionChanged: syncResourceMonitoring()
     Component.onCompleted: syncResourceMonitoring()
+
+    onClosing: function(close) {
+        if (root.allowClose)
+            return
+        if (SystemBackend.backupBusy) {
+            close.accepted = false
+            closeDuringBackupDialog.open()
+            return
+        }
+        if (root.nonBackupMutationActive()) {
+            close.accepted = false
+            operationInProgressDialog.open()
+        }
+    }
+
+    Connections {
+        target: SystemBackend
+        function onBackupBusyChanged() {
+            if (root.closeAfterBackupCancel && !SystemBackend.backupBusy) {
+                root.closeAfterBackupCancel = false
+                root.allowClose = true
+                Qt.callLater(Qt.quit)
+            }
+        }
+    }
 
     function showIndex(index) {
         if (index >= 0 && index <= 6)
@@ -367,6 +402,48 @@ Kirigami.ApplicationWindow {
                 icon.name: "edit-copy"
                 onClicked: SystemBackend.copyToClipboard(informationText.text)
             }
+        }
+    }
+
+    Controls.Dialog {
+        id: closeDuringBackupDialog
+        modal: true
+        parent: Controls.Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 32,
+                        parent ? parent.width - Kirigami.Units.largeSpacing * 2
+                               : Kirigami.Units.gridUnit * 32)
+        implicitHeight: Kirigami.Units.gridUnit * 12
+        title: qsTr("Operazione di backup attiva")
+        standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
+        contentItem: Controls.Label {
+            wrapMode: Text.WordWrap
+            text: qsTr("Backup, verifica o ripristino è ancora in corso. Annullare l'operazione, attendere la bonifica e chiudere krisCC?")
+        }
+        onAccepted: {
+            root.closeAfterBackupCancel = true
+            if (!SystemBackend.cancelSnapshot()) {
+                root.closeAfterBackupCancel = false
+                SystemBackend.notify(qsTr("Chiusura rimandata"),
+                                     qsTr("Non è stato possibile avviare l'annullamento dell'operazione."))
+            }
+        }
+    }
+
+    Controls.Dialog {
+        id: operationInProgressDialog
+        modal: true
+        parent: Controls.Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 32,
+                        parent ? parent.width - Kirigami.Units.largeSpacing * 2
+                               : Kirigami.Units.gridUnit * 32)
+        implicitHeight: Kirigami.Units.gridUnit * 12
+        title: qsTr("Operazione in corso")
+        standardButtons: Controls.Dialog.Close
+        contentItem: Controls.Label {
+            wrapMode: Text.WordWrap
+            text: qsTr("krisCC non può essere chiuso mentre una modifica di sistema è in corso. Attendere il completamento o annullarla dal relativo pannello.")
         }
     }
 

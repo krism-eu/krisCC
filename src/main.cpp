@@ -22,7 +22,7 @@
 #include "ServiceManagerBackend.h"
 #include "MaintenanceBackend.h"
 #include "SoftwareBackend.h"
-#include "SystemBackend.h"
+#include "SystemBackendRuntime.h"
 #include "UtilityBackend.h"
 
 int main(int argc, char *argv[])
@@ -68,7 +68,6 @@ int main(int argc, char *argv[])
         }
     }
 
-    // Never leave an unreachable hidden process when the session bus or activation object is unavailable.
     const bool startHidden = parser.isSet(backgroundOption) && singleInstanceReady;
     if (parser.isSet(backgroundOption) && !singleInstanceReady)
         qWarning("krisCC: --background requested without a usable session D-Bus single-instance service; showing the window instead.");
@@ -82,13 +81,14 @@ int main(int argc, char *argv[])
     RkBackend rkBackend(&polkitHelper);
     MaintenanceBackend maintenanceBackend;
     SoftwareBackend softwareBackend(&polkitHelper);
-    SystemBackend systemBackend(&polkitHelper);
+    SystemBackendRuntime systemBackend(&polkitHelper);
     CustomActionsBackend customActionsBackend;
     CronBackend cronBackend;
     ServiceManagerBackend serviceManagerBackend;
 
     QObject::connect(&rkBackend, &RkBackend::operationFinished, &bootcBackend,
                      [&bootcBackend](bool, const QString &) {
+        PackageSearch::invalidateSharedInventory();
         bootcBackend.refreshPackages();
     });
 

@@ -55,7 +55,7 @@ jobs:
         run: >-
           dnf -y --setopt=updates-testing.enabled=false install gcc-c++ cmake ninja-build gzip python3
           qt6-qtbase-devel qt6-qtdeclarative-devel kf6-kirigami-devel
-          bootc dnf5 dnf5-plugins rpm rpm-build tar qqc2-breeze-style
+          bootc dnf5 dnf5-plugins rpm rpm-build tar qqc2-breeze-style libarchive
 
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release

@@ -91,12 +91,40 @@
     <annotate key="org.freedesktop.policykit.exec.argv1">repo-add</annotate>
   </action>
 
+  <action id="org.kriscc.controlcenter.boot.read-uefi">
+    <description>Read UEFI boot entries with elevated access</description>
+    <message>Authentication is required to read UEFI boot entries</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/admin</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">boot-read-uefi</annotate>
+  </action>
   <action id="org.kriscc.controlcenter.bootnext.uefi">
     <description>Select the next UEFI boot entry</description>
     <message>Authentication is required to select the next UEFI boot entry</message>
     <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/admin</annotate>
     <annotate key="org.freedesktop.policykit.exec.argv1">boot-next-uefi</annotate>
+  </action>
+  <action id="org.kriscc.controlcenter.bootnext.clear-uefi">
+    <description>Clear the next UEFI boot entry</description>
+    <message>Authentication is required to clear the next UEFI boot entry</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/admin</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">boot-clear-next-uefi</annotate>
+  </action>
+  <action id="org.kriscc.controlcenter.boot.delete-uefi">
+    <description>Delete a UEFI boot entry</description>
+    <message>Authentication is required to delete this UEFI boot entry</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/admin</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">boot-delete-uefi</annotate>
+  </action>
+  <action id="org.kriscc.controlcenter.boot.order-uefi">
+    <description>Change the UEFI boot order</description>
+    <message>Authentication is required to change the UEFI boot order</message>
+    <defaults><allow_any>no</allow_any><allow_inactive>no</allow_inactive><allow_active>auth_admin</allow_active></defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/libexec/kriscc/admin</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">boot-order-uefi</annotate>
   </action>
   <action id="org.kriscc.controlcenter.bootnext.grub">
     <description>Select the next GRUB boot entry</description>

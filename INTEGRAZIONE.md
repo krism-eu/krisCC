@@ -6,7 +6,7 @@ krisCC 0.8.1 è un'applicazione standalone Qt 6/Kirigami pensata per uso persona
 
 - Qt 6 Core/Gui/Qml/Quick/DBus
 - KF6 Kirigami
-- `bootc`, `rpm`, `dnf5`, `dnf5-plugins` (config-manager), `pkexec`, `tar`, `bash`
+- `bootc`, `rpm`, `dnf5`, `dnf5-plugins` (config-manager), `pkexec`, `tar`, `bash`, `libarchive`
 - CLI runtime richieste per percorso: `/usr/bin/timeout`, `systemctl`, `loginctl`, `resolvectl` e `journalctl`; lo spec non forza i nomi dei pacchetti provider
 - `systemctl` deve supportare l'output JSON tabellare usato da `list-units` e `list-unit-files` (`--output=json`); Fedora 45 soddisfa questo contratto
 - `/usr/bin/rk` come helper del layer persistente KrisOS
@@ -21,6 +21,8 @@ krisCC usa come layout primario quello attuale di KrisOS:
 - `/usr/share/krisos/owned-packages.txt`
 
 `/usr/bin/rk` non viene rinominato: è ancora il nome dell'helper nel repository KrisOS corrente e cambiarlo unilateralmente romperebbe le operazioni persistenti e la policy Polkit.
+
+Il Control Center considera `owned-packages.txt` il manifest della base **attualmente in esecuzione**. Non usa il manifest di un'immagine BootC soltanto staged come se descrivesse il sistema corrente. L'inventario RPM installato, il manifest della base e la lista persistente vengono pubblicati alla UI come una fotografia coerente: un errore di lettura rende la classificazione temporaneamente non disponibile invece di trasformare tutti i pacchetti in “locali”. La fotografia è condivisa tra i modelli Software, ha una scadenza breve e viene invalidata dopo operazioni `rk`; un refresh esplicito forza la rivalidazione senza dipendere da percorsi interni del database RPM.
 
 ## Modello software
 
@@ -78,7 +80,8 @@ Poi verificare manualmente `rk plan/add/rm/sync`, ricerca RPM, apertura e gestio
 
 Repository: https://github.com/krism-eu/krisCC
 
-
 ## Backup home K1.0
 
 Il profilo home esclude cache, cestino, backup precedenti, `~/.local/share/flatpak` e `~/.local/share/containers`. Questi ultimi sono runtime/app Flatpak e storage Podman ricostruibili; eventuali volumi Podman sono quindi fuori dal backup. I dati personali delle applicazioni Flatpak in `~/.var/app` restano inclusi.
+
+La verifica e il ripristino usano `/usr/libexec/kriscc/archive`, che legge i record tar/gzip tramite `libarchive`, costruisce un piano strutturato e applica i dati con attraversamento ancorato a directory descriptor senza seguire symlink nei componenti del percorso. Lo snapshot appena creato viene validato dallo stesso motore prima di essere pubblicato come backup riuscito.

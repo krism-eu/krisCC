@@ -24,6 +24,7 @@ Requires:       NetworkManager
 Requires:       bootc
 Requires:       tar
 Requires:       bash
+Requires:       libarchive
 Requires:       /usr/bin/timeout
 Requires:       /usr/bin/systemctl
 Requires:       /usr/bin/loginctl
@@ -53,7 +54,9 @@ delegated to a dedicated external application.
 %doc README.md
 %{_bindir}/krisCC
 %{_libexecdir}/kriscc/admin
+%{_libexecdir}/kriscc/archive
 %{_libexecdir}/kriscc/bootc-status
+%{_libexecdir}/kriscc/cleanup-estimate
 %{_libexecdir}/kriscc/maintenance
 %{_datadir}/applications/krisCC.desktop
 %{_datadir}/polkit-1/actions/org.kriscc.controlcenter.policy

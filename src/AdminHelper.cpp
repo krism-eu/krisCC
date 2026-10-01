@@ -1,6 +1,9 @@
 #include "AdminPolicy.h"
 
 #include <QCoreApplication>
+#include <QDir>
+#include <QFile>
+#include <QHash>
 #include <QProcess>
 #include <QTextStream>
 
@@ -8,6 +11,79 @@
 #include <unistd.h>
 
 namespace {
+using ProcessMap = QHash<qint64, quint64>;
+
+ProcessMap processesInGroup(qint64 pgid)
+{
+    ProcessMap result;
+    if (pgid <= 0)
+        return result;
+
+    const QDir proc(QStringLiteral("/proc"));
+    const QStringList entries = proc.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+    for (const QString &entry : entries) {
+        bool pidOk = false;
+        const qint64 pid = entry.toLongLong(&pidOk);
+        if (!pidOk || pid <= 0)
+            continue;
+
+        QFile statFile(proc.filePath(entry + QStringLiteral("/stat")));
+        if (!statFile.open(QIODevice::ReadOnly))
+            continue;
+        const QByteArray line = statFile.readAll().trimmed();
+        const qsizetype closeParen = line.lastIndexOf(')');
+        if (closeParen < 0 || closeParen + 2 >= line.size())
+            continue;
+        const QList<QByteArray> fields = line.mid(closeParen + 2).split(' ');
+        if (fields.size() <= 19)
+            continue;
+
+        bool groupOk = false;
+        bool startOk = false;
+        const qint64 processGroup = fields.at(2).toLongLong(&groupOk);
+        const quint64 startTime = fields.at(19).toULongLong(&startOk);
+        if (groupOk && startOk && processGroup == pgid)
+            result.insert(pid, startTime);
+    }
+    return result;
+}
+
+bool mapsShareIdentity(const ProcessMap &known, const ProcessMap &current)
+{
+    for (auto it = current.cbegin(); it != current.cend(); ++it) {
+        const auto knownIt = known.constFind(it.key());
+        if (knownIt != known.cend() && knownIt.value() == it.value())
+            return true;
+    }
+    return false;
+}
+
+void refreshTrackedGroup(qint64 pgid, ProcessMap *tracked, bool allowSeed)
+{
+    const ProcessMap current = processesInGroup(pgid);
+    if (current.isEmpty())
+        return;
+    if (!mapsShareIdentity(*tracked, current) && !(allowSeed && tracked->isEmpty()))
+        return;
+    for (auto it = current.cbegin(); it != current.cend(); ++it)
+        tracked->insert(it.key(), it.value());
+}
+
+bool trackedGroupAlive(qint64 pgid, const ProcessMap &tracked)
+{
+    if (pgid <= 0 || tracked.isEmpty())
+        return false;
+    return mapsShareIdentity(tracked, processesInGroup(pgid));
+}
+
+bool signalTrackedGroup(qint64 pgid, ProcessMap *tracked, int signalNumber,
+                        bool allowSeed = false)
+{
+    refreshTrackedGroup(pgid, tracked, allowSeed);
+    if (!trackedGroupAlive(pgid, *tracked))
+        return false;
+    return ::kill(-pgid, signalNumber) == 0;
+}
 
 int runProgram(const AdminPolicy::Command &command)
 {
@@ -28,29 +104,75 @@ int runProgram(const AdminPolicy::Command &command)
         return 125;
     }
 
-    if (process.waitForFinished(command.timeoutMs)) {
-        if (process.exitStatus() != QProcess::NormalExit) {
-            err << "kriscc-admin: processo terminato in modo anomalo: "
-                << command.program << '\n';
-            return 125;
+    const qint64 pgid = process.processId();
+    ProcessMap tracked;
+    refreshTrackedGroup(pgid, &tracked, true);
+
+    int remaining = command.timeoutMs;
+    bool leaderFinished = false;
+    int leaderExitCode = 125;
+    QProcess::ExitStatus leaderExitStatus = QProcess::CrashExit;
+
+    while (remaining > 0) {
+        const int slice = qMin(100, remaining);
+        const bool finished = process.waitForFinished(slice);
+        remaining -= slice;
+        refreshTrackedGroup(pgid, &tracked, false);
+        if (finished) {
+            leaderFinished = true;
+            leaderExitCode = process.exitCode();
+            leaderExitStatus = process.exitStatus();
+            break;
         }
-        return process.exitCode();
     }
 
-    const qint64 pid = process.processId();
+    if (leaderFinished) {
+        // A successful leader is not enough: privileged descendants remain part
+        // of the operation. Give a short natural-drain window while preserving
+        // observed process identities to avoid signalling a reused numeric PGID.
+        for (int i = 0; i < 5 && trackedGroupAlive(pgid, tracked); ++i) {
+            ::usleep(100 * 1000);
+            refreshTrackedGroup(pgid, &tracked, false);
+        }
+        if (!trackedGroupAlive(pgid, tracked)) {
+            if (leaderExitStatus != QProcess::NormalExit) {
+                err << "kriscc-admin: processo terminato in modo anomalo: "
+                    << command.program << '\n';
+                return 125;
+            }
+            return leaderExitCode;
+        }
+
+        err << "kriscc-admin: il comando ha lasciato processi discendenti attivi: "
+            << command.program << '\n';
+        err.flush();
+        (void)signalTrackedGroup(pgid, &tracked, SIGTERM);
+        for (int i = 0; i < 30 && trackedGroupAlive(pgid, tracked); ++i) {
+            ::usleep(100 * 1000);
+            refreshTrackedGroup(pgid, &tracked, false);
+        }
+        if (trackedGroupAlive(pgid, tracked))
+            (void)signalTrackedGroup(pgid, &tracked, SIGKILL);
+        return 125;
+    }
+
     err << "kriscc-admin: timeout per " << command.program << '\n';
     err.flush();
 
-    if (pid > 0)
-        (void)::kill(-pid, SIGTERM);
-    else
+    if (!signalTrackedGroup(pgid, &tracked, SIGTERM, true))
         process.terminate();
 
-    if (!process.waitForFinished(3000)) {
-        if (pid > 0)
-            (void)::kill(-pid, SIGKILL);
-        else
-            process.kill();
+    for (int i = 0; i < 30; ++i) {
+        (void)process.waitForFinished(100);
+        refreshTrackedGroup(pgid, &tracked, false);
+        if (process.state() == QProcess::NotRunning && !trackedGroupAlive(pgid, tracked))
+            break;
+    }
+
+    if (trackedGroupAlive(pgid, tracked))
+        (void)signalTrackedGroup(pgid, &tracked, SIGKILL);
+    if (process.state() != QProcess::NotRunning) {
+        process.kill();
         process.waitForFinished(3000);
     }
     return 124;

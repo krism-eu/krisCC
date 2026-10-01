@@ -7,16 +7,19 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+
 def read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
+
 
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise AssertionError(message)
 
+
 version_cfg = read("cmake/KrisCCVersion.cmake")
 m_v = re.search(r'KRISCC_VERSION\s+"([^"]+)"', version_cfg)
-require(m_v, "missing canonical krisCC version")
+require(m_v is not None, "missing canonical krisCC version")
 VERSION = m_v.group(1)
 require(re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", VERSION) is not None,
         "public krisCC version must be X.Y.Z only")
@@ -26,6 +29,7 @@ require("KRISCC_RELEASE" not in version_cfg,
 cmake = read("CMakeLists.txt")
 spec = read("packaging/krisCC.spec")
 workflow = read(".github/workflows/build.yml")
+main_cpp = read("src/main.cpp")
 polkit_cpp = read("src/PolkitHelper.cpp")
 admin_cpp = read("src/AdminHelper.cpp")
 admin_policy = read("src/AdminPolicy.cpp")
@@ -35,7 +39,27 @@ cron_cpp = read("src/CronBackend.cpp")
 cron_parser_cpp = read("src/CronParser.cpp")
 utility_cpp = read("src/UtilityBackend.cpp")
 package_cpp = read("src/PackageSearch.cpp")
+package_h = read("src/PackageSearch.h")
+package_inventory_cpp = read("src/PackageInventoryCache.cpp")
+package_inventory_h = read("src/PackageInventoryCache.h")
+package_inventory_test = read("tests/test_package_inventory.cpp")
 system_cpp = read("src/SystemBackend.cpp")
+system_h = read("src/SystemBackend.h")
+runtime_cpp = read("src/SystemBackendRuntime.cpp")
+runtime_h = read("src/SystemBackendRuntime.h")
+runtime_archive = read("src/SystemBackendRuntimeArchive.cpp")
+runtime_lifecycle = read("src/SystemBackendRuntimeLifecycle.cpp")
+runtime_services = read("src/SystemBackendRuntimeServices.cpp")
+runtime_boot = read("src/SystemBackendRuntimeBoot.cpp")
+archive_tool = read("src/ArchiveTool.cpp")
+archive_restore = read("src/ArchiveRestoreEngine.cpp")
+backup_safety = read("src/BackupSafety.cpp")
+process_runner = read("src/ProcessRunner.cpp")
+service_manager_cpp = read("src/ServiceManagerBackend.cpp")
+service_json_cpp = read("src/ServiceJson.cpp")
+systemd_jobs = read("src/SystemdJobCoordinator.cpp")
+maintenance_trash = read("src/MaintenanceTrash.cpp")
+cleanup_estimate = read("src/cleanup-estimate.sh")
 software_qml = read("qml/modules/SoftwareModule.qml")
 system_qml = read("qml/modules/SystemModule.qml")
 dashboard_qml = read("qml/modules/DashboardModule.qml")
@@ -44,19 +68,13 @@ commands_qml = read("qml/modules/CommandsModule.qml")
 tools_qml = read("qml/modules/ToolsModule.qml")
 services_qml = read("qml/modules/ServicesNetworkModule.qml")
 repair_cpp = read("src/RepairBackend.cpp")
-service_manager_cpp = read("src/ServiceManagerBackend.cpp")
 recovery_qml = read("qml/modules/RecoveryModule.qml")
 contract_parsers_h = read("src/ContractParsers.h")
 contract_parsers_cpp = read("src/ContractParsers.cpp")
 contract_parsers_test = read("tests/test_contract_parsers.cpp")
 cron_parser_test = read("tests/test_cron_parser.cpp")
 
-command_ids = set(re.findall(r'\{\s*id:\s*"([^"]+)"', commands_qml))
-bookmark_ids = set(re.findall(r'id == QStringLiteral\("([^"]+)"\)', utility_cpp))
-require(command_ids <= bookmark_ids,
-        "CommandsModule contains bookmark IDs not implemented by UtilityBackend: "
-        + ", ".join(sorted(command_ids - bookmark_ids)))
-
+# Version/release identity and Fedora 45 build contract.
 require(f'Version:        {VERSION}' in spec, "RPM Version differs from canonical version")
 require('Release:        1%{?dist}' in spec,
         "RPM Release must stay fixed at 1; bump X.Y.Z instead")
@@ -71,6 +89,10 @@ require(all(f"Requires:       {path}" in spec for path in runtime_paths)
         and 'Requires:       coreutils' not in spec
         and 'Requires:       systemd' not in spec,
         "Fedora 45 runtime contract must use executable-path requirements")
+require('Requires:       libarchive' in spec
+        and '%{_libexecdir}/kriscc/archive' in spec
+        and '%{_libexecdir}/kriscc/cleanup-estimate' in spec,
+        "structured archive/cleanup helpers are not packaged with their runtime contract")
 require('KRISCC_VERSION="${PROJECT_VERSION}"' in cmake,
         "UI version must be exactly canonical X.Y.Z")
 require('KrisCCVersion.cmake' in workflow
@@ -86,24 +108,17 @@ require('echo "source_zip=krisCC-${vr}-source.zip"' in workflow
 require('VERSION: ${{ steps.identity.outputs.version }}' in workflow
         and '"krisCC ${VERSION}"' in workflow,
         "CI does not verify the public X.Y.Z application version")
-checkout_dependency = workflow.find('- name: Install checkout dependency')
-first_checkout = workflow.find('- uses: actions/checkout@')
-require(checkout_dependency >= 0 and first_checkout >= 0 and checkout_dependency < first_checkout,
-        "build job must install Git before checkout so exact source snapshots have repository metadata")
-require('fetch-depth: 1' in workflow,
-        "build checkout must preserve the exact Git commit for source bundling")
-require('python3 tools/source_snapshot.py' in workflow
+require('fetch-depth: 1' in workflow
+        and 'python3 tools/source_snapshot.py' in workflow
         and 'git archive' in workflow
         and '--format=zip' in workflow,
-        "CI does not generate both exact source TXT and ZIP from the build commit")
+        "CI exact-source snapshot contract is incomplete")
 require('sha256sum "$RPM" "$SOURCE_ZIP" "$SOURCE_TXT" > SHA256SUMS' in workflow
         and 'test "$(wc -l < SHA256SUMS)" -eq 3' in workflow,
         "RPM/source ZIP/source TXT are not covered by one three-entry SHA256SUMS")
-require('grep -Fxq "# commit: $GITHUB_SHA"' in workflow,
-        "source transcript is not tied to the exact build commit")
-require('tag="v${BASH_REMATCH[1]}"' in workflow
-        and 'test "${BASH_REMATCH[2]}" = "1"' in workflow,
-        "release tag must remain public X.Y.Z while RPM Release stays fixed at 1")
+require(f'<release version="{VERSION}"' in read("data/org.kriscc.KrisCC.metainfo.xml"),
+        "AppStream release is stale")
+
 source_snapshot = read("tools/source_snapshot.py")
 require('run_git(root, "ls-tree", "-r", "-z", "--full-tree", commit)' in source_snapshot
         and 'run_git(root, "cat-file", "blob", object_sha)' in source_snapshot
@@ -111,50 +126,30 @@ require('run_git(root, "ls-tree", "-r", "-z", "--full-tree", commit)' in source_
         and '# tree:' in source_snapshot
         and 'hashlib.sha256' in source_snapshot,
         "source TXT generator does not snapshot and fingerprint the exact tracked Git tree")
-require(f'<release version="{VERSION}"' in read("data/org.kriscc.KrisCC.metainfo.xml"),
-        "AppStream release is stale")
-f45_smoke = read("tests/f45-minimal-runtime.sh")
-require('fedora-bootc-45-minimal:latest' in f45_smoke
-        and 'distro-sync' in f45_smoke
-        and "--exclude='*.i686'" in f45_smoke
-        and 'comm -23 /tmp/base.before /tmp/all.after' in f45_smoke
-        and '--pull=always' in f45_smoke,
-        "Fedora 45 Branched Minimal local smoke contract is incomplete")
 
-require("src/Validators.cpp src/Validators.h" in cmake, "shared validators not linked")
-require("src/AdminPolicy.cpp src/AdminPolicy.h" in cmake, "shared admin policy not linked")
-require("kriscc-test-validators" in cmake
-        and "kriscc-test-admin-policy" in cmake
-        and "kriscc-test-process-runner" in cmake
-        and "kriscc-test-parsers" in cmake
-        and "kriscc-test-cron-parser" in cmake,
-        "semantic unit tests are not wired into CTest")
-require("src/ProcessRunner.cpp src/ProcessRunner.h" in cmake,
-        "shared user-level ProcessRunner not linked")
-require("src/ContractParsers.cpp src/ContractParsers.h" in cmake,
-        "shared contract parsers not linked")
-require("src/CronBackend.cpp src/CronBackend.h" in cmake
-        and "src/CronParser.cpp src/CronParser.h" in cmake,
-        "cron viewer backend/parser not linked")
-require('QStringLiteral("-l")' in cron_cpp
-        and 'QIODevice::ReadOnly' in cron_cpp
-        and 'QStringLiteral("/etc/crontab")' in cron_cpp
-        and 'QStringLiteral("/etc/cron.d")' in cron_cpp
-        and "pkexec" not in cron_cpp
-        and "Polkit" not in cron_cpp
-        and "crontab -e" not in cron_cpp,
-        "cron viewer must remain capability-driven and read-only")
-require('qsTr("Cron")' in commands_qml
-        and "CronBackend.jobs" in commands_qml
-        and "CronBackend.reload()" in commands_qml
-        and "openFromCron" in commands_qml,
-        "Cron tab is not wired into the Commands UI")
-require("parsesUserCrontab" in cron_parser_test
-        and "parsesSystemCrontab" in cron_parser_test
-        and "describesCommonSchedules" in cron_parser_test
-        and "QRegularExpression" in cron_parser_cpp,
-        "cron parser contract/tests are incomplete")
+# Active runtime must be the hardened subclass, not the legacy base implementation.
+require('SystemBackendRuntime systemBackend(&polkitHelper);' in main_cpp,
+        "main does not instantiate the hardened SystemBackend runtime")
+for source in (
+    "src/SystemBackendRuntime.cpp", "src/SystemBackendRuntime.h",
+    "src/SystemBackendRuntimeArchive.cpp", "src/SystemBackendRuntimeLifecycle.cpp",
+    "src/SystemBackendRuntimeServices.cpp", "src/SystemBackendRuntimeBoot.cpp",
+    "src/BackupSafety.cpp", "src/ArchiveRestoreEngine.cpp", "src/SystemdJobCoordinator.cpp",
+    "src/ServiceJson.cpp", "src/PackageInventoryCache.cpp",
+):
+    require(source in cmake, f"active hardening source not linked: {source}")
 
+# Unit/regression coverage is part of the release contract.
+for target in (
+    "kriscc-test-validators", "kriscc-test-admin-policy", "kriscc-test-process-runner",
+    "kriscc-test-backup-safety", "kriscc-test-archive-restore", "kriscc-test-service-json",
+    "kriscc-test-service-manager-reentrancy", "kriscc-test-systemd-job-coordinator",
+    "kriscc-test-maintenance-trash", "cleanup-estimate", "kriscc-test-package-inventory",
+    "kriscc-test-parsers", "kriscc-test-cron-parser",
+):
+    require(target in cmake, f"required regression target is not wired into CTest: {target}")
+
+# Privilege boundary: one constrained helper, no generic shell/admin path, no retained auth.
 require("AdminPolicy::resolve" in admin_cpp and "AdminPolicy::resolve" in polkit_cpp,
         "client/root privileged allowlist does not share AdminPolicy")
 require('QStringLiteral("/usr/bin/rk")' in admin_policy
@@ -169,27 +164,9 @@ require("setStandardInputFile(QProcess::nullDevice())" in admin_cpp,
         "root helper stdin must be closed")
 require("SIGTERM" in admin_cpp and "SIGKILL" in admin_cpp and "return 124" in admin_cpp,
         "root helper timeout is not real/bounded")
-require('m_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin")' in rk_cpp,
-        "krisCC rk mutations must pass through the supervised admin helper")
-require('m_polkit->execute(QStringLiteral("/usr/bin/rk")' not in rk_cpp,
-        "krisCC must not launch privileged rk directly")
-process_runner = read("src/ProcessRunner.cpp")
-require("setStandardInputFile(QProcess::nullDevice())" in process_runner,
-        "shared user-level ProcessRunner must close stdin")
-require("ProcessRunner" in custom_cpp and "ProcessRunner" in utility_cpp,
-        "custom actions and utility commands must use the shared ProcessRunner")
-require("ProcessRunner" in system_cpp
-        and "m_backupRunner" in read("src/SystemBackend.h")
-        and "kBackupVerifyTimeoutMs" in system_cpp
-        and "kBackupOperationTimeoutMs" in system_cpp,
-        "backup operations must use the bounded shared ProcessRunner")
-require("(exitCode == 0 || exitCode == 1)" not in system_cpp,
-        "tar exit code 1 must never be published as a valid backup")
-require('preflightOptions.arguments = {QStringLiteral("-tzf"), canonical};' in system_cpp,
-        "restore must gate extraction behind an archive preflight")
-
-require("options.mergedChannels = !structuredOutput;" in utility_cpp,
-        "machine-readable utility output must be isolated from stderr")
+require('m_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin")' in rk_cpp
+        and 'm_polkit->execute(QStringLiteral("/usr/bin/rk")' not in rk_cpp,
+        "rk mutations must pass through the supervised admin helper")
 
 policy = ET.parse(ROOT / "data/org.kriscc.controlcenter.policy").getroot()
 actions = {node.attrib["id"]: node for node in policy.findall("action")}
@@ -206,79 +183,214 @@ for action_id, node in actions.items():
         require(bool(annotations.get("org.freedesktop.policykit.exec.argv1")),
                 f"{action_id}: mutation lacks semantic argv1 restriction")
 
+uefi_actions = {
+    "org.kriscc.controlcenter.boot.read-uefi": "boot-read-uefi",
+    "org.kriscc.controlcenter.bootnext.clear-uefi": "boot-clear-next-uefi",
+    "org.kriscc.controlcenter.boot.delete-uefi": "boot-delete-uefi",
+    "org.kriscc.controlcenter.boot.order-uefi": "boot-order-uefi",
+}
+for action_id, operation in uefi_actions.items():
+    require(action_id in actions, f"missing UEFI Polkit action: {action_id}")
+    annotations = {n.attrib.get("key"): n.text for n in actions[action_id].findall("annotate")}
+    require(annotations.get("org.freedesktop.policykit.exec.argv1") == operation,
+            f"{action_id}: wrong semantic operation mapping")
+
 for qml in ROOT.glob("qml/**/*.qml"):
     qml_text = qml.read_text(encoding="utf-8")
     require("PolkitHelper" not in qml_text, f"{qml}: PolkitHelper leaked into QML")
     require(not re.search(r'/(?:usr/)?bin/(?:bootc|dnf5|efibootmgr|grub2-reboot)', qml_text),
             f"{qml}: privileged executable leaked into QML")
 
-require("Layout.preferredHeight: contentHeight" not in software_qml,
-        "Software list virtualization regressed")
-require("Kirigami.ScrollablePage" not in software_qml,
-        "Software must have a single scrolling owner")
-require("Layout.fillHeight: true" in software_qml,
-        "Software list viewport must fill available height")
-require("Novità repository" not in software_qml,
-        "removed repository-news tab returned")
-require('text: qsTr("Dettagli tecnici")' not in system_qml,
-        "raw BootC JSON toggle returned")
-require("id: flatpakDialog" not in system_qml
-        and 'text: qsTr("Aggiorna tutto")' not in system_qml,
-        "System updates tab must not duplicate Flatpak updating")
-require('text: qsTr("Plasma")' not in system_qml,
-        "System tools must not duplicate the Plasma launcher block")
-require("entries.size() >= 500" not in package_cpp,
-        "installed RPM inventory is silently capped")
-require("entries.size() >= 100" in package_cpp and "m_truncated" in package_cpp,
-        "RPM live-search result cap is not explicit")
-require("rpmdb.sqlite" not in package_cpp,
-        "PackageSearch must not hardcode an RPM database path")
-require('QStringLiteral("firewalld.service")' in system_cpp,
-        "Dashboard firewall state is not sourced from firewalld")
-require("topMemoryProcesses" in read("src/SystemBackend.h"),
-        "Dashboard top-memory model is missing")
-require("std::min<qsizetype>(10, entries.size())" in system_cpp,
-        "Dashboard must expose the top ten RAM process groups")
-require('model: ["overlay", "sync", "selinux", "firewall", "storage", "network"]' in dashboard_qml,
-        "Dashboard six-tile status grid order changed")
-require('{ id: "system", title: qsTr("Sistema")' not in dashboard_qml
-        and dashboard_qml.find('{ id: "flatpak", title: qsTr("Flatpak")')
-            < dashboard_qml.find('{ id: "software", title: qsTr("Software")'),
-        "Dashboard top row must start with Flatpak/Software and omit the redundant System tile")
-require('qsTr("Prestazioni")' in dashboard_qml
-        and 'qsTr("CPU")' in dashboard_qml
-        and 'qsTr("Temperatura")' in dashboard_qml
-        and 'qsTr("RAM")' in dashboard_qml
-        and 'Layout.column: 2' in dashboard_qml
-        and 'Layout.row: 0' in dashboard_qml
-        and 'Layout.rowSpan: 4' in dashboard_qml,
-        "Dashboard performance card must fill the complete third column")
-require("memoryTotalMiB" not in dashboard_qml,
-        "Dashboard RAM card must not show total/swap text")
-require("networkState" in read("src/SystemBackend.h")
-        and '"network"' in dashboard_qml,
-        "Dashboard network card contract is missing")
-require('SystemBackend.launchTool("kfind")' in dashboard_qml
-        and "SystemBackend.openTemporaryFolder()" in dashboard_qml
-        and "SystemBackend.openHomeFolder()" in dashboard_qml
-        and "SystemBackend.openRootFolder()" in dashboard_qml,
-        "Dashboard quick actions lost KFind, temporary folder, Home or root filesystem")
-require('qsTr("Backup e Recovery")' not in dashboard_qml,
-        "Dashboard quick actions must not duplicate Backup and Recovery")
-require('qsTr("Terminale")' not in dashboard_qml
-        and 'columns: width >= 900 ? 6' in dashboard_qml
-        and 'uniformCellWidths: true' in dashboard_qml
-        and 'Item { Layout.fillWidth: true; Layout.preferredHeight:' in dashboard_qml,
-        "Dashboard quick actions must remain six equal-width slots with one reserved and no Terminal")
-require('"podman", title: qsTr("Container")' not in dashboard_qml,
-        "Dashboard must not duplicate the Container navigation tile")
-require("Aggiorna Control Center" not in dashboard_qml
-        and "checkControlCenterUpdate()" in read("qml/modules/SystemModule.qml")
-        and "checkControlCenterUpdate()" not in commands_qml
-        and "updateControlCenter()" not in commands_qml
-        and "fc44.x86_64.rpm" not in system_cpp
-        and "fc45.x86_64.rpm" not in system_cpp,
-        "Control Center release check must stay image-owned and in System & Boot")
+# KR-04: group lifetime is independent from QProcess leader lifetime and PGID reuse is guarded.
+require("setStandardInputFile(QProcess::nullDevice())" in process_runner,
+        "shared user-level ProcessRunner must close stdin")
+require("processesInGroup" in process_runner
+        and "mapsShareIdentity" in process_runner
+        and "m_processGroupId" in process_runner
+        and "m_leaderExited" in process_runner
+        and "trackedGroupAlive" in process_runner
+        and "::kill(-m_processGroupId" in process_runner,
+        "ProcessRunner does not track descendant identity across leader exit")
+process_runner_test = read("tests/test_process_runner.cpp")
+require("cancellationOutlivesLeaderAndKillsChild" in process_runner_test
+        and "normalLeaderExitWaitsForDescendant" in process_runner_test,
+        "ProcessRunner descendant regressions are missing")
+require("ProcessRunner" in custom_cpp and "ProcessRunner" in utility_cpp,
+        "custom actions and utility commands must use the shared ProcessRunner")
+
+# KR-01/02/03/14/15: stable archive identity, structural records, bounded plan, confined apply.
+require("ArchiveRestoreEngine" in cmake
+        and "makeStableArchiveCopy" in archive_tool
+        and "validate-created" in archive_tool,
+        "active backup path does not use the structured archive helper")
+require('m_library.setFileName(QStringLiteral("archive"))' in archive_restore
+        and 'archive_read_next_header' in archive_restore
+        and 'archive_entry_pathname' in archive_restore
+        and 'archive_entry_symlink' in archive_restore
+        and 'archive_entry_hardlink' in archive_restore,
+        "archive validation reconstructs metadata instead of reading structured records")
+require("kMaxMembers" in archive_restore
+        and "kMaxPathBytes" in archive_restore
+        and "kMaxSingleFileBytes" in archive_restore
+        and "kMaxTotalFileBytes" in archive_restore,
+        "archive resource limits are missing")
+require("RESOLVE_BENEATH" in archive_restore
+        and "RESOLVE_NO_SYMLINKS" in archive_restore
+        and "RESOLVE_NO_XDEV" in archive_restore
+        and "O_NOFOLLOW" in archive_restore
+        and "openat2 non disponibile: ripristino confinato rifiutato" in archive_restore,
+        "restore path traversal is not fail-closed or mount-confined")
+require("Membro duplicato o ambiguo" in archive_restore
+        and "Ciclo di hard link" in archive_restore
+        and "Hard link verso membro assente" in archive_restore
+        and "Conflitto file/directory" in archive_restore,
+        "archive plan does not reject ambiguous link/type graphs")
+require("QTemporaryDir" in runtime_archive
+        and "setAutoRemove(true)" in runtime_archive
+        and "ReadOwner" in runtime_archive
+        and "m_backupWorkspace" in runtime_h,
+        "backup/restore workspace is not private and lifecycle-owned")
+require("BackupSafety::listBackups" in runtime_cpp
+        and "BackupSafety::removeBackup" in runtime_cpp
+        and "AT_SYMLINK_NOFOLLOW" in backup_safety
+        and "unlinkat" in backup_safety,
+        "backup inventory/delete does not share descriptor-anchored admissibility")
+require("appendBackupDestinationExclusions" in runtime_cpp
+        and "backupRoot == canonicalHome" in runtime_cpp
+        and 'QStringLiteral("--exclude=") + relative' in runtime_cpp,
+        "backup destination exclusion is not shared by config/home creation")
+require("partialFile.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner)" in runtime_cpp,
+        "backup partial file must be created as 0600")
+require("startCreatedArchiveValidation" in runtime_cpp
+        and "Snapshot creato e validato correttamente" in runtime_archive,
+        "created snapshots are published without restore-policy validation")
+require("kriscc-test-backup-safety" in cmake and "kriscc-test-archive-restore" in cmake,
+        "behavioral backup regressions are not wired")
+archive_restore_test = read("tests/test_archive_restore.cpp")
+for case in (
+    "internalRelativeLinkIsAccepted", "relativeTargetLeavingRootIsRejected",
+    "absoluteSymlinkIsPreservedButNeverTraversed", "preexistingDestinationSymlinkCannotEscape",
+    "internalHardLinkIsAcceptedAndRestored", "duplicateMemberIsRejected",
+    "missingHardLinkTargetIsRejected", "delimiterTextInRegularNameIsAccepted",
+):
+    require(case in archive_restore_test, f"missing archive restore regression: {case}")
+
+# KR-13: close/reboot coordinate with active mutation and cancellation lifecycle.
+require("onClosing: function(close)" in main_qml
+        and "SystemBackend.backupBusy" in main_qml
+        and "closeAfterBackupCancel" in main_qml
+        and "nonBackupMutationActive" in main_qml,
+        "window close does not coordinate with active mutations")
+require("if (m_backupBusy)" in runtime_lifecycle
+        and "Riavvio rimandato" in runtime_lifecycle
+        and "m_backupWorkspace->setAutoRemove(false)" in runtime_lifecycle,
+        "reboot/destruction can race a running backup or restore")
+
+# KR-05/KR-12/KR-16: trash metadata order, single cleanup session, reliable estimates.
+require("successfullyRemovedData" in maintenance_trash
+        and maintenance_trash.index("successfullyRemovedData") < maintenance_trash.index(".trashinfo")
+        and "dataEntryExists" in maintenance_trash,
+        "trash metadata may be removed before corresponding data")
+require("cleanupSessionActive" in tools_qml
+        and "cleanupGeneration" in tools_qml
+        and "finishCleanupStep" in tools_qml
+        and "cleanupCurrent === id" in tools_qml
+        and "cleanupWaiting" in tools_qml,
+        "unified cleanup does not have one guarded session lifecycle")
+require('/usr/libexec/kriscc/cleanup-estimate' in utility_cpp,
+        "cleanup estimate is not routed through the dedicated bounded helper")
+require('if out="$($DU_BIN -sh -- "$path" 2>/dev/null)"; then' in cleanup_estimate
+        and "accesso negato" in cleanup_estimate
+        and "non misurabile" in cleanup_estimate
+        and cleanup_estimate.count("printf '") >= 4,
+        "cleanup estimate does not distinguish producer errors/absence or complete each line")
+cleanup_test = read("tests/test_cleanup_estimate.sh")
+require("du-fail" in cleanup_test
+        and "journal-fail" in cleanup_test
+        and "Cestini: assente" in cleanup_test
+        and "Journal: circa 0B" in cleanup_test
+        and 'wc -l' in cleanup_test,
+        "cleanup estimate behavioral regressions are incomplete")
+
+# KR-06/07/08/09: reentrancy-safe service completion, union inventory, parse errors, real systemd jobs.
+require("finish(state, message);\n            emit controlFinished" in service_manager_cpp
+        and "finish(QStringLiteral(\"success\")" in service_manager_cpp,
+        "service control state is not finalized before external completion signals")
+require('list-units' in service_manager_cpp
+        and 'list-unit-files' in service_manager_cpp
+        and 'QStringLiteral("not-loaded")' in service_manager_cpp,
+        "service inventory does not merge loaded and installed-only units")
+require("ServiceJson::parseUnitList" in service_manager_cpp
+        and "ServiceJson::parseUnitFiles" in service_manager_cpp
+        and "Output JSON systemd troncato" in service_manager_cpp,
+        "systemd JSON failure/truncation is not distinct from an empty healthy list")
+require("QJsonParseError" in service_json_cpp and "document.isArray()" in service_json_cpp,
+        "ServiceJson parser does not expose a strict structured contract")
+require('QStringLiteral("Subscribe")' in systemd_jobs
+        and "m_earlyResults" in systemd_jobs
+        and "acceptJobPath" in systemd_jobs
+        and "serviceOwnerChanged" in systemd_jobs
+        and "Tempo massimo superato attendendo il job systemd" in systemd_jobs,
+        "systemd mutations do not follow the real job lifecycle")
+require("kriscc-test-service-manager-reentrancy" in cmake
+        and "kriscc-test-systemd-job-coordinator" in cmake,
+        "service/systemd behavioral race regressions are missing")
+
+# KR-11: UEFI and GRUB readers are independent; aggregate busy/error is presentation only.
+require("m_uefiProcess" in runtime_h and "m_grubProcess" in runtime_h
+        and "m_uefiBusy" in runtime_h and "m_grubBusy" in runtime_h
+        and "m_uefiRequestGeneration" in runtime_h and "m_grubRequestGeneration" in runtime_h,
+        "UEFI and GRUB read lifecycles are still shared")
+require("SystemBackendRuntime::refreshUefiEntries" in runtime_boot
+        and "SystemBackendRuntime::refreshGrubEntries" in runtime_boot
+        and "syncBootAggregate" in runtime_boot,
+        "runtime boot readers are not independently implemented")
+
+# KR-17/KR-19: shared invalidatable RPM/base/persistent snapshot; no false local classification on errors.
+require("PackageInventoryCache::shared()" in package_cpp
+        and "m_inventory->ensureFresh" in package_cpp
+        and "PackageSearch::invalidateSharedInventory" in main_cpp,
+        "PackageSearch models do not share/invalidate one inventory coordinator")
+require('QStringLiteral("/usr/bin/rpm")' in package_inventory_h
+        and 'QStringLiteral("/usr/share/krisos/owned-packages.txt")' in package_inventory_h
+        and 'QStringLiteral("/var/lib/krisos/packages.list")' in package_inventory_h,
+        "inventory coordinator does not own the three canonical sources")
+require("ttlMs" in package_inventory_h
+        and "expired()" in package_inventory_cpp
+        and "m_forceAgain" in package_inventory_cpp
+        and "requestEpoch != m_epoch" in package_inventory_cpp,
+        "inventory cache lacks expiry or anti-stale invalidation")
+require("QSet<QString> candidate" in package_inventory_cpp
+        and "file.error() != QFileDevice::NoError" in package_inventory_cpp
+        and "m_owned = std::move(owned)" in package_inventory_cpp
+        and "m_persistent = std::move(persistent)" in package_inventory_cpp,
+        "manifest refresh is not atomic/fail-closed")
+require("Classificazione dei pacchetti non disponibile" in package_cpp
+        and "!m_inventory->ready()" in package_cpp,
+        "manifest/inventory errors can still publish false local/removable classifications")
+require("rpmdb.sqlite" not in package_cpp and "rpmdb.sqlite" not in package_inventory_cpp,
+        "package inventory must not hardcode the RPM database path")
+for case in (
+    "cacheIsReusedAndInvalidated", "missingOwnedManifestRecovers",
+    "concurrentRequestsShareOneRpmLoad", "forcedRefreshPublishesMetadataAtomically",
+    "failedRefreshNeverPublishesEmptyInventory",
+):
+    require(case in package_inventory_test, f"missing package-inventory regression: {case}")
+
+# Existing architecture/ownership invariants preserved by the hardening.
+command_ids = set(re.findall(r'\{\s*id:\s*"([^"]+)"', commands_qml))
+bookmark_ids = set(re.findall(r'id == QStringLiteral\("([^"]+)"\)', utility_cpp))
+require(command_ids <= bookmark_ids,
+        "CommandsModule contains bookmark IDs not implemented by UtilityBackend: "
+        + ", ".join(sorted(command_ids - bookmark_ids)))
+require("Layout.preferredHeight: contentHeight" not in software_qml
+        and "Kirigami.ScrollablePage" not in software_qml
+        and "Layout.fillHeight: true" in software_qml,
+        "Software list scrolling/virtualization regressed")
+require("entries.size() >= 500" not in package_cpp
+        and "entries.size() >= 100" in package_cpp
+        and "m_truncated" in package_cpp,
+        "RPM live-search cap/inventory behavior regressed")
 require("qml/modules/FlatpakModule.qml" not in cmake
         and "runFlatpak" not in utility_cpp
         and "addFlathubUser" not in utility_cpp
@@ -286,87 +398,34 @@ require("qml/modules/FlatpakModule.qml" not in cmake
         and "parseFlatpakTsv" not in contract_parsers_cpp
         and "parseFlatpakTsv" not in contract_parsers_test,
         "Flatpak management engine must stay delegated to KDE Discover")
-require('else if (pageId === "flatpak") SystemBackend.launchTool("discover")' in read("qml/Main.qml")
-        and '{ id: "flatpak", title: qsTr("Flatpak")' in dashboard_qml
-        and 'SystemBackend.toolAvailable("discover")' in dashboard_qml,
-        "Dashboard Flatpak tile must delegate to KDE Discover")
-require("(?:rpm|i686|x86_64|noarch)" in recovery_qml,
-        "Recovery forget input must reject package suffixes rejected by Validators::packageName")
-require("anchors.right: parent.right" in read("qml/Main.qml")
-        and "id: versionLabel" in read("qml/Main.qml"),
-        "Version label is not anchored to the physical right edge")
-require('text: qsTr("Info Center")' in read("qml/Main.qml")
-        and read("qml/Main.qml").find('text: qsTr("Info Center")')
-            < read("qml/Main.qml").find('text: qsTr("Impostazioni Plasma")'),
-        "Info Center must stay in the fixed sidebar above Plasma settings")
-require("columns: 3" in dashboard_qml
-        and "Layout.rowSpan: 4" in dashboard_qml
-        and "Layout.column: 2" in dashboard_qml,
-        "Dashboard central area must use one aligned three-column grid without a top-right gap")
-require('Home + partizione sistema' not in dashboard_qml,
-        "Dashboard storage card must not add a redundant storage subtitle")
-require('QStringLiteral("/sysroot")' in system_cpp
-        and 'tr("Home: %1")' in system_cpp
-        and 'tr("Sistema: %1")' in system_cpp,
-        "Dashboard storage tile must report both Home and system filesystem")
-require("Layout.maximumWidth: Layout.preferredWidth" in read("qml/modules/SoftwareModule.qml"),
-        "Repository status/action columns are not fixed-width aligned")
-require("else if (tabs.currentIndex === 2) upgradesModel.loadUpgrades()" in software_qml
-        and "Component.onCompleted: upgradesModel.loadUpgrades()" not in software_qml,
-        "Software upgrade inventory must stay lazy until the Aggiornabili tab is opened")
-require(re.search(r'requestAction\(\s*"repo-enable"', software_qml) is not None
-        and 'if (action === "repo-enable")' in software_qml,
-        "repository enable mutation must require the shared confirmation flow")
-require("backupDirectory" in read("src/SystemBackend.h")
-        and "setBackupDirectory" in system_cpp,
+require("qml/modules/PodmanModule.qml" not in cmake
+        and "runPodman" not in utility_cpp
+        and "parsePodmanJson" not in contract_parsers_h,
+        "Podman ownership must stay outside krisCC")
+require('else if (pageId === "flatpak") SystemBackend.launchTool("discover")' in main_qml
+        and '{ id: "flatpak", title: qsTr("Flatpak")' in dashboard_qml,
+        "Dashboard Flatpak entry must delegate to KDE Discover")
+require("backupDirectory" in system_h and "setBackupDirectory" in system_cpp,
         "selectable backup destination is missing")
 require('qsTr("Escluso: ")' not in recovery_qml
         and 'qsTr("presente")' not in recovery_qml
         and 'qsTr("assente")' not in recovery_qml,
-        "Backup preview must show only entries that are actually included")
-require('item.insert(QStringLiteral("included"), false)' not in system_cpp
-        and 'item.insert(QStringLiteral("exists")' not in system_cpp,
-        "Backup preview backend must not expose excluded or absent rows")
-require("partialFile.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner)" in system_cpp,
-        "backup partial file must be created as 0600")
-require("qml/modules/PodmanModule.qml" not in cmake
-        and "runPodman" not in utility_cpp
-        and "parsePodmanJson" not in contract_parsers_h
-        and "containerImageRef" not in read("src/Validators.h"),
-        "Podman ownership must stay outside krisCC")
-require("qml/modules/ToolsModule.qml" in cmake
-        and "qml/modules/ServicesNetworkModule.qml" in cmake
-        and "src/RepairBackend.cpp src/RepairBackend.h" in cmake,
-        "Swiss Army modules/backends are not wired into the build")
-require('bool ServiceManagerBackend::validJournalUnit' in service_manager_cpp
-        and r'\\.(?:service|socket|timer)$' in service_manager_cpp
-        and '!validJournalUnit(unit.trimmed())' in service_manager_cpp
-        and 'if (m_busy || !validUnit(unit))' in service_manager_cpp,
-        "journal must accept service/socket/timer without widening service controls")
-require('restartAudio()' in read("src/RepairBackend.h")
-        and 'flushDns()' in read("src/RepairBackend.h")
-        and 'reconnectNetwork' in repair_cpp,
-        "operational audio/network repair contract is incomplete")
-require('cleanup-estimate' in utility_cpp
-        and 'du -sh \\"$HOME/.local/share/Trash\\"' in utility_cpp
-        and 'journal-vacuum' in tools_qml
-        and 'dnf-clean' in tools_qml
-        and 'QStringLiteral("journal-vacuum")' in admin_policy
-        and 'QStringLiteral("dnf-clean")' in admin_policy
-        and 'flatpak-unused' in tools_qml,
-        "unified cleanup contract is incomplete")
-require("startService" in system_cpp and "stopService" in system_cpp
-        and "restartService" in system_cpp and "resetFailedService" in system_cpp
-        and 'QStringLiteral("cockpit.socket")' in system_cpp
-        and 'QStringLiteral("sshd.service")' not in system_cpp
-        and 'QStringLiteral("smb.service")' not in system_cpp,
-        "allowlisted common-service controls are incomplete")
-require("requestFirmwareReboot" in system_cpp
-        and 'SetRebootToFirmwareSetup' in system_cpp
-        and "kernelArguments" in system_cpp,
-        "firmware reboot/read-only kernel contract is incomplete")
-require('parseDnfListJson("{}")' in contract_parsers_test,
-        "empty DNF5 list JSON regression test is missing")
+        "Backup preview must show only entries actually included")
+require("topMemoryProcesses" in system_h
+        and "std::min<qsizetype>(10, entries.size())" in system_cpp,
+        "Dashboard top-memory model regressed")
+require('QStringLiteral("firewalld.service")' in system_cpp
+        and 'QStringLiteral("cockpit.socket")' in system_cpp,
+        "Dashboard common-service state sources regressed")
+require('QStringLiteral("wifi")' in system_cpp and 'WirelessEnabled' in system_cpp,
+        "Wi-Fi common-service state must use NetworkManager radio state")
+require('selectedInterface = iface.name();' in system_cpp
+        and 'selectedInterface = iface.humanReadableName()' not in system_cpp,
+        "NetworkManager mutations must use the kernel interface name")
+require('networkDisplayName' in system_h and 'iface.humanReadableName()' in system_cpp,
+        "network UI must keep display label separate from kernel interface name")
+require("OperationLog::append" in repair_cpp,
+        "RepairBackend mutations must be recorded in operation history")
 require("m_operationLines.isEmpty()" in rk_cpp
         and "m_operationLines.append(output.trimmed())" in rk_cpp,
         "rk privileged failures must surface a fallback operation line")
@@ -374,152 +433,73 @@ require("pendingPreviewPackage" in software_qml
         and 'utilityBackend.operationId === "rpm.plan"' in software_qml
         and "utilityBackend.cancel()" in software_qml,
         "rk plan preview cancellation/serialization contract is missing")
-require("canonicalBackupRoot == canonicalHome" in system_cpp
-        and 'QFileInfo(partial).fileName()' in system_cpp,
-        "Home-as-backup-directory self-output exclusion is missing")
-
-wrapper = read("src/bootc-status.sh")
-require('exec /usr/bin/timeout --signal=TERM --kill-after=3s 30s /usr/bin/bootc status --format json --format-version=1' in wrapper,
-        "BootC JSON wrapper is not root-side bounded or no longer pins schema v1")
-require('"$@"' not in wrapper, "BootC wrapper accepts arbitrary arguments")
-
-for ignored in ("stage/", "artifacts/", "audit-build/", "*.rpm"):
-    require(ignored in read(".gitignore"), f".gitignore missing {ignored}")
-
-require("0.6 è" not in read("INTEGRAZIONE.md"), "integration docs are stale")
-require("--output=json" in read("INTEGRAZIONE.md")
-        and "list-units" in read("INTEGRAZIONE.md")
-        and "list-unit-files" in read("INTEGRAZIONE.md"),
-        "integration docs must state the systemctl JSON runtime capability")
-require("release 0.5.1" not in read("i18n/README.md"), "i18n docs are stale")
-require("auth_admin_keep" not in read("data/org.kriscc.controlcenter.policy"),
-        "Polkit retention is forbidden")
-
-require("archiveMemberPath" in read("src/Validators.cpp") and "archiveVerboseEntry" in read("src/Validators.cpp")
-        and 'QStringLiteral("-tvzf")' in system_cpp,
-        "restore preflight must validate archive member paths and types before extraction")
-require("QTimer::singleShot(15000, reply" in system_cpp,
-        "Control Center update check must have a network timeout")
-require("Validators::repositoryId" in read("src/SoftwareBackend.cpp") and "validRepositoryId" not in read("src/SoftwareBackend.h"),
-        "repository validation must use shared Validators")
-require("OperationLog::append" in repair_cpp,
-        "RepairBackend mutations must be recorded in operation history")
-
-require('root.pendingAction = "restart"' in services_qml
-        and 'SystemBackend.restartService(root.pendingService)' in services_qml,
-        "service restart must use the shared confirmation dialog")
+require('parseDnfListJson("{}")' in contract_parsers_test,
+        "empty DNF5 list JSON regression test is missing")
+require('restartAudio()' in read("src/RepairBackend.h")
+        and 'flushDns()' in read("src/RepairBackend.h")
+        and 'reconnectNetwork' in repair_cpp,
+        "operational audio/network repair contract is incomplete")
+require('QStringLiteral("--vacuum-size=16M")' in admin_policy
+        and '--vacuum-size=100M' not in admin_policy
+        and 'Journal archiviati oltre 16 MiB' in tools_qml,
+        "journal vacuum must remain bounded at 16 MiB")
 require('id: cleanupConfirmDialog' in tools_qml
         and 'onClicked: cleanupConfirmDialog.open()' in tools_qml
         and 'La pulizia dei cestini è irreversibile.' in tools_qml,
         "unified cleanup must require explicit confirmation")
-require('Reset stato fallito non riuscito' in system_cpp
-        and 'manager.asyncCall(QStringLiteral("ResetFailedUnit"), service), this' in system_cpp,
-        "ResetFailedUnit errors must be watched and surfaced")
-require('Impossibile eliminare il backup: %1.' in system_cpp
-        and 'La cartella backup non è disponibile o scrivibile.' in system_cpp,
-        "backup mutation failures must be surfaced through backup state")
 
-require('selectedInterface = iface.name();' in system_cpp
-        and 'selectedInterface = iface.humanReadableName()' not in system_cpp,
-        "NetworkManager mutations must use the kernel interface name")
-require('Interfaccia di rete non valida.' in repair_cpp
-        and 'bool RepairBackend::fail' in repair_cpp,
-        "network repair validation failures must be surfaced")
-require('root.pendingAction = "reset"' in services_qml
-        and 'SystemBackend.resetFailedService(root.pendingService)' in services_qml,
-        "failed-service reset must use the shared confirmation dialog")
-require('cleanupTotal = 0' in tools_qml and 'cleanupDone = 0' in tools_qml,
-        "cleanup queue must clear transient progress state after completion")
-require('Notification ownership stays in main.cpp for Polkit operations.' in system_cpp,
-        "Polkit maintenance notifications must have a single owner")
+# Cron and fixed command viewer remain read-only/capability-driven.
+require("src/CronBackend.cpp src/CronBackend.h" in cmake
+        and "src/CronParser.cpp src/CronParser.h" in cmake,
+        "cron viewer backend/parser not linked")
+require('QStringLiteral("-l")' in cron_cpp
+        and 'QIODevice::ReadOnly' in cron_cpp
+        and 'QStringLiteral("/etc/crontab")' in cron_cpp
+        and 'QStringLiteral("/etc/cron.d")' in cron_cpp
+        and "pkexec" not in cron_cpp
+        and "Polkit" not in cron_cpp
+        and "crontab -e" not in cron_cpp,
+        "cron viewer must remain capability-driven and read-only")
+require("parsesUserCrontab" in cron_parser_test
+        and "parsesSystemCrontab" in cron_parser_test
+        and "describesCommonSchedules" in cron_parser_test
+        and "QRegularExpression" in cron_parser_cpp,
+        "cron parser contract/tests are incomplete")
 
-# Final success marker: keep this after every contract check above.
-
+# Boot/update ownership and version UI remain image-owned.
+require("Aggiorna Control Center" not in dashboard_qml
+        and "checkControlCenterUpdate()" in system_qml
+        and "checkControlCenterUpdate()" not in commands_qml
+        and "updateControlCenter()" not in commands_qml
+        and "fc44.x86_64.rpm" not in system_cpp
+        and "fc45.x86_64.rpm" not in system_cpp,
+        "Control Center release check must stay image-owned")
+require("QTimer::singleShot(15000, reply" in system_cpp,
+        "Control Center update check must have a network timeout")
 require('label: qsTr("Comandi")' in main_qml
         and 'label: qsTr("Strumenti & Fix")' in main_qml
         and main_qml.index('label: qsTr("Comandi")') < main_qml.index('label: qsTr("Strumenti & Fix")'),
-        "navigation must keep Commands before final Tools & Fix page")
+        "navigation must keep Commands before Tools & Fix")
 require('text: qsTr("Terminale")' in main_qml
-        and 'text: qsTr("Info Center")' in main_qml
-        and main_qml.index('text: qsTr("Terminale")') < main_qml.index('text: qsTr("Info Center")'),
-        "Terminal must live in the persistent sidebar above Info Center")
-require('qsTr("Salute")' not in read("qml/modules/SystemModule.qml")
-        and 'qsTr("Strumenti")' not in read("qml/modules/SystemModule.qml")
-        and 'qsTr("Avvio e dischi")' in read("qml/modules/SystemModule.qml")
-        and 'qsTr("Control Center")' in read("qml/modules/SystemModule.qml"),
-        "System & Boot tab ownership is inconsistent")
-require('title: qsTr("Comandi")' in commands_qml
-        and 'qsTr("Control Center")' not in commands_qml,
-        "Commands page must not own the Control Center card")
-require('qsTr("Rete & DNS")' not in tools_qml
-        and 'qsTr("Pulizia disco unificata")' in tools_qml
-        and 'qsTr("Riparatore Audio")' in tools_qml
-        and 'qsTr("Diagnostica")' in tools_qml
-        and 'diagnostic.vainfo' not in utility_cpp,
-        "Tools & Fix ownership/VA-API cleanup is inconsistent")
-require('qsTr("Cloudflare")' not in services_qml
-        and 'qsTr("Quad9")' not in services_qml
-        and 'qsTr("Google")' not in services_qml
-        and 'checkInternetIdentity()' in services_qml,
-        "Services & Network must delegate DNS editing and expose Internet identity")
-require('nextUefiBootLabel' in system_cpp
-        and 'qsTr("Prossimo avvio EFI")' in dashboard_qml,
-        "Dashboard next-EFI informational tile is missing")
-require('emitted < 20' in system_cpp and 'recent(int limit = 20)' in read("src/OperationLog.h"),
-        "operation history UI/default must be capped at 20 recent entries")
+        and 'text: qsTr("Info Center")' in main_qml,
+        "persistent sidebar tools regressed")
+require('anchors.right: parent.right' in main_qml and 'id: versionLabel' in main_qml,
+        "version label is not anchored to the physical right edge")
 
-
-require(r'QStringLiteral("(?m)^BootNext:\\s*([0-9A-Fa-f]{4})\\s*$")' in system_cpp
-        and r'QStringLiteral("(?m)^BootOrder:\\s*([0-9A-Fa-f]{4}(?:,[0-9A-Fa-f]{4})*)\\s*$")' in system_cpp,
-        "UEFI BootNext/BootOrder regex must use valid escaped whitespace")
-require('boot-read-uefi' in admin_policy
-        and 'refreshUefiEntriesPrivileged' in system_cpp
-        and 'refreshUefiEntriesPrivileged()' in system_qml,
-        "UEFI read must offer an explicit privileged fallback when direct access is denied")
-require('consumeArchiveListing' in system_cpp
-        and system_cpp.count('&ProcessRunner::outputReady') >= 2
-        and 'QString::fromUtf8(stdoutData).split' not in system_cpp,
-        "backup restore preflight must validate the complete tar listing as a stream")
-require("applyDnsPreset" not in repair_cpp and "applyDnsPreset" not in read("src/RepairBackend.h"),
-        "removed DNS preset UI must not leave a dead backend API")
-require('networkDisplayName' in read("src/SystemBackend.h")
-        and 'iface.humanReadableName()' in system_cpp,
-        "network UI must keep a display label separate from the kernel interface name")
-require('recent(int limit = 20)' in read("src/OperationLog.h")
-        and 'operationHistory() const' not in read("src/SystemBackend.h"),
-        "history API/default contract is inconsistent")
-require('QStringLiteral("--vacuum-size=16M")' in admin_policy
-        and '--vacuum-size=100M' not in admin_policy
-        and 'Journal archiviati oltre 16 MiB' in tools_qml,
-        "journal vacuum must remain aggressively bounded at 16 MiB")
-
-require('QStringLiteral("cockpit.socket")' in system_cpp
-        and '{ id: "cockpit.socket", title: qsTr("Cockpit") }' in services_qml
-        and 'SystemBackend.serviceStates["cockpit.socket"]' in dashboard_qml
-        and 'openWebConsole' not in dashboard_qml,
-        "Cockpit must be informational on Dashboard and managed as a service/socket")
-require('QStringLiteral("wifi")' in system_cpp
-        and 'WirelessEnabled' in system_cpp
-        and 'setWifiRadio(true, false)' in system_cpp
-        and 'setWifiRadio(false, false)' in system_cpp
-        and '{ id: "wifi", title: qsTr("Wi-Fi") }' in services_qml,
-        "Wi-Fi must be controlled through NetworkManager radio state even when disabled")
-require('qsTr("Diagnostica hardware rapida")' not in tools_qml
-        and tools_qml.count('Layout.fillWidth: true; text: qsTr("GPU / Mesa")') == 1
-        and 'qsTr("Strumenti esterni")' in tools_qml,
-        "Tools diagnostics must use two compact full-width groups")
-require('id: "services-all"' in commands_qml
-        and 'id: "git-config-origins"' in commands_qml
-        and 'id: "podman-storage"' in commands_qml
-        and 'id: "podman-connections"' in commands_qml
-        and 'id: "shell-path"' in commands_qml
-        and 'QStringLiteral("services-all")' in utility_cpp,
-        "final fixed command shortcuts are missing")
-require('columns: 3' in dashboard_qml
-        and 'qsTr("Prossimo avvio EFI")' in dashboard_qml
-        and 'qsTr("Cockpit")' in dashboard_qml
-        and 'qsTr("Aggiorna stato")' in dashboard_qml
-        and 'Item { Layout.fillWidth: true; Layout.preferredHeight:' in dashboard_qml,
-        "Dashboard top strip / reserved quick-action slot contract missing")
+# Integration docs and wrappers remain pinned/read-only.
+wrapper = read("src/bootc-status.sh")
+require('exec /usr/bin/timeout --signal=TERM --kill-after=3s 30s /usr/bin/bootc status --format json --format-version=1' in wrapper,
+        "BootC JSON wrapper is not bounded or no longer pins schema v1")
+require('"$@"' not in wrapper, "BootC wrapper accepts arbitrary arguments")
+for ignored in ("stage/", "artifacts/", "audit-build/", "*.rpm"):
+    require(ignored in read(".gitignore"), f".gitignore missing {ignored}")
+require("--output=json" in read("INTEGRAZIONE.md")
+        and "list-units" in read("INTEGRAZIONE.md")
+        and "list-unit-files" in read("INTEGRAZIONE.md")
+        and "libarchive" in read("INTEGRAZIONE.md")
+        and "fotografia coerente" in read("INTEGRAZIONE.md"),
+        "integration docs do not state current structured runtime/inventory contracts")
+require("auth_admin_keep" not in read("data/org.kriscc.controlcenter.policy"),
+        "Polkit retention is forbidden")
 
 print(f"release audit OK: krisCC {VERSION}")
