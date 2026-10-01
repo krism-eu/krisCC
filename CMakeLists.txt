@@ -26,6 +26,8 @@ qt_add_executable(krisCC
     src/ServiceManagerBackend.cpp src/ServiceManagerBackend.h
     src/SystemBackend.cpp src/SystemBackend.h
     src/SystemBackendRuntime.cpp src/SystemBackendRuntime.h
+    src/SystemBackendRuntimeArchive.cpp
+    src/SystemBackendRuntimeLifecycle.cpp
     src/BackupSafety.cpp src/BackupSafety.h
     src/SoftwareBackend.cpp src/SoftwareBackend.h
     src/PackageSearch.cpp src/PackageSearch.h
@@ -83,6 +85,14 @@ add_executable(kriscc-admin
 set_target_properties(kriscc-admin PROPERTIES OUTPUT_NAME admin)
 target_link_libraries(kriscc-admin PRIVATE Qt6::Core)
 
+add_executable(kriscc-archive
+    src/ArchiveTool.cpp
+    src/ArchiveRestoreEngine.cpp src/ArchiveRestoreEngine.h
+    src/BackupSafety.cpp src/BackupSafety.h
+)
+set_target_properties(kriscc-archive PROPERTIES OUTPUT_NAME archive)
+target_link_libraries(kriscc-archive PRIVATE Qt6::Core)
+
 include(CTest)
 if(BUILD_TESTING)
     add_executable(kriscc-test-validators
@@ -119,6 +129,15 @@ if(BUILD_TESTING)
     target_link_libraries(kriscc-test-backup-safety PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME backup-safety COMMAND kriscc-test-backup-safety)
 
+    add_executable(kriscc-test-archive-restore
+        tests/test_archive_restore.cpp
+        src/ArchiveRestoreEngine.cpp src/ArchiveRestoreEngine.h
+    )
+    target_include_directories(kriscc-test-archive-restore PRIVATE src)
+    target_link_libraries(kriscc-test-archive-restore PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME archive-restore COMMAND kriscc-test-archive-restore)
+    set_tests_properties(archive-restore PROPERTIES TIMEOUT 30)
+
     add_executable(kriscc-test-parsers
         tests/test_contract_parsers.cpp
         src/ContractParsers.cpp src/ContractParsers.h
@@ -145,7 +164,8 @@ set_target_properties(kriscc-maintenance PROPERTIES OUTPUT_NAME maintenance)
 target_link_libraries(kriscc-maintenance PRIVATE Qt6::Core)
 
 install(TARGETS krisCC RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(TARGETS kriscc-admin kriscc-maintenance RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/kriscc)
+install(TARGETS kriscc-admin kriscc-archive kriscc-maintenance
+        RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/kriscc)
 install(PROGRAMS src/bootc-status.sh DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/kriscc RENAME bootc-status)
 install(FILES data/krisCC.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 install(FILES data/org.kriscc.controlcenter.policy DESTINATION ${CMAKE_INSTALL_DATADIR}/polkit-1/actions)

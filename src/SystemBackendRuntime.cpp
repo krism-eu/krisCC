@@ -99,9 +99,6 @@ bool SystemBackendRuntime::appendBackupDestinationExclusions(const QString &kind
 
     if (backupRoot == canonicalHome) {
         if (kind == QStringLiteral("home")) {
-            // The destination cannot be excluded as a directory when it is the
-            // archived root itself. Exclude every supported backup/final-partial
-            // leaf instead, including older snapshots.
             *arguments << QStringLiteral("--exclude=./config-*.tar.gz")
                        << QStringLiteral("--exclude=./home-*.tar.gz")
                        << QStringLiteral("--exclude=./config-*.tar.gz.partial")
@@ -148,6 +145,11 @@ bool SystemBackendRuntime::createSnapshot(const QString &kind)
         return false;
     if (kind != QStringLiteral("home") && kind != QStringLiteral("config")) {
         setBackupResult(tr("Tipo di snapshot non consentito."), QString(), QStringLiteral("error"));
+        return false;
+    }
+    if (archiveHelperPath().isEmpty()) {
+        setBackupResult(tr("Helper strutturato degli archivi non disponibile."),
+                        QString(), QStringLiteral("error"));
         return false;
     }
 
@@ -225,9 +227,6 @@ bool SystemBackendRuntime::createSnapshot(const QString &kind)
         args << entries;
     }
 
-    // Create the partial leaf with owner-only permissions before tar starts.
-    // QFile::remove removes a link itself rather than its target; the final
-    // restore/delete paths use descriptor-anchored operations.
     QFile::remove(partial);
     {
         QFile partialFile(partial);
@@ -254,39 +253,26 @@ bool SystemBackendRuntime::createSnapshot(const QString &kind)
             return;
         m_backupRunner = nullptr;
         runner->deleteLater();
-        setBackupBusy(false);
 
         QByteArray combined = stdoutData;
         if (!combined.isEmpty() && !stderrData.isEmpty() && !combined.endsWith('\n'))
             combined.append('\n');
         combined.append(stderrData);
         const QString details = QString::fromUtf8(combined).trimmed();
-
         const bool archiveProduced = QFileInfo(partial).exists() && QFileInfo(partial).size() > 0;
+
         if (outcome == ProcessRunner::Success && archiveProduced) {
-            if (QFileInfo::exists(output) && !QFile::remove(output)) {
-                m_backupPartialPath = partial;
-                setBackupResult(tr("Snapshot prodotto ma il nome finale è già occupato e non può essere sostituito in sicurezza."),
-                                partial, QStringLiteral("error"));
-                return;
+            if (!startCreatedArchiveValidation(output, partial)) {
+                QFile::remove(partial);
+                m_backupPartialPath.clear();
+                setBackupBusy(false);
             }
-            if (!QFile::rename(partial, output)) {
-                m_backupPartialPath = partial;
-                setBackupResult(tr("Snapshot prodotto ma non è stato possibile finalizzarne il nome. Il file parziale è stato conservato."),
-                                partial, QStringLiteral("error"));
-                return;
-            }
-            m_backupPartialPath.clear();
-            QFile::setPermissions(output, QFileDevice::ReadOwner | QFileDevice::WriteOwner);
-            setBackupResult(tr("Snapshot creato correttamente."), output, QStringLiteral("success"));
-            OperationLog::append(QStringLiteral("Backup"), QStringLiteral("create"),
-                                 QStringLiteral("success"), QFileInfo(output).fileName());
-            notify(tr("Backup completato"), output);
             return;
         }
 
         QFile::remove(partial);
         m_backupPartialPath.clear();
+        setBackupBusy(false);
         QString message;
         QString state = QStringLiteral("error");
         if (outcome == ProcessRunner::Cancelled) {
@@ -305,8 +291,7 @@ bool SystemBackendRuntime::createSnapshot(const QString &kind)
         }
         setBackupResult(message, QString(), state);
         OperationLog::append(QStringLiteral("Backup"), QStringLiteral("create"),
-                             outcome == ProcessRunner::TimedOut ? QStringLiteral("timeout")
-                                                               : state,
+                             outcome == ProcessRunner::TimedOut ? QStringLiteral("timeout") : state,
                              QFileInfo(output).fileName());
     });
 
