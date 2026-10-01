@@ -13,12 +13,21 @@ class SystemBackendRuntime final : public SystemBackend
 {
     Q_OBJECT
     Q_PROPERTY(bool mutationRunning READ mutationRunning NOTIFY mutationRunningChanged)
+    Q_PROPERTY(bool uefiEntriesBusy READ uefiEntriesBusy NOTIFY bootEntriesChanged)
+    Q_PROPERTY(bool grubEntriesBusy READ grubEntriesBusy NOTIFY bootEntriesChanged)
+    Q_PROPERTY(QString uefiEntriesError READ uefiEntriesError NOTIFY bootEntriesChanged)
+    Q_PROPERTY(QString grubEntriesError READ grubEntriesError NOTIFY bootEntriesChanged)
 
 public:
     explicit SystemBackendRuntime(PolkitHelper *polkit, QObject *parent = nullptr);
     ~SystemBackendRuntime() override;
 
     bool mutationRunning() const;
+    bool uefiEntriesBusy() const { return m_uefiBusy || m_runtimeBootReadOwned; }
+    bool grubEntriesBusy() const { return m_grubBusy; }
+    const QString &uefiEntriesError() const { return m_uefiError; }
+    const QString &grubEntriesError() const { return m_grubError; }
+
     bool createSnapshot(const QString &kind) override;
     bool cancelSnapshot() override;
     QVariantList backups() const override;

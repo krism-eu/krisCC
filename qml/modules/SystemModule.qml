@@ -348,13 +348,6 @@ Kirigami.ScrollablePage {
             ColumnLayout {
                 spacing: Kirigami.Units.largeSpacing
 
-                Kirigami.InlineMessage {
-                    Layout.fillWidth: true
-                    visible: SystemBackend.bootEntriesError.length > 0
-                    type: Kirigami.MessageType.Warning
-                    text: SystemBackend.bootEntriesError
-                }
-
                 Kirigami.AbstractCard {
                     Layout.fillWidth: true
                     contentItem: ColumnLayout {
@@ -402,15 +395,15 @@ Kirigami.ScrollablePage {
                             Controls.Button {
                                 text: qsTr("Aggiorna")
                                 icon.name: "view-refresh"
-                                enabled: !SystemBackend.bootEntriesBusy
+                                enabled: !SystemBackend.uefiEntriesBusy
                                       && SystemBackend.uefiBootAvailable
                                 onClicked: SystemBackend.refreshUefiEntries()
                             }
                             Controls.Button {
-                                visible: SystemBackend.bootEntriesError.length > 0
+                                visible: SystemBackend.uefiEntriesError.length > 0
                                 text: qsTr("Leggi con autorizzazione")
                                 icon.name: "security-high"
-                                enabled: !SystemBackend.bootEntriesBusy
+                                enabled: !SystemBackend.uefiEntriesBusy
                                       && SystemBackend.canSelectNextBoot
                                       && SystemBackend.uefiBootAvailable
                                 onClicked: SystemBackend.refreshUefiEntriesPrivileged()
@@ -453,7 +446,8 @@ Kirigami.ScrollablePage {
                                 Controls.Button {
                                     visible: SystemBackend.nextUefiBootLabel.length > 0
                                     text: qsTr("Annulla BootNext")
-                                    enabled: SystemBackend.canSelectNextBoot
+                                    enabled: !SystemBackend.uefiEntriesBusy
+                                          && SystemBackend.canSelectNextBoot
                                     onClicked: clearUefiNextDialog.open()
                                 }
                             }
@@ -461,9 +455,9 @@ Kirigami.ScrollablePage {
 
                         Kirigami.InlineMessage {
                             Layout.fillWidth: true
-                            visible: SystemBackend.bootEntriesError.length > 0
+                            visible: SystemBackend.uefiEntriesError.length > 0
                             type: Kirigami.MessageType.Warning
-                            text: SystemBackend.bootEntriesError
+                            text: SystemBackend.uefiEntriesError
                         }
 
                         Repeater {
@@ -502,7 +496,8 @@ Kirigami.ScrollablePage {
                                         display: Controls.AbstractButton.IconOnly
                                         Controls.ToolTip.visible: hovered
                                         Controls.ToolTip.text: text
-                                        enabled: SystemBackend.canSelectNextBoot
+                                        enabled: !SystemBackend.uefiEntriesBusy
+                                              && SystemBackend.canSelectNextBoot
                                               && modelData.orderIndex > 0
                                         onClicked: SystemBackend.moveUefiEntry(modelData.code, -1)
                                     }
@@ -513,14 +508,16 @@ Kirigami.ScrollablePage {
                                         display: Controls.AbstractButton.IconOnly
                                         Controls.ToolTip.visible: hovered
                                         Controls.ToolTip.text: text
-                                        enabled: SystemBackend.canSelectNextBoot
+                                        enabled: !SystemBackend.uefiEntriesBusy
+                                              && SystemBackend.canSelectNextBoot
                                               && modelData.orderIndex >= 0
                                               && modelData.orderIndex < SystemBackend.uefiBootOrder.length - 1
                                         onClicked: SystemBackend.moveUefiEntry(modelData.code, 1)
                                     }
                                     Controls.Button {
                                         text: qsTr("BootNext")
-                                        enabled: SystemBackend.canSelectNextBoot
+                                        enabled: !SystemBackend.uefiEntriesBusy
+                                              && SystemBackend.canSelectNextBoot
                                               && !modelData.next
                                         onClicked: {
                                             nextUefiDialog.token = modelData.code
@@ -537,7 +534,8 @@ Kirigami.ScrollablePage {
                                         Controls.ToolTip.text: modelData.current
                                             ? qsTr("La voce corrente non può essere eliminata")
                                             : text
-                                        enabled: SystemBackend.canSelectNextBoot
+                                        enabled: !SystemBackend.uefiEntriesBusy
+                                              && SystemBackend.canSelectNextBoot
                                               && !modelData.current
                                         onClicked: {
                                             root.pendingUefiDeleteToken = modelData.code
@@ -566,7 +564,7 @@ Kirigami.ScrollablePage {
                             Controls.Button {
                                 text: qsTr("Leggi voci")
                                 icon.name: "view-refresh"
-                                enabled: !SystemBackend.bootEntriesBusy && SystemBackend.grubEntriesAvailable
+                                enabled: !SystemBackend.grubEntriesBusy && SystemBackend.grubEntriesAvailable
                                 onClicked: SystemBackend.refreshGrubEntries()
                             }
                             Controls.ComboBox {
@@ -579,13 +577,22 @@ Kirigami.ScrollablePage {
                             }
                             Controls.Button { icon.name: "go-next";
                                 text: qsTr("Prossimo avvio")
-                                enabled: grubCombo.count > 0 && SystemBackend.grubNextBootAvailable && SystemBackend.canSelectNextBoot
+                                enabled: !SystemBackend.grubEntriesBusy
+                                      && grubCombo.count > 0
+                                      && SystemBackend.grubNextBootAvailable
+                                      && SystemBackend.canSelectNextBoot
                                 onClicked: {
                                     nextGrubDialog.entryId = grubCombo.currentValue
                                     nextGrubDialog.label = grubCombo.currentText
                                     nextGrubDialog.open()
                                 }
                             }
+                        }
+                        Kirigami.InlineMessage {
+                            Layout.fillWidth: true
+                            visible: SystemBackend.grubEntriesError.length > 0
+                            type: Kirigami.MessageType.Warning
+                            text: SystemBackend.grubEntriesError
                         }
                     }
                 }

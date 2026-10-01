@@ -112,6 +112,7 @@ if(BUILD_TESTING)
 
     add_test(NAME cleanup-estimate COMMAND /usr/bin/bash ${CMAKE_SOURCE_DIR}/tests/test_cleanup_estimate.sh)
     add_test(NAME lifecycle-contract COMMAND /usr/bin/bash ${CMAKE_SOURCE_DIR}/tests/test_lifecycle_contract.sh)
+    add_test(NAME boot-read-contract COMMAND /usr/bin/bash ${CMAKE_SOURCE_DIR}/tests/test_boot_read_contract.sh)
 
     add_executable(kriscc-test-package-inventory tests/test_package_inventory.cpp src/PackageInventoryCache.cpp src/PackageInventoryCache.h)
     target_include_directories(kriscc-test-package-inventory PRIVATE src)
