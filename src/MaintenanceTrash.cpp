@@ -3,6 +3,8 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
+#include <QSet>
 #include <QStorageInfo>
 
 namespace KrisccMaintenance {
@@ -68,29 +70,34 @@ bool removeEntry(const QString &path, TrashCleanupResult *result)
     return false;
 }
 
-void cleanSubdirectory(const QString &trashRoot, const QString &name, TrashCleanupResult *result)
+bool safeTrashSubdirectory(const QString &trashRoot, const QString &name,
+                           QString *path, TrashCleanupResult *result,
+                           bool allowMissing = true)
 {
-    const QString path = QDir(trashRoot).filePath(name);
-    const QFileInfo info(path);
-    if (!info.exists() && !info.isSymLink())
-        return;
-
+    const QString candidate = QDir(trashRoot).filePath(name);
+    const QFileInfo info(candidate);
+    if (!info.exists() && !info.isSymLink()) {
+        if (path)
+            *path = candidate;
+        return allowMissing;
+    }
     if (info.isSymLink() || !info.isDir()) {
-        result->errors.append(QStringLiteral("Percorso cestino non sicuro ignorato: %1").arg(path));
-        return;
+        result->errors.append(QStringLiteral("Percorso cestino non sicuro ignorato: %1").arg(candidate));
+        return false;
     }
-
-    if (isMountPoint(path)) {
-        result->errors.append(QStringLiteral("Mount nel cestino ignorato per sicurezza: %1").arg(path));
-        return;
+    if (isMountPoint(candidate)) {
+        result->errors.append(QStringLiteral("Mount nel cestino ignorato per sicurezza: %1").arg(candidate));
+        return false;
     }
+    if (path)
+        *path = candidate;
+    return true;
+}
 
-    QDir directory(path);
-    const QFileInfoList entries = directory.entryInfoList(
-        QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot,
-        QDir::Name);
-    for (const QFileInfo &entry : entries)
-        removeEntry(entry.absoluteFilePath(), result);
+bool dataEntryExists(const QString &filesPath, const QString &name)
+{
+    const QFileInfo info(QDir(filesPath).filePath(name));
+    return info.exists() || info.isSymLink();
 }
 
 }
@@ -114,8 +121,60 @@ TrashCleanupResult cleanTrashRoot(const QString &trashRoot)
         return result;
     }
 
-    cleanSubdirectory(trashRoot, QStringLiteral("files"), &result);
-    cleanSubdirectory(trashRoot, QStringLiteral("info"), &result);
+    QString filesPath;
+    QString infoPath;
+    const bool filesSafe = safeTrashSubdirectory(trashRoot, QStringLiteral("files"),
+                                                 &filesPath, &result);
+    const bool infoSafe = safeTrashSubdirectory(trashRoot, QStringLiteral("info"),
+                                                &infoPath, &result);
+
+    // If either half exists but is unsafe, do not touch the other half. This
+    // prevents losing restore metadata while data could still be present behind
+    // a rejected symlink/mount/type.
+    if (!filesSafe || !infoSafe)
+        return result;
+
+    QSet<QString> successfullyRemovedData;
+    const QFileInfo filesInfo(filesPath);
+    if (filesInfo.exists()) {
+        QDir filesDir(filesPath);
+        const QFileInfoList dataEntries = filesDir.entryInfoList(
+            QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot,
+            QDir::Name);
+        for (const QFileInfo &entry : dataEntries) {
+            const QString name = entry.fileName();
+            if (removeEntry(entry.absoluteFilePath(), &result))
+                successfullyRemovedData.insert(name);
+        }
+    }
+
+    const QFileInfo infoInfo(infoPath);
+    if (!infoInfo.exists())
+        return result;
+
+    QDir infoDir(infoPath);
+    const QFileInfoList metadataEntries = infoDir.entryInfoList(
+        QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot,
+        QDir::Name);
+    for (const QFileInfo &metadata : metadataEntries) {
+        const QString fileName = metadata.fileName();
+        if (!fileName.endsWith(QStringLiteral(".trashinfo"))) {
+            // Unknown metadata is not coupled to a Trash/files name; leave it
+            // untouched rather than guessing.
+            continue;
+        }
+        const QString dataName = fileName.left(fileName.size() - qsizetype(10));
+
+        // Metadata may be removed only after the corresponding data entry has
+        // gone. This covers both a successful removal in this pass and a true
+        // pre-existing orphan, while preserving metadata for every failed data
+        // removal.
+        if (successfullyRemovedData.contains(dataName)
+            || !dataEntryExists(filesPath, dataName)) {
+            removeEntry(metadata.absoluteFilePath(), &result);
+        }
+    }
+
     return result;
 }
 

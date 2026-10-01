@@ -11,16 +11,54 @@ Kirigami.ScrollablePage {
     title: qsTr("Strumenti & Fix")
     UtilityBackend { id: utility }
     RepairBackend { id: repair }
+
+    property bool cleanupSessionActive: false
+    property int cleanupGeneration: 0
     property var cleanupQueue: []
     property int cleanupTotal: 0
     property int cleanupDone: 0
     property string cleanupErrors: ""
     property string cleanupCurrent: ""
+    property bool cleanupWaiting: false
+
+    function cleanupUtilityStep(id) {
+        return id !== "trash" && id !== "journal-vacuum" && id !== "dnf-clean"
+    }
+
+    function finishCleanupStep(id, success, output) {
+        if (!cleanupSessionActive || cleanupCurrent !== id)
+            return
+        if (!success) {
+            var detail = output && output.length ? output : qsTr("operazione non riuscita")
+            cleanupErrors += (cleanupErrors.length ? "\n" : "") + id + ": " + detail
+        }
+        cleanupCurrent = ""
+        cleanupWaiting = false
+        if (cleanupDone < cleanupTotal)
+            cleanupDone++
+        if (cleanupQueue.length > 0) {
+            Qt.callLater(root.runNextCleanup)
+        } else {
+            cleanupSessionActive = false
+        }
+    }
 
     function runNextCleanup() {
-        if (utility.busy || MaintenanceBackend.running || cleanupQueue.length === 0)
+        if (!cleanupSessionActive || cleanupCurrent.length > 0)
             return
+        if (cleanupQueue.length === 0) {
+            cleanupSessionActive = false
+            cleanupWaiting = false
+            return
+        }
+        if (utility.busy || MaintenanceBackend.running) {
+            cleanupWaiting = true
+            return
+        }
+
+        cleanupWaiting = false
         var id = cleanupQueue.shift()
+        var generation = cleanupGeneration
         cleanupCurrent = id
         var started = true
         if (id === "trash")
@@ -31,54 +69,51 @@ Kirigami.ScrollablePage {
             started = SystemBackend.cleanDnfCache()
         else
             started = utility.runBookmark(id)
+
         if (!started) {
-            cleanupErrors += (cleanupErrors.length ? "\n" : "") + id + ": " + qsTr("impossibile avviare")
-            Qt.callLater(root.cleanupStepFinished)
+            Qt.callLater(function() {
+                if (root.cleanupSessionActive
+                        && root.cleanupGeneration === generation
+                        && root.cleanupCurrent === id) {
+                    root.finishCleanupStep(id, false, qsTr("impossibile avviare"))
+                }
+            })
         }
     }
 
-    function cleanupStepFinished() {
-        if (cleanupTotal > 0 && cleanupDone < cleanupTotal)
-            cleanupDone++
-        if (cleanupQueue.length > 0) {
+    function wakeCleanupIfNeeded() {
+        if (cleanupSessionActive && cleanupCurrent.length === 0 && cleanupQueue.length > 0)
             Qt.callLater(root.runNextCleanup)
-        } else {
-            cleanupCurrent = ""
-            cleanupTotal = 0
-            cleanupDone = 0
-        }
     }
 
     Connections {
         target: utility
         function onStateChanged() {
-            if (!utility.busy && root.cleanupTotal > 0 && root.cleanupCurrent.length > 0
-                    && root.cleanupCurrent !== "trash" && root.cleanupCurrent !== "journal-vacuum" && root.cleanupCurrent !== "dnf-clean") {
-                if (utility.resultState !== "success")
-                    root.cleanupErrors += (root.cleanupErrors.length ? "\n" : "") + root.cleanupCurrent + ": " + utility.output
-                root.cleanupCurrent = ""
-                root.cleanupStepFinished()
+            if (root.cleanupSessionActive && root.cleanupCurrent.length > 0
+                    && root.cleanupUtilityStep(root.cleanupCurrent) && !utility.busy) {
+                var id = root.cleanupCurrent
+                root.finishCleanupStep(id, utility.resultState === "success", utility.output)
+                return
             }
+            if (!utility.busy)
+                root.wakeCleanupIfNeeded()
         }
     }
     Connections {
         target: MaintenanceBackend
         function onFinished(success, output) {
-            if (root.cleanupTotal > 0 && root.cleanupCurrent === "trash") {
-                if (!success) root.cleanupErrors += (root.cleanupErrors.length ? "\n" : "") + "trash: " + output
-                root.cleanupCurrent = ""
-                root.cleanupStepFinished()
+            if (root.cleanupSessionActive && root.cleanupCurrent === "trash") {
+                root.finishCleanupStep("trash", success, output)
+                return
             }
+            root.wakeCleanupIfNeeded()
         }
     }
     Connections {
         target: SystemBackend
         function onAdminMaintenanceFinished(operation, success, output) {
-            if (root.cleanupTotal > 0 && root.cleanupCurrent === operation) {
-                if (!success) root.cleanupErrors += (root.cleanupErrors.length ? "\n" : "") + operation + ": " + output
-                root.cleanupCurrent = ""
-                root.cleanupStepFinished()
-            }
+            if (root.cleanupSessionActive && root.cleanupCurrent === operation)
+                root.finishCleanupStep(operation, success, output)
         }
     }
 
@@ -106,7 +141,7 @@ Kirigami.ScrollablePage {
                     contentItem: ColumnLayout {
                         Kirigami.Heading { level: 2; text: qsTr("Riparatore Audio"); font.bold: true }
                         Controls.Label { Layout.fillWidth: true; wrapMode: Text.WordWrap; text: qsTr("Riavvia PipeWire, PipeWire Pulse e WirePlumber nella sessione utente.") }
-                        Controls.Button { text: qsTr("Ripristina stack audio"); icon.name: "audio-volume-high"; enabled: !repair.busy; onClicked: repair.restartAudio() }
+                        Controls.Button { text: qsTr("Ripristina stack audio"); icon.name: "audio-volume-high"; enabled: !root.cleanupSessionActive && !repair.busy; onClicked: repair.restartAudio() }
                         Controls.Label { Layout.fillWidth: true; visible: repair.output.length > 0; wrapMode: Text.WordWrap; text: repair.output }
                     }
                 }
@@ -118,26 +153,62 @@ Kirigami.ScrollablePage {
                         GridLayout {
                             Layout.fillWidth: true
                             columns: width > 700 ? 2 : 1
-                            Controls.CheckBox { id: trash; text: qsTr("Cestini utente e volumi"); checked: true }
-                            Controls.CheckBox { id: journal; text: qsTr("Journal archiviati oltre 16 MiB"); checked: true }
-                            Controls.CheckBox { id: dnf; text: qsTr("Cache DNF5"); checked: true }
-                            Controls.CheckBox { id: flatpak; text: qsTr("Runtime Flatpak inutilizzati"); checked: true; enabled: SystemBackend.programAvailable("flatpak") }
+                            Controls.CheckBox { id: trash; text: qsTr("Cestini utente e volumi"); checked: true; enabled: !root.cleanupSessionActive }
+                            Controls.CheckBox { id: journal; text: qsTr("Journal archiviati oltre 16 MiB"); checked: true; enabled: !root.cleanupSessionActive }
+                            Controls.CheckBox { id: dnf; text: qsTr("Cache DNF5"); checked: true; enabled: !root.cleanupSessionActive }
+                            Controls.CheckBox { id: flatpak; text: qsTr("Runtime Flatpak inutilizzati"); checked: true; enabled: !root.cleanupSessionActive && SystemBackend.programAvailable("flatpak") }
                         }
                         Flow {
                             Layout.fillWidth: true
                             spacing: Kirigami.Units.smallSpacing
-                            Controls.Button { text: qsTr("Stima spazio"); icon.name: "drive-harddisk"; enabled: !utility.busy && !MaintenanceBackend.running; onClicked: utility.runBookmark("cleanup-estimate") }
+                            Controls.Button {
+                                text: qsTr("Stima spazio")
+                                icon.name: "drive-harddisk"
+                                enabled: !root.cleanupSessionActive && !utility.busy && !MaintenanceBackend.running
+                                onClicked: utility.runBookmark("cleanup-estimate")
+                            }
                             Controls.Button {
                                 text: qsTr("Avvia pulizia selezionata")
                                 icon.name: "edit-clear"
-                                enabled: !utility.busy && !MaintenanceBackend.running && (trash.checked || journal.checked || dnf.checked || flatpak.checked)
+                                enabled: !root.cleanupSessionActive && !utility.busy && !MaintenanceBackend.running
+                                         && (trash.checked || journal.checked || dnf.checked || flatpak.checked)
                                 onClicked: cleanupConfirmDialog.open()
                             }
-                            Controls.Button { text: qsTr("Solo cestino home"); icon.name: "user-trash"; enabled: MaintenanceBackend.available && !MaintenanceBackend.running; onClicked: { trashScopeDialog.scope = "home"; trashScopeDialog.open() } }
-                            Controls.Button { text: qsTr("Cestini altre partizioni"); icon.name: "drive-harddisk"; enabled: MaintenanceBackend.available && !MaintenanceBackend.running; onClicked: { trashScopeDialog.scope = "system"; trashScopeDialog.open() } }
-                            Controls.Button { text: qsTr("RPM non necessari"); icon.name: "edit-find"; enabled: SystemBackend.programAvailable("dnf5") && !utility.busy; onClicked: utility.runBookmark("unneeded-rpms") }
+                            Controls.Button {
+                                text: qsTr("Solo cestino home")
+                                icon.name: "user-trash"
+                                enabled: !root.cleanupSessionActive && MaintenanceBackend.available && !MaintenanceBackend.running
+                                onClicked: { trashScopeDialog.scope = "home"; trashScopeDialog.open() }
+                            }
+                            Controls.Button {
+                                text: qsTr("Cestini altre partizioni")
+                                icon.name: "drive-harddisk"
+                                enabled: !root.cleanupSessionActive && MaintenanceBackend.available && !MaintenanceBackend.running
+                                onClicked: { trashScopeDialog.scope = "system"; trashScopeDialog.open() }
+                            }
+                            Controls.Button {
+                                text: qsTr("RPM non necessari")
+                                icon.name: "edit-find"
+                                enabled: !root.cleanupSessionActive && SystemBackend.programAvailable("dnf5") && !utility.busy
+                                onClicked: utility.runBookmark("unneeded-rpms")
+                            }
                         }
-                        Controls.ProgressBar { Layout.fillWidth: true; visible: root.cleanupTotal > 0; from: 0; to: Math.max(1, root.cleanupTotal); value: root.cleanupDone }
+                        Controls.ProgressBar {
+                            Layout.fillWidth: true
+                            visible: root.cleanupSessionActive || root.cleanupDone > 0
+                            from: 0
+                            to: Math.max(1, root.cleanupTotal)
+                            value: root.cleanupDone
+                        }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            visible: root.cleanupSessionActive
+                            text: root.cleanupWaiting
+                                  ? qsTr("Pulizia in attesa che il backend corrente diventi disponibile…")
+                                  : (root.cleanupCurrent.length > 0
+                                     ? qsTr("Operazione corrente: %1").arg(root.cleanupCurrent)
+                                     : qsTr("Preparazione operazione successiva…"))
+                        }
                         Kirigami.InlineMessage { Layout.fillWidth: true; visible: root.cleanupErrors.length > 0; type: Kirigami.MessageType.Warning; text: qsTr("Pulizia parziale:\n") + root.cleanupErrors }
                         Controls.Label { Layout.fillWidth: true; visible: utility.output.length > 0 || MaintenanceBackend.output.length > 0; wrapMode: Text.WordWrap; text: utility.output.length > 0 ? utility.output : MaintenanceBackend.output }
                     }
@@ -157,15 +228,15 @@ Kirigami.ScrollablePage {
                             uniformCellWidths: true
                             columnSpacing: Kirigami.Units.smallSpacing
                             rowSpacing: Kirigami.Units.smallSpacing
-                            Controls.Button { Layout.fillWidth: true; text: qsTr("Rapporto supporto"); icon.name: "document-preview"; enabled: !utility.busy; onClicked: utility.runBookmark("support-report") }
-                            Controls.Button { Layout.fillWidth: true; text: qsTr("Sicurezza"); enabled: !utility.busy; onClicked: utility.runBookmark("security") }
-                            Controls.Button { Layout.fillWidth: true; text: qsTr("Errori avvio"); enabled: !utility.busy; onClicked: utility.runBookmark("journal-errors") }
-                            Controls.Button { Layout.fillWidth: true; text: qsTr("Warning kernel"); enabled: !utility.busy; onClicked: utility.runBookmark("kernel-errors") }
-                            Controls.Button { Layout.fillWidth: true; text: qsTr("Spazio"); enabled: !utility.busy; onClicked: utility.runBookmark("disk-space") }
-                            Controls.Button { Layout.fillWidth: true; text: qsTr("Inode"); enabled: !utility.busy; onClicked: utility.runBookmark("inodes") }
-                            Controls.Button { Layout.fillWidth: true; text: qsTr("Tempo avvio"); enabled: !utility.busy; onClicked: utility.runBookmark("boot-time") }
-                            Controls.Button { Layout.fillWidth: true; text: qsTr("GPU / Mesa"); enabled: !utility.busy && SystemBackend.programAvailable("glxinfo"); onClicked: utility.runBookmark("gpu-driver") }
-                            Controls.Button { Layout.fillWidth: true; text: qsTr("Vulkan"); enabled: !utility.busy && SystemBackend.programAvailable("vulkaninfo"); onClicked: utility.runBookmark("vulkan-info") }
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("Rapporto supporto"); icon.name: "document-preview"; enabled: !root.cleanupSessionActive && !utility.busy; onClicked: utility.runBookmark("support-report") }
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("Sicurezza"); enabled: !root.cleanupSessionActive && !utility.busy; onClicked: utility.runBookmark("security") }
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("Errori avvio"); enabled: !root.cleanupSessionActive && !utility.busy; onClicked: utility.runBookmark("journal-errors") }
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("Warning kernel"); enabled: !root.cleanupSessionActive && !utility.busy; onClicked: utility.runBookmark("kernel-errors") }
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("Spazio"); enabled: !root.cleanupSessionActive && !utility.busy; onClicked: utility.runBookmark("disk-space") }
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("Inode"); enabled: !root.cleanupSessionActive && !utility.busy; onClicked: utility.runBookmark("inodes") }
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("Tempo avvio"); enabled: !root.cleanupSessionActive && !utility.busy; onClicked: utility.runBookmark("boot-time") }
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("GPU / Mesa"); enabled: !root.cleanupSessionActive && !utility.busy && SystemBackend.programAvailable("glxinfo"); onClicked: utility.runBookmark("gpu-driver") }
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("Vulkan"); enabled: !root.cleanupSessionActive && !utility.busy && SystemBackend.programAvailable("vulkaninfo"); onClicked: utility.runBookmark("vulkan-info") }
                         }
                     }
                 }
@@ -180,10 +251,10 @@ Kirigami.ScrollablePage {
                             uniformCellWidths: true
                             columnSpacing: Kirigami.Units.smallSpacing
                             rowSpacing: Kirigami.Units.smallSpacing
-                            Controls.Button { Layout.fillWidth: true; text: qsTr("KSystemLog"); icon.name: "utilities-log-viewer"; enabled: SystemBackend.toolAvailable("ksystemlog"); onClicked: SystemBackend.launchTool("ksystemlog") }
-                            Controls.Button { Layout.fillWidth: true; text: qsTr("Monitor di sistema"); icon.name: "utilities-system-monitor"; enabled: SystemBackend.toolAvailable("systemmonitor"); onClicked: SystemBackend.launchTool("systemmonitor") }
-                            Controls.Button { Layout.fillWidth: true; text: qsTr("ISO Image Writer"); icon.name: "media-optical"; enabled: SystemBackend.toolAvailable("isoimagewriter"); onClicked: SystemBackend.launchTool("isoimagewriter") }
-                            Controls.Button { Layout.fillWidth: true; text: qsTr("QDirStat"); icon.name: "folder-chart"; enabled: SystemBackend.toolAvailable("qdirstat"); onClicked: SystemBackend.launchTool("qdirstat") }
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("KSystemLog"); icon.name: "utilities-log-viewer"; enabled: !root.cleanupSessionActive && SystemBackend.toolAvailable("ksystemlog"); onClicked: SystemBackend.launchTool("ksystemlog") }
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("Monitor di sistema"); icon.name: "utilities-system-monitor"; enabled: !root.cleanupSessionActive && SystemBackend.toolAvailable("systemmonitor"); onClicked: SystemBackend.launchTool("systemmonitor") }
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("ISO Image Writer"); icon.name: "media-optical"; enabled: !root.cleanupSessionActive && SystemBackend.toolAvailable("isoimagewriter"); onClicked: SystemBackend.launchTool("isoimagewriter") }
+                            Controls.Button { Layout.fillWidth: true; text: qsTr("QDirStat"); icon.name: "folder-chart"; enabled: !root.cleanupSessionActive && SystemBackend.toolAvailable("qdirstat"); onClicked: SystemBackend.launchTool("qdirstat") }
                         }
                     }
                 }
@@ -244,15 +315,24 @@ Kirigami.ScrollablePage {
                   + (trash.checked ? qsTr("\n\nLa pulizia dei cestini è irreversibile.") : "")
         }
         onAccepted: {
+            if (root.cleanupSessionActive)
+                return
+            root.cleanupGeneration++
+            root.cleanupSessionActive = true
             root.cleanupQueue = []
             root.cleanupDone = 0
             root.cleanupErrors = ""
             root.cleanupCurrent = ""
+            root.cleanupWaiting = false
             if (trash.checked) root.cleanupQueue.push("trash")
             if (journal.checked) root.cleanupQueue.push("journal-vacuum")
             if (dnf.checked) root.cleanupQueue.push("dnf-clean")
             if (flatpak.checked) root.cleanupQueue.push("flatpak-unused")
             root.cleanupTotal = root.cleanupQueue.length
+            if (root.cleanupTotal === 0) {
+                root.cleanupSessionActive = false
+                return
+            }
             root.runNextCleanup()
         }
     }
@@ -267,6 +347,6 @@ Kirigami.ScrollablePage {
         title: qsTr("Svuotare i cestini selezionati?")
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label { wrapMode: Text.WordWrap; text: qsTr("L'operazione elimina definitivamente gli elementi dal cestino selezionato.") }
-        onAccepted: MaintenanceBackend.cleanTrash(scope)
+        onAccepted: if (!root.cleanupSessionActive) MaintenanceBackend.cleanTrash(scope)
     }
 }
