@@ -1,25 +1,16 @@
 #include "PackageSearch.h"
+
 #include "ContractParsers.h"
+#include "PackageInventoryCache.h"
 
-#include <QFile>
-#include <QFileInfo>
 #include <QTimer>
-#include <QTextStream>
-
 
 PackageSearch::PackageSearch(QObject *parent)
     : QAbstractListModel(parent)
+    , m_inventory(PackageInventoryCache::shared())
 {
-    QFile file(QStringLiteral("/usr/share/krisos/owned-packages.txt"));
-    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QTextStream in(&file);
-        while (!in.atEnd()) {
-            const QString name = in.readLine().trimmed();
-            if (!name.isEmpty() && !name.startsWith(QLatin1Char('#')))
-                m_owned.insert(name);
-        }
-    }
-    refreshPersistentSet();
+    connect(m_inventory, &PackageInventoryCache::refreshFinished, this,
+            [this](bool success, const QString &error) { onInventoryReady(success, error); });
 }
 
 int PackageSearch::rowCount(const QModelIndex &parent) const
@@ -64,12 +55,66 @@ QHash<int, QByteArray> PackageSearch::roleNames() const
     };
 }
 
+void PackageSearch::invalidateSharedInventory()
+{
+    PackageInventoryCache::shared()->invalidate();
+}
+
+void PackageSearch::refreshInventory()
+{
+    m_inventory->ensureFresh(true);
+}
+
+void PackageSearch::requestInventory(PendingQuery query, const QString &value, bool force)
+{
+    m_pendingQuery = query;
+    m_pendingValue = value;
+    m_pendingGeneration = m_generation;
+    m_inventory->ensureFresh(force);
+}
+
+void PackageSearch::onInventoryReady(bool success, const QString &error)
+{
+    if (m_pendingQuery == PendingQuery::None || m_pendingGeneration != m_generation)
+        return;
+
+    const PendingQuery query = m_pendingQuery;
+    const QString value = m_pendingValue;
+    m_pendingQuery = PendingQuery::None;
+    m_pendingValue.clear();
+
+    if (!success || !m_inventory->ready()) {
+        clearResults();
+        setSearching(false);
+        const QString detail = error.isEmpty() ? m_inventory->errorString() : error;
+        emit searchError(detail.isEmpty()
+            ? tr("Classificazione dei pacchetti non disponibile.")
+            : tr("Classificazione dei pacchetti non disponibile: %1").arg(detail));
+        emit searchFinished();
+        return;
+    }
+
+    switch (query) {
+    case PendingQuery::Search:
+        startRepoQuery(value);
+        break;
+    case PendingQuery::Installed:
+        startListQuery(QStringLiteral("--installed"), true);
+        break;
+    case PendingQuery::Upgrades:
+        startListQuery(QStringLiteral("--upgrades"), true);
+        break;
+    case PendingQuery::None:
+        break;
+    }
+}
+
 void PackageSearch::search(const QString &term)
 {
     const QString sanitized = sanitizeTerm(term);
-    refreshPersistentSet();
     ++m_generation;
     stopActiveProcess();
+    m_pendingQuery = PendingQuery::None;
 
     if (sanitized.size() < 2) {
         clearResults();
@@ -83,7 +128,7 @@ void PackageSearch::search(const QString &term)
         emit truncatedChanged();
     }
     setSearching(true);
-    startInstalledQuery(sanitized);
+    requestInventory(PendingQuery::Search, sanitized, false);
 }
 
 void PackageSearch::loadInstalled(const QString &filter)
@@ -92,82 +137,30 @@ void PackageSearch::loadInstalled(const QString &filter)
         QStringLiteral("all"), QStringLiteral("base"),
         QStringLiteral("persistent"), QStringLiteral("local")
     };
-    m_installedFilter = allowed.contains(filter) ? filter : QStringLiteral("all");
-    refreshPersistentSet();
+    const QString normalized = allowed.contains(filter) ? filter : QStringLiteral("all");
+    const bool forceRefresh = m_loadedInstalledOnce && normalized == m_installedFilter;
+    m_installedFilter = normalized;
+    m_loadedInstalledOnce = true;
+
     ++m_generation;
     stopActiveProcess();
-    startListQuery(QStringLiteral("--installed"), true);
+    m_pendingQuery = PendingQuery::None;
+    clearResults();
+    setSearching(true);
+    requestInventory(PendingQuery::Installed, QString(), forceRefresh);
 }
 
 void PackageSearch::loadUpgrades()
 {
-    refreshPersistentSet();
+    const bool forceRefresh = m_loadedUpgradesOnce;
+    m_loadedUpgradesOnce = true;
+
     ++m_generation;
     stopActiveProcess();
-    startListQuery(QStringLiteral("--upgrades"), true);
-}
-
-void PackageSearch::startInstalledQuery(const QString &term)
-{
-    const quint64 generation = m_generation;
-    auto *rawProcess = new QProcess(this);
-    const QPointer<QProcess> process(rawProcess);
-    m_process = rawProcess;
-
-    connect(rawProcess, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-            [this, process, term, generation](int exitCode, QProcess::ExitStatus status) {
-        if (!process)
-            return;
-        if (process != m_process || generation != m_generation) {
-            process->deleteLater();
-            return;
-        }
-
-        const bool timedOut = process->property("krisccTimedOut").toBool();
-        m_installed.clear();
-        if (!timedOut && status == QProcess::NormalExit && exitCode == 0) {
-            const auto lines = process->readAllStandardOutput().split('\n');
-            for (const QByteArray &line : lines) {
-                const QString name = QString::fromUtf8(line).trimmed();
-                if (!name.isEmpty())
-                    m_installed.insert(name);
-            }
-
-        }
-
-        m_process = nullptr;
-        process->deleteLater();
-        if (timedOut)
-            emit searchError(tr("Tempo massimo superato durante la lettura dei pacchetti installati; la ricerca continua senza cache locale aggiornata."));
-        startRepoQuery(term);
-    });
-
-    connect(rawProcess, &QProcess::errorOccurred, this,
-            [this, process, term, generation](QProcess::ProcessError error) {
-        if (!process || process != m_process || generation != m_generation
-            || error != QProcess::FailedToStart)
-            return;
-
-        m_installed.clear();
-        m_process = nullptr;
-        process->deleteLater();
-        emit searchError(tr("Impossibile avviare rpm per leggere i pacchetti installati."));
-        startRepoQuery(term);
-    });
-
-    rawProcess->start(QStringLiteral("/usr/bin/rpm"),
-                      {QStringLiteral("-qa"), QStringLiteral("--qf"), QStringLiteral("%{NAME}\\n")});
-    QTimer::singleShot(30 * 1000, rawProcess, [this, process, generation] {
-        if (!process || process != m_process || generation != m_generation
-                || process->state() == QProcess::NotRunning)
-            return;
-        process->setProperty("krisccTimedOut", true);
-        process->terminate();
-        QTimer::singleShot(2000, process, [process] {
-            if (process && process->state() != QProcess::NotRunning)
-                process->kill();
-        });
-    });
+    m_pendingQuery = PendingQuery::None;
+    clearResults();
+    setSearching(true);
+    requestInventory(PendingQuery::Upgrades, QString(), forceRefresh);
 }
 
 void PackageSearch::startRepoQuery(const QString &term)
@@ -176,6 +169,7 @@ void PackageSearch::startRepoQuery(const QString &term)
     auto *rawProcess = new QProcess(this);
     const QPointer<QProcess> process(rawProcess);
     m_process = rawProcess;
+    rawProcess->setProcessChannelMode(QProcess::SeparateChannels);
 
     connect(rawProcess, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
             [this, process, generation](int exitCode, QProcess::ExitStatus status) {
@@ -210,6 +204,9 @@ void PackageSearch::startRepoQuery(const QString &term)
             return;
         }
 
+        const QSet<QString> &installed = m_inventory->installed();
+        const QSet<QString> &owned = m_inventory->owned();
+        const QSet<QString> &persistent = m_inventory->persistent();
         QList<Entry> entries;
         bool truncated = false;
         for (const QVariant &value : parsed.values) {
@@ -226,9 +223,9 @@ void PackageSearch::startRepoQuery(const QString &term)
             entry.arch = row.value(QStringLiteral("arch")).toString();
             entry.downloadSize = row.value(QStringLiteral("downloadSize")).toULongLong();
             entry.installSize = row.value(QStringLiteral("installSize")).toULongLong();
-            entry.installed = m_installed.contains(entry.name);
-            entry.owned = m_owned.contains(entry.name);
-            entry.persistent = m_persistent.contains(entry.name);
+            entry.installed = installed.contains(entry.name);
+            entry.owned = owned.contains(entry.name);
+            entry.persistent = persistent.contains(entry.name);
             entries.append(entry);
         }
 
@@ -266,7 +263,7 @@ void PackageSearch::startRepoQuery(const QString &term)
                        packageSpec});
     QTimer::singleShot(2 * 60 * 1000, rawProcess, [this, process, generation] {
         if (!process || process != m_process || generation != m_generation
-                || process->state() == QProcess::NotRunning)
+            || process->state() == QProcess::NotRunning)
             return;
         process->setProperty("krisccTimedOut", true);
         process->terminate();
@@ -280,9 +277,6 @@ void PackageSearch::startRepoQuery(const QString &term)
 void PackageSearch::startListQuery(const QString &filter, bool installedEntries)
 {
     const quint64 generation = m_generation;
-    setSearching(true);
-    clearResults();
-
     auto *rawProcess = new QProcess(this);
     const QPointer<QProcess> process(rawProcess);
     m_process = rawProcess;
@@ -319,6 +313,8 @@ void PackageSearch::startListQuery(const QString &filter, bool installedEntries)
             return;
         }
 
+        const QSet<QString> &owned = m_inventory->owned();
+        const QSet<QString> &persistent = m_inventory->persistent();
         QList<Entry> entries;
         for (const QVariant &value : parsed.values) {
             const QVariantMap row = value.toMap();
@@ -327,9 +323,9 @@ void PackageSearch::startListQuery(const QString &filter, bool installedEntries)
             entry.arch = row.value(QStringLiteral("arch")).toString();
             entry.version = row.value(QStringLiteral("version")).toString();
             entry.repository = row.value(QStringLiteral("repository")).toString();
-            entry.installed = installedEntries || m_installed.contains(entry.name);
-            entry.owned = m_owned.contains(entry.name);
-            entry.persistent = m_persistent.contains(entry.name);
+            entry.installed = installedEntries;
+            entry.owned = owned.contains(entry.name);
+            entry.persistent = persistent.contains(entry.name);
 
             if (installedEntries) {
                 const bool local = entry.installed && !entry.owned && !entry.persistent;
@@ -373,7 +369,7 @@ void PackageSearch::startListQuery(const QString &filter, bool installedEntries)
     rawProcess->start(QStringLiteral("/usr/bin/dnf5"), args);
     QTimer::singleShot(2 * 60 * 1000, rawProcess, [this, process, generation] {
         if (!process || process != m_process || generation != m_generation
-                || process->state() == QProcess::NotRunning)
+            || process->state() == QProcess::NotRunning)
             return;
         process->setProperty("krisccTimedOut", true);
         process->terminate();
@@ -386,7 +382,7 @@ void PackageSearch::startListQuery(const QString &filter, bool installedEntries)
 
 void PackageSearch::clearResults()
 {
-    if (m_results.isEmpty())
+    if (m_results.isEmpty() && m_sourceResults.isEmpty())
         return;
     beginResetModel();
     m_results.clear();
@@ -427,19 +423,6 @@ void PackageSearch::stopActiveProcess()
         if (process && process->state() != QProcess::NotRunning)
             process->kill();
     });
-}
-
-void PackageSearch::refreshPersistentSet()
-{
-    m_persistent.clear();
-    QFile file(QStringLiteral("/var/lib/krisos/packages.list"));
-    if (!file.open(QIODevice::ReadOnly | QIODevice::Text))
-        return;
-    while (!file.atEnd()) {
-        const QString line = QString::fromUtf8(file.readLine()).trimmed();
-        if (!line.isEmpty() && !line.startsWith(QLatin1Char('#')))
-            m_persistent.insert(line);
-    }
 }
 
 void PackageSearch::setLocalFilter(const QString &text)
