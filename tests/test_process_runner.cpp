@@ -26,6 +26,7 @@ private slots:
         QVERIFY(runner.start(options));
         QVERIFY(spy.wait(3000));
         QCOMPARE(spy.at(0).at(0).value<ProcessRunner::Outcome>(), ProcessRunner::Success);
+        QVERIFY(!runner.outputTruncated());
     }
 
     void timeoutIsReal()
@@ -130,9 +131,10 @@ private slots:
         QCOMPARE(spy.at(0).at(2).toByteArray(),
                  QByteArray("flathub\tFlathub\thttps://dl.flathub.org/repo/\t\n"));
         QCOMPARE(spy.at(0).at(3).toByteArray(), QByteArray("warning only\n"));
+        QVERIFY(!runner.outputTruncated());
     }
 
-    void outputIsBounded()
+    void outputIsBoundedAndReported()
     {
         ProcessRunner runner;
         QSignalSpy spy(&runner, &ProcessRunner::finished);
@@ -147,6 +149,7 @@ private slots:
         const QByteArray output = spy.at(0).at(2).toByteArray();
         QVERIFY(output.size() <= 64);
         QVERIFY(!output.isEmpty());
+        QVERIFY(runner.outputTruncated());
     }
 
     void streamingOutputIsCompletePastRestoreLimit()
@@ -168,6 +171,7 @@ private slots:
         QCOMPARE(finishedSpy.at(0).at(0).value<ProcessRunner::Outcome>(), ProcessRunner::Success);
         QCOMPARE(streamed.size(), 320 * 1024);
         QVERIFY(finishedSpy.at(0).at(2).toByteArray().size() <= 64 * 1024);
+        QVERIFY(runner.outputTruncated());
     }
 };
 

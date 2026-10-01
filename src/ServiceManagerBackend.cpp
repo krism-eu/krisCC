@@ -2,10 +2,9 @@
 
 #include "OperationLog.h"
 #include "ProcessRunner.h"
+#include "ServiceJson.h"
 
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
+#include <QHash>
 #include <QRegularExpression>
 #include <QStandardPaths>
 #include <QVariantMap>
@@ -18,6 +17,13 @@ constexpr qsizetype kMaxOutput = 1024 * 1024;
 QString scopeName(bool userScope)
 {
     return userScope ? QStringLiteral("user") : QStringLiteral("system");
+}
+
+bool structuredTask(ServiceManagerBackend::Task task)
+{
+    return task == ServiceManagerBackend::Task::ServicesUnits
+        || task == ServiceManagerBackend::Task::ServicesFiles
+        || task == ServiceManagerBackend::Task::FailedUnits;
 }
 }
 
@@ -40,37 +46,6 @@ bool ServiceManagerBackend::validJournalUnit(const QString &unit) const
     static const QRegularExpression pattern(
         QStringLiteral("^[A-Za-z0-9_.@:-]{1,120}\\.(?:service|socket|timer)$"));
     return pattern.match(unit).hasMatch();
-}
-
-QVariantList ServiceManagerBackend::parseUnitsJson(const QByteArray &data,
-                                                   const QString &scope) const
-{
-    QVariantList rows;
-    QJsonParseError error;
-    const QJsonDocument document = QJsonDocument::fromJson(data, &error);
-    if (error.error != QJsonParseError::NoError || !document.isArray())
-        return rows;
-
-    for (const QJsonValue &value : document.array()) {
-        if (!value.isObject())
-            continue;
-        const QJsonObject object = value.toObject();
-        QString unit = object.value(QStringLiteral("unit")).toString();
-        if (unit.isEmpty())
-            unit = object.value(QStringLiteral("unit_file")).toString();
-        if (!validUnit(unit))
-            continue;
-
-        QVariantMap row;
-        row.insert(QStringLiteral("unit"), unit);
-        row.insert(QStringLiteral("scope"), scope);
-        row.insert(QStringLiteral("active"), object.value(QStringLiteral("active")).toString());
-        row.insert(QStringLiteral("sub"), object.value(QStringLiteral("sub")).toString());
-        row.insert(QStringLiteral("description"), object.value(QStringLiteral("description")).toString());
-        row.insert(QStringLiteral("enabled"), object.value(QStringLiteral("state")).toString());
-        rows.append(row);
-    }
-    return rows;
 }
 
 bool ServiceManagerBackend::startProcess(const QStringList &arguments, Task task, int timeoutMs)
@@ -98,11 +73,12 @@ bool ServiceManagerBackend::startProcess(const QStringList &arguments, Task task
                                  const QString &errorString) {
         if (runner != m_runner)
             return;
+        const bool truncated = runner->outputTruncated();
         m_runner = nullptr;
         runner->deleteLater();
         m_busy = false;
         handleFinished(task, exitCode, int(outcome),
-                       standardOutput, standardError, errorString);
+                       standardOutput, standardError, errorString, truncated);
     });
 
     ProcessRunner::Options options;
@@ -218,11 +194,12 @@ bool ServiceManagerBackend::loadJournal(const QString &unit, bool userScope,
                            const QString &errorString) {
         if (runner != m_runner)
             return;
+        const bool truncated = runner->outputTruncated();
         m_runner = nullptr;
         runner->deleteLater();
         m_busy = false;
         handleFinished(Task::Journal, exitCode, int(outcome),
-                       standardOutput, standardError, errorString);
+                       standardOutput, standardError, errorString, truncated);
     });
 
     QStringList args;
@@ -286,9 +263,10 @@ bool ServiceManagerBackend::controlUnit(const QString &unit, bool userScope,
 void ServiceManagerBackend::handleFinished(Task task, int exitCode, int outcome,
                                            const QByteArray &stdoutData,
                                            const QByteArray &stderrData,
-                                           const QString &errorString)
+                                           const QString &errorString,
+                                           bool outputTruncated)
 {
-    const auto result = static_cast<ProcessRunner::Outcome>(outcome);
+    const auto processResult = static_cast<ProcessRunner::Outcome>(outcome);
     QByteArray combined = stdoutData;
     if (!stderrData.isEmpty()) {
         if (!combined.isEmpty() && !combined.endsWith('\n'))
@@ -297,51 +275,102 @@ void ServiceManagerBackend::handleFinished(Task task, int exitCode, int outcome,
     }
     const QString text = QString::fromUtf8(combined).trimmed();
 
-    if (result != ProcessRunner::Success) {
+    if (processResult != ProcessRunner::Success) {
         if (task == Task::Control) {
-            OperationLog::append(QStringLiteral("Servizi"),
-                                 m_controlAction + QStringLiteral(" ") + m_controlUnit,
-                                 QStringLiteral("error"), text.left(200));
+            const bool userScope = m_userScope;
             const QString failedAction = m_controlAction;
             const QString failedUnit = m_controlUnit;
             m_controlAction.clear();
             m_controlUnit.clear();
-            emit controlFinished(m_userScope, failedUnit, failedAction, false);
+            OperationLog::append(QStringLiteral("Servizi"),
+                                 failedAction + QStringLiteral(" ") + failedUnit,
+                                 QStringLiteral("error"), text.left(200));
+
+            QString message;
+            QString state = QStringLiteral("error");
+            if (processResult == ProcessRunner::Cancelled) {
+                state = QStringLiteral("cancelled");
+                message = tr("Operazione annullata.");
+            } else if (processResult == ProcessRunner::TimedOut) {
+                state = QStringLiteral("timeout");
+                message = tr("Tempo massimo superato.");
+            } else if (processResult == ProcessRunner::FailedToStart) {
+                message = tr("Impossibile avviare il comando: %1").arg(errorString);
+            } else {
+                message = text.isEmpty() ? tr("Comando terminato con codice %1.").arg(exitCode) : text;
+            }
+            // Finalize every mutable field before the external signal. A direct
+            // slot may start a new refresh immediately.
+            finish(state, message);
+            emit controlFinished(userScope, failedUnit, failedAction, false);
+            return;
         }
-        if (result == ProcessRunner::Cancelled)
+
+        if (processResult == ProcessRunner::Cancelled)
             finish(QStringLiteral("cancelled"), tr("Operazione annullata."));
-        else if (result == ProcessRunner::TimedOut)
+        else if (processResult == ProcessRunner::TimedOut)
             finish(QStringLiteral("timeout"), tr("Tempo massimo superato."));
-        else if (result == ProcessRunner::FailedToStart)
+        else if (processResult == ProcessRunner::FailedToStart)
             finish(QStringLiteral("error"), tr("Impossibile avviare il comando: %1").arg(errorString));
         else
-            finish(QStringLiteral("error"),
-                   text.isEmpty() ? tr("Comando terminato con codice %1.").arg(exitCode) : text);
+            finish(QStringLiteral("error"), text.isEmpty()
+                       ? tr("Comando terminato con codice %1.").arg(exitCode) : text);
+        return;
+    }
+
+    if (outputTruncated && (task == Task::ServicesUnits
+                            || task == Task::ServicesFiles
+                            || task == Task::FailedUnits)) {
+        m_pendingServices.clear();
+        finish(QStringLiteral("error"),
+               tr("Output JSON systemd troncato: stato non disponibile."));
         return;
     }
 
     if (task == Task::ServicesUnits) {
-        m_pendingServices = parseUnitsJson(stdoutData, scopeName(m_userScope));
+        const ServiceJsonResult parsed = ServiceJson::parseUnitList(
+            stdoutData, scopeName(m_userScope));
+        if (!parsed.ok()) {
+            m_pendingServices.clear();
+            finish(QStringLiteral("error"),
+                   tr("Impossibile interpretare list-units: %1").arg(parsed.error));
+            return;
+        }
+        m_pendingServices = parsed.rows;
         startUnitFilesQuery();
         return;
     }
 
     if (task == Task::ServicesFiles) {
-        const QVariantList unitFiles = parseUnitsJson(stdoutData, scopeName(m_userScope));
-        QHash<QString, QString> enabled;
-        for (const QVariant &value : unitFiles) {
-            const QVariantMap row = value.toMap();
-            enabled.insert(row.value(QStringLiteral("unit")).toString(),
-                           row.value(QStringLiteral("enabled")).toString());
+        const ServiceJsonResult parsed = ServiceJson::parseUnitFiles(
+            stdoutData, scopeName(m_userScope));
+        if (!parsed.ok()) {
+            m_pendingServices.clear();
+            finish(QStringLiteral("error"),
+                   tr("Impossibile interpretare list-unit-files: %1").arg(parsed.error));
+            return;
         }
 
-        for (QVariant &value : m_pendingServices) {
-            QVariantMap row = value.toMap();
-            row.insert(QStringLiteral("enabled"),
-                       enabled.value(row.value(QStringLiteral("unit")).toString(),
-                                     QStringLiteral("unknown")));
-            value = row;
+        QHash<QString, int> existing;
+        for (int i = 0; i < m_pendingServices.size(); ++i)
+            existing.insert(m_pendingServices.at(i).toMap().value(QStringLiteral("unit")).toString(), i);
+
+        for (const QVariant &value : parsed.rows) {
+            const QVariantMap fileRow = value.toMap();
+            const QString unit = fileRow.value(QStringLiteral("unit")).toString();
+            const auto it = existing.constFind(unit);
+            if (it == existing.cend()) {
+                QVariantMap row = fileRow;
+                row.insert(QStringLiteral("active"), QStringLiteral("not-loaded"));
+                m_pendingServices.append(row);
+                existing.insert(unit, m_pendingServices.size() - 1);
+            } else {
+                QVariantMap row = m_pendingServices.at(it.value()).toMap();
+                row.insert(QStringLiteral("enabled"), fileRow.value(QStringLiteral("enabled")));
+                m_pendingServices[it.value()] = row;
+            }
         }
+
         std::sort(m_pendingServices.begin(), m_pendingServices.end(),
                   [](const QVariant &a, const QVariant &b) {
             return a.toMap().value(QStringLiteral("unit")).toString()
@@ -354,7 +383,14 @@ void ServiceManagerBackend::handleFinished(Task task, int exitCode, int outcome,
     }
 
     if (task == Task::FailedUnits) {
-        m_failedUnits = parseUnitsJson(stdoutData, scopeName(m_userScope));
+        const ServiceJsonResult parsed = ServiceJson::parseUnitList(
+            stdoutData, scopeName(m_userScope));
+        if (!parsed.ok()) {
+            finish(QStringLiteral("error"),
+                   tr("Stato delle unità fallite non disponibile: %1").arg(parsed.error));
+            return;
+        }
+        m_failedUnits = parsed.rows;
         finish(QStringLiteral("success"),
                m_failedUnits.isEmpty()
                    ? tr("Nessuna unità fallita.")
@@ -365,20 +401,23 @@ void ServiceManagerBackend::handleFinished(Task task, int exitCode, int outcome,
     if (task == Task::Journal) {
         m_journalText = QString::fromUtf8(stdoutData).trimmed();
         finish(QStringLiteral("success"),
-               m_journalText.isEmpty() ? tr("Nessun messaggio corrispondente.") : QString());
+               outputTruncated
+                   ? tr("Log limitato alla parte più recente disponibile.")
+                   : (m_journalText.isEmpty() ? tr("Nessun messaggio corrispondente.") : QString()));
         return;
     }
 
     if (task == Task::Control) {
-        OperationLog::append(QStringLiteral("Servizi"),
-                             m_controlAction + QStringLiteral(" ") + m_controlUnit,
-                             QStringLiteral("success"));
+        const bool userScope = m_userScope;
         const QString action = m_controlAction;
         const QString unit = m_controlUnit;
         m_controlAction.clear();
         m_controlUnit.clear();
-        emit controlFinished(m_userScope, unit, action, true);
+        OperationLog::append(QStringLiteral("Servizi"),
+                             action + QStringLiteral(" ") + unit,
+                             QStringLiteral("success"));
         finish(QStringLiteral("success"), tr("Operazione completata su %1.").arg(unit));
+        emit controlFinished(userScope, unit, action, true);
         return;
     }
 

@@ -34,8 +34,6 @@ ProcessMap processesInGroup(qint64 pgid)
             continue;
 
         const QList<QByteArray> fields = line.mid(closeParen + 2).split(' ');
-        // fields[0] is /proc stat field 3 (state); pgrp is field 5 and
-        // starttime is field 22.
         if (fields.size() <= 19)
             continue;
 
@@ -114,6 +112,24 @@ void ProcessRunner::appendBounded(QByteArray &target, const QByteArray &data, qs
         target = target.right(limit);
 }
 
+void ProcessRunner::appendStdout(const QByteArray &data)
+{
+    if (!data.isEmpty() && m_options.maxOutputBytes > 0
+        && m_stdout.size() + data.size() > m_options.maxOutputBytes) {
+        m_stdoutTruncated = true;
+    }
+    appendBounded(m_stdout, data, m_options.maxOutputBytes);
+}
+
+void ProcessRunner::appendStderr(const QByteArray &data)
+{
+    if (!data.isEmpty() && m_options.maxOutputBytes > 0
+        && m_stderr.size() + data.size() > m_options.maxOutputBytes) {
+        m_stderrTruncated = true;
+    }
+    appendBounded(m_stderr, data, m_options.maxOutputBytes);
+}
+
 bool ProcessRunner::start(const Options &options)
 {
     if (running() || options.program.isEmpty())
@@ -135,6 +151,8 @@ bool ProcessRunner::start(const Options &options)
     m_leaderExited = false;
     m_groupWasForced = false;
     m_killScheduled = false;
+    m_stdoutTruncated = false;
+    m_stderrTruncated = false;
 
     m_process = new QProcess(this);
     m_process->setProgram(options.program);
@@ -165,15 +183,14 @@ bool ProcessRunner::start(const Options &options)
         if (!m_process || m_finished)
             return;
         const QByteArray data = m_process->readAllStandardOutput();
-        appendBounded(m_stdout, data, m_options.maxOutputBytes);
+        appendStdout(data);
         if (!data.isEmpty())
             emit outputReady(data);
     });
     connect(m_process, &QProcess::readyReadStandardError, this, [this] {
         if (!m_process || m_finished || m_options.mergedChannels)
             return;
-        const QByteArray data = m_process->readAllStandardError();
-        appendBounded(m_stderr, data, m_options.maxOutputBytes);
+        appendStderr(m_process->readAllStandardError());
     });
     connect(m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
         if (!m_process || m_finished || error != QProcess::FailedToStart)
@@ -217,11 +234,11 @@ void ProcessRunner::drain()
     if (!m_process)
         return;
     const QByteArray out = m_process->readAllStandardOutput();
-    appendBounded(m_stdout, out, m_options.maxOutputBytes);
+    appendStdout(out);
     if (!out.isEmpty())
         emit outputReady(out);
     if (!m_options.mergedChannels)
-        appendBounded(m_stderr, m_process->readAllStandardError(), m_options.maxOutputBytes);
+        appendStderr(m_process->readAllStandardError());
 }
 
 void ProcessRunner::refreshTrackedGroup(bool allowSeed)
@@ -344,11 +361,6 @@ void ProcessRunner::handleLeaderFinished(int exitCode, QProcess::ExitStatus stat
         return;
     }
 
-    // A normal leader exit does not complete the operation while descendants
-    // are still alive. Give pipelines a short grace period, then clean up the
-    // original, identity-tracked process group. A reused numeric PGID is never
-    // signalled unless at least one previously observed process identity still
-    // belongs to it.
     const quint64 generation = m_generation;
     QTimer::singleShot(500, this, [this, generation] {
         if (generation != m_generation || !m_active || m_finished || !m_leaderExited)

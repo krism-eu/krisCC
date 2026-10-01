@@ -24,10 +24,13 @@ qt_add_executable(krisCC
     src/CronBackend.cpp src/CronBackend.h
     src/CronParser.cpp src/CronParser.h
     src/ServiceManagerBackend.cpp src/ServiceManagerBackend.h
+    src/ServiceJson.cpp src/ServiceJson.h
+    src/SystemdJobCoordinator.cpp src/SystemdJobCoordinator.h
     src/SystemBackend.cpp src/SystemBackend.h
     src/SystemBackendRuntime.cpp src/SystemBackendRuntime.h
     src/SystemBackendRuntimeArchive.cpp
     src/SystemBackendRuntimeLifecycle.cpp
+    src/SystemBackendRuntimeServices.cpp
     src/BackupSafety.cpp src/BackupSafety.h
     src/SoftwareBackend.cpp src/SoftwareBackend.h
     src/PackageSearch.cpp src/PackageSearch.h
@@ -137,6 +140,14 @@ if(BUILD_TESTING)
     target_link_libraries(kriscc-test-archive-restore PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME archive-restore COMMAND kriscc-test-archive-restore)
     set_tests_properties(archive-restore PROPERTIES TIMEOUT 30)
+
+    add_executable(kriscc-test-service-json
+        tests/test_service_json.cpp
+        src/ServiceJson.cpp src/ServiceJson.h
+    )
+    target_include_directories(kriscc-test-service-json PRIVATE src)
+    target_link_libraries(kriscc-test-service-json PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME service-json COMMAND kriscc-test-service-json)
 
     add_executable(kriscc-test-parsers
         tests/test_contract_parsers.cpp

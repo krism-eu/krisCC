@@ -38,6 +38,7 @@ public:
     bool start(const Options &options);
     bool cancel();
     bool running() const;
+    bool outputTruncated() const { return m_stdoutTruncated || m_stderrTruncated; }
 
 signals:
     void outputReady(const QByteArray &data);
@@ -56,6 +57,8 @@ private:
     void requestGroupTermination();
     void scheduleGroupKill();
     void finalizePendingOutcome();
+    void appendStdout(const QByteArray &data);
+    void appendStderr(const QByteArray &data);
     static void appendBounded(QByteArray &target, const QByteArray &data, qsizetype limit);
 
     QProcess *m_process = nullptr;
@@ -76,4 +79,6 @@ private:
     bool m_leaderExited = false;
     bool m_groupWasForced = false;
     bool m_killScheduled = false;
+    bool m_stdoutTruncated = false;
+    bool m_stderrTruncated = false;
 };

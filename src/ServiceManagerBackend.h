@@ -19,6 +19,15 @@ class ServiceManagerBackend : public QObject
     Q_PROPERTY(bool userScope READ userScope NOTIFY stateChanged)
 
 public:
+    enum class Task {
+        None,
+        ServicesUnits,
+        ServicesFiles,
+        FailedUnits,
+        Journal,
+        Control
+    };
+
     explicit ServiceManagerBackend(QObject *parent = nullptr);
     ~ServiceManagerBackend() override;
 
@@ -43,22 +52,12 @@ signals:
                          const QString &action, bool success);
 
 private:
-    enum class Task {
-        None,
-        ServicesUnits,
-        ServicesFiles,
-        FailedUnits,
-        Journal,
-        Control
-    };
-
     bool startProcess(const QStringList &arguments, Task task, int timeoutMs = 15000);
     void handleFinished(Task task, int exitCode, int outcome,
                         const QByteArray &stdoutData, const QByteArray &stderrData,
-                        const QString &errorString);
+                        const QString &errorString, bool outputTruncated);
     bool validUnit(const QString &unit) const;
     bool validJournalUnit(const QString &unit) const;
-    QVariantList parseUnitsJson(const QByteArray &data, const QString &scope) const;
     void finish(const QString &state, const QString &message = QString());
     void startUnitFilesQuery();
 
