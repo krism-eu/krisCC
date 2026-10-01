@@ -17,11 +17,13 @@ int emitResult(const ArchiveOperationResult &result)
     object.insert(QStringLiteral("applied"), result.applied);
     object.insert(QStringLiteral("members"), result.members);
     object.insert(QStringLiteral("message"), result.message);
+
+    const QByteArray payload = QJsonDocument(object).toJson(QJsonDocument::Compact);
     QFile out;
-    out.open(stdout, QIODevice::WriteOnly);
-    out.write(QJsonDocument(object).toJson(QJsonDocument::Compact));
-    out.write("\n");
-    out.flush();
+    if (!out.open(stdout, QIODevice::WriteOnly))
+        return 2;
+    if (out.write(payload) != payload.size() || out.write("\n") != 1 || !out.flush())
+        return 2;
     return result.success ? 0 : 1;
 }
 
