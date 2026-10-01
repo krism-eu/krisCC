@@ -52,6 +52,8 @@ signals:
                          const QString &action, bool success);
 
 private:
+    friend class ServiceManagerReentrancyTest;
+
     bool startProcess(const QStringList &arguments, Task task, int timeoutMs = 15000);
     void handleFinished(Task task, int exitCode, int outcome,
                         const QByteArray &stdoutData, const QByteArray &stderrData,
