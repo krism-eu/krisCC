@@ -25,7 +25,6 @@ bool UtilityBackend::validPackageName(const QString &name) const
     return Validators::packageName(name);
 }
 
-
 void UtilityBackend::setImmediateError(const QString &title, const QString &operationId, const QString &message)
 {
     m_title = title;
@@ -124,7 +123,6 @@ void UtilityBackend::finish(const QString &message, const QString &state)
     m_output = message.trimmed();
     m_rows.clear();
     m_resultState = state;
-
     emit stateChanged();
 }
 
@@ -151,15 +149,9 @@ bool UtilityBackend::runBookmark(const QString &id)
         return start(QStringLiteral("systemctl"), {QStringLiteral("--user"), QStringLiteral("restart"), QStringLiteral("pipewire"), QStringLiteral("pipewire-pulse"), QStringLiteral("wireplumber")}, tr("Riavvio Audio PipeWire"), QStringLiteral("bookmark.pipewire-restart"), kShortQueryTimeoutMs);
     if (id == QStringLiteral("dns-flush"))
         return start(QStringLiteral("resolvectl"), {QStringLiteral("flush-caches")}, tr("Svuota cache DNS"), QStringLiteral("repair.dns-flush"), kShortQueryTimeoutMs);
-    if (id == QStringLiteral("cleanup-estimate")) {
-        const QString script = QStringLiteral(
-            "printf 'Cestini: '; du -sh \"$HOME/.local/share/Trash\" 2>/dev/null | cut -f1 || echo '0'; "
-            "printf 'Journal: '; journalctl --disk-usage 2>/dev/null | sed 's/^.*take up /circa /'; "
-            "printf 'Cache DNF: '; du -sh /var/cache/libdnf5 2>/dev/null | cut -f1 || echo 'non misurabile'; "
-            "printf 'Flatpak inutilizzati: calcolo esatto durante la pulizia\\n'");
-        return start(QStringLiteral("/usr/bin/bash"), {QStringLiteral("-c"), script},
+    if (id == QStringLiteral("cleanup-estimate"))
+        return start(QStringLiteral("/usr/libexec/kriscc/cleanup-estimate"), {},
                      tr("Stima spazio recuperabile"), QStringLiteral("cleanup.estimate"), kShortQueryTimeoutMs);
-    }
     if (id == QStringLiteral("flatpak-unused"))
         return start(QStringLiteral("flatpak"), {QStringLiteral("uninstall"), QStringLiteral("--user"), QStringLiteral("--unused"), QStringLiteral("--noninteractive"), QStringLiteral("--assumeyes")}, tr("Rimozione runtime Flatpak inutilizzati"), QStringLiteral("cleanup.flatpak"), kRepositoryQueryTimeoutMs);
     if (id == QStringLiteral("gpu-driver"))
@@ -292,4 +284,3 @@ bool UtilityBackend::previewRpmInstall(const QString &packageName)
                  tr("Piano installazione persistente: %1").arg(packageName),
                  QStringLiteral("rpm.plan"), kRepositoryQueryTimeoutMs);
 }
-
