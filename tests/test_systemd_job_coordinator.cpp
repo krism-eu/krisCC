@@ -1,9 +1,7 @@
 #include <QtTest>
 #include <QSignalSpy>
 
-#define private public
 #include "SystemdJobCoordinator.h"
-#undef private
 
 class SystemdJobCoordinatorTest final : public QObject
 {
