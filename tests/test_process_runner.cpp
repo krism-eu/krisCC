@@ -4,6 +4,9 @@
 
 #include "ProcessRunner.h"
 
+#include <cerrno>
+#include <signal.h>
+
 Q_DECLARE_METATYPE(ProcessRunner::Outcome)
 
 class ProcessRunnerTest final : public QObject
@@ -34,7 +37,7 @@ private slots:
         options.arguments = {QStringLiteral("-c"), QStringLiteral("sleep 10")};
         options.timeoutMs = 100;
         QVERIFY(runner.start(options));
-        QVERIFY(spy.wait(4000));
+        QVERIFY(spy.wait(5000));
         QCOMPARE(spy.at(0).at(0).value<ProcessRunner::Outcome>(), ProcessRunner::TimedOut);
     }
 
@@ -48,8 +51,53 @@ private slots:
         options.timeoutMs = 5000;
         QVERIFY(runner.start(options));
         QTimer::singleShot(50, &runner, [&runner] { QVERIFY(runner.cancel()); });
-        QVERIFY(spy.wait(4000));
+        QVERIFY(spy.wait(5000));
         QCOMPARE(spy.at(0).at(0).value<ProcessRunner::Outcome>(), ProcessRunner::Cancelled);
+    }
+
+    void cancellationOutlivesLeaderAndKillsChild()
+    {
+        ProcessRunner runner;
+        QSignalSpy spy(&runner, &ProcessRunner::finished);
+        QByteArray streamed;
+        connect(&runner, &ProcessRunner::outputReady, &runner,
+                [&streamed](const QByteArray &data) { streamed.append(data); });
+
+        ProcessRunner::Options options;
+        options.program = QStringLiteral("/usr/bin/bash");
+        options.arguments = {
+            QStringLiteral("--noprofile"), QStringLiteral("--norc"), QStringLiteral("-c"),
+            QStringLiteral("trap 'exit 0' TERM; (trap '' TERM; sleep 30) & child=$!; printf '%s\\n' \"$child\"; wait")
+        };
+        options.timeoutMs = 10000;
+        QVERIFY(runner.start(options));
+        QTRY_VERIFY_WITH_TIMEOUT(streamed.contains('\n'), 2000);
+        const qint64 childPid = streamed.trimmed().toLongLong();
+        QVERIFY(childPid > 0);
+
+        QVERIFY(runner.cancel());
+        QVERIFY(spy.wait(6000));
+        QCOMPARE(spy.at(0).at(0).value<ProcessRunner::Outcome>(), ProcessRunner::Cancelled);
+
+        errno = 0;
+        QVERIFY2(::kill(childPid, 0) == -1 && errno == ESRCH,
+                 "cancel completed while a descendant was still alive");
+    }
+
+    void normalLeaderExitWaitsForDescendant()
+    {
+        ProcessRunner runner;
+        QSignalSpy spy(&runner, &ProcessRunner::finished);
+        ProcessRunner::Options options;
+        options.program = QStringLiteral("/usr/bin/bash");
+        options.arguments = {
+            QStringLiteral("--noprofile"), QStringLiteral("--norc"), QStringLiteral("-c"),
+            QStringLiteral("(sleep 0.25) & exit 0")
+        };
+        options.timeoutMs = 3000;
+        QVERIFY(runner.start(options));
+        QVERIFY(spy.wait(3000));
+        QCOMPARE(spy.at(0).at(0).value<ProcessRunner::Outcome>(), ProcessRunner::Success);
     }
 
     void failedStartIsDistinct()
