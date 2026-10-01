@@ -2,6 +2,7 @@
 
 #include "SystemBackend.h"
 
+#include <QPointer>
 #include <QTemporaryDir>
 
 #include <memory>
@@ -28,6 +29,10 @@ public:
     bool stopService(const QString &service) override;
     bool restartService(const QString &service) override;
 
+    void refreshUefiEntries() override;
+    void refreshUefiEntriesPrivileged() override;
+    void refreshGrubEntries() override;
+
 private:
     bool appendBackupDestinationExclusions(const QString &kind, const QString &home,
                                            const QString &backupRoot,
@@ -41,7 +46,20 @@ private:
     bool startCreatedArchiveValidation(const QString &output, const QString &partial);
     SystemdJobCoordinator *systemdJobs();
     bool startSystemdJob(const QString &service, const QString &action);
+    void ensureBootRuntimeConnections();
+    void syncBootAggregate();
 
     std::unique_ptr<QTemporaryDir> m_backupWorkspace;
     SystemdJobCoordinator *m_systemdJobCoordinator = nullptr;
+
+    QPointer<QProcess> m_uefiProcess;
+    QPointer<QProcess> m_grubProcess;
+    bool m_uefiBusy = false;
+    bool m_grubBusy = false;
+    bool m_runtimeBootReadOwned = false;
+    bool m_bootRuntimeConnectionsInitialized = false;
+    QString m_uefiError;
+    QString m_grubError;
+    quint64 m_uefiRequestGeneration = 0;
+    quint64 m_grubRequestGeneration = 0;
 };
