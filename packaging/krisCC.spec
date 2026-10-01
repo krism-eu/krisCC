@@ -53,7 +53,9 @@ delegated to a dedicated external application.
 %doc README.md
 %{_bindir}/krisCC
 %{_libexecdir}/kriscc/admin
+%{_libexecdir}/kriscc/archive
 %{_libexecdir}/kriscc/bootc-status
+%{_libexecdir}/kriscc/cleanup-estimate
 %{_libexecdir}/kriscc/maintenance
 %{_datadir}/applications/krisCC.desktop
 %{_datadir}/polkit-1/actions/org.kriscc.controlcenter.policy
@@ -230,40 +232,6 @@ delegated to a dedicated external application.
 - Optimize backend state accessors without changing the QML architecture
 - Remove the unused duplicate rkStatus API after strict release audit
 
-* Fri Sep 18 2026 krism-eu - 0.5.1-3
-- Correct Fedora 44 usr-merged paths for efibootmgr, grubby and grub2-reboot
-- Supersede the pre-audit 0.5.1-2 candidate
-
-* Fri Sep 18 2026 krism-eu - 0.5.1-2
-- Harden backup process failure handling and keep verification output bounded
-- Keep Flatpak cleanup in user scope and avoid duplicate QML page recreation
-- Tighten one-shot GRUB argument validation
-- Add cross-layer release audit and strict lint/static-analysis gates
-
-* Fri Sep 18 2026 krism-eu - 0.5.1-1
-- Integration release for the complete KrisOS ISO
-- Keep the validated 0.5 feature set unchanged
-
-* Fri Sep 18 2026 krism-eu - 0.5.0-1
-- Add a unified minimal KrisOS system/update center
-- Add health, security, storage, UEFI and GRUB/BLS read-only diagnostics
-- Support one-shot UEFI BootNext and GRUB next-entry selection when available
-- Add backup inventory, verification and user-level restore
-- Add local operation history and expand safe terminal command bookmarks
-- Keep firmware and first-run/welcome tooling out of krisCC
-
-* Thu Sep 17 2026 krism-eu - 0.4.0-11
-- Use structured backend operation identifiers and result states in QML
-- Make backup archives atomic with warning/cancellation handling
-- Make --background a single D-Bus-activatable instance
-- Test the installed RPM artifact in CI
-
-* Thu Sep 17 2026 krism-eu - 0.4.0-10
-- Align BootC controls with KrisOS single-deployment update model
-- Route RPM previews through rk policy and limit discovery to supported repositories
-- Remove privileged rollback and arbitrary DNF repository mutations
-- Drop unused legacy RPM migration metadata; krisCC has a single package identity
-
 * Wed Sep 16 2026 krism-eu - 0.4.0-9
 - Preserve --background startup mode after the krisCC technical rename
 - Keep KrisOS session autostart from opening the main window
@@ -286,7 +254,6 @@ delegated to a dedicated external application.
 * Wed Sep 16 2026 krism-eu - 0.4.0-5
 - Add a simple Podman container management page with size, status and common actions
 - Begin the safe user-facing rename from K-ControlC to KCC while retaining package compatibility
-- Keep RPM size and transaction details visible in software search
 
 * Wed Sep 16 2026 krism-eu - 0.4.0-4
 - Replace raw Flatpak command output with structured application cards
