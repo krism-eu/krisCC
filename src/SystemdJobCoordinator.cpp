@@ -142,17 +142,24 @@ void SystemdJobCoordinator::sendRequest()
             finish(false, reply.error().message());
             return;
         }
-
-        m_jobPath = reply.value().path();
-        const auto early = m_earlyResults.constFind(m_jobPath);
-        if (early != m_earlyResults.cend()) {
-            const QString result = early.value();
-            finish(result == QStringLiteral("done"),
-                   result == QStringLiteral("done")
-                       ? tr("Job systemd completato.")
-                       : tr("Job systemd terminato con esito: %1").arg(result));
-        }
+        acceptJobPath(reply.value().path());
     });
+}
+
+void SystemdJobCoordinator::acceptJobPath(const QString &path)
+{
+    if (!m_active || path.isEmpty())
+        return;
+    m_jobPath = path;
+    const auto early = m_earlyResults.constFind(m_jobPath);
+    if (early == m_earlyResults.cend())
+        return;
+
+    const QString result = early.value();
+    finish(result == QStringLiteral("done"),
+           result == QStringLiteral("done")
+               ? tr("Job systemd completato.")
+               : tr("Job systemd terminato con esito: %1").arg(result));
 }
 
 void SystemdJobCoordinator::onJobRemoved(uint, const QDBusObjectPath &job,
@@ -204,7 +211,6 @@ void SystemdJobCoordinator::finish(bool success, const QString &message)
     m_jobPath.clear();
     m_earlyResults.clear();
 
-    // State is final before signals: direct slots are free to start another job.
     emit completed(unit, action, success, message);
     emit stateMayHaveChanged();
 }
