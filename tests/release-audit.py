@@ -184,10 +184,10 @@ for action_id, node in actions.items():
                 f"{action_id}: mutation lacks semantic argv1 restriction")
 
 uefi_actions = {
-    "org.kriscc.controlcenter.bootnext.uefi": "boot-next-uefi",
-    "org.kriscc.controlcenter.bootnext.uefi.clear": "boot-clear-next-uefi",
-    "org.kriscc.controlcenter.bootentry.uefi.delete": "boot-delete-uefi",
-    "org.kriscc.controlcenter.bootorder.uefi": "boot-order-uefi",
+    "org.kriscc.controlcenter.boot.read-uefi": "boot-read-uefi",
+    "org.kriscc.controlcenter.bootnext.clear-uefi": "boot-clear-next-uefi",
+    "org.kriscc.controlcenter.boot.delete-uefi": "boot-delete-uefi",
+    "org.kriscc.controlcenter.boot.order-uefi": "boot-order-uefi",
 }
 for action_id, operation in uefi_actions.items():
     require(action_id in actions, f"missing UEFI Polkit action: {action_id}")
@@ -266,6 +266,14 @@ require("startCreatedArchiveValidation" in runtime_cpp
         "created snapshots are published without restore-policy validation")
 require("kriscc-test-backup-safety" in cmake and "kriscc-test-archive-restore" in cmake,
         "behavioral backup regressions are not wired")
+archive_restore_test = read("tests/test_archive_restore.cpp")
+for case in (
+    "internalRelativeLinkIsAccepted", "relativeTargetLeavingRootIsRejected",
+    "absoluteSymlinkIsPreservedButNeverTraversed", "preexistingDestinationSymlinkCannotEscape",
+    "internalHardLinkIsAcceptedAndRestored", "duplicateMemberIsRejected",
+    "missingHardLinkTargetIsRejected", "delimiterTextInRegularNameIsAccepted",
+):
+    require(case in archive_restore_test, f"missing archive restore regression: {case}")
 
 # KR-13: close/reboot coordinate with active mutation and cancellation lifecycle.
 require("onClosing: function(close)" in main_qml
