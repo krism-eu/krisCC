@@ -31,6 +31,7 @@ private slots:
 private:
     void ensureSubscribedAndSend();
     void sendRequest();
+    void acceptJobPath(const QString &path);
     void finish(bool success, const QString &message);
     QString currentOwner() const;
 
