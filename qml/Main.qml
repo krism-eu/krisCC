@@ -413,6 +413,7 @@ Kirigami.ApplicationWindow {
         width: Math.min(Kirigami.Units.gridUnit * 32,
                         parent ? parent.width - Kirigami.Units.largeSpacing * 2
                                : Kirigami.Units.gridUnit * 32)
+        implicitHeight: Kirigami.Units.gridUnit * 12
         title: qsTr("Operazione di backup attiva")
         standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
         contentItem: Controls.Label {
@@ -437,6 +438,7 @@ Kirigami.ApplicationWindow {
         width: Math.min(Kirigami.Units.gridUnit * 32,
                         parent ? parent.width - Kirigami.Units.largeSpacing * 2
                                : Kirigami.Units.gridUnit * 32)
+        implicitHeight: Kirigami.Units.gridUnit * 12
         title: qsTr("Operazione in corso")
         standardButtons: Controls.Dialog.Close
         contentItem: Controls.Label {

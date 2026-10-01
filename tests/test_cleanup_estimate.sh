@@ -56,13 +56,15 @@ grep -Fxq 'Cestini: assente' <<<"$out"
 grep -Fxq 'Journal: circa 0B' <<<"$out"
 
 mkdir -p "$TMP/home/.local/share/Trash"
-chmod 000 "$TMP/home/.local/share/Trash"
-# Root can bypass mode bits; use a failing producer to exercise the explicit read-error path portably.
+
+# Exercise the explicit producer-error path with an accessible directory.
+# Permission checks behave differently for root (as used by container CI),
+# so do not combine this case with chmod 000.
+chmod 700 "$TMP/home/.local/share/Trash"
 out="$(KRISCC_DU_BIN="$TMP/bin/du-fail" run_helper)"
 grep -Fxq 'Cestini: non misurabile' <<<"$out"
 grep -Fxq 'Cache DNF: non misurabile' <<<"$out"
 grep -Fxq 'Journal: circa 0B' <<<"$out"
-chmod 700 "$TMP/home/.local/share/Trash"
 
 out="$(KRISCC_JOURNALCTL_BIN="$TMP/bin/journal-fail" run_helper)"
 grep -Fxq 'Journal: non misurabile' <<<"$out"

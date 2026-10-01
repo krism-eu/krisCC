@@ -130,7 +130,7 @@ public:
     Q_INVOKABLE virtual bool restartService(const QString &service);
     Q_INVOKABLE bool resetFailedService(const QString &service);
     Q_INVOKABLE virtual void requestReboot();
-    Q_INVOKABLE void requestFirmwareReboot();
+    Q_INVOKABLE virtual void requestFirmwareReboot();
     Q_INVOKABLE QStringList kernelArguments() const;
     Q_INVOKABLE bool vacuumJournal();
     Q_INVOKABLE bool cleanDnfCache();

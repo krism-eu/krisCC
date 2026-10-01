@@ -29,7 +29,7 @@ public:
 
     bool ready() const { return m_ready && !m_loading; }
     bool loading() const { return m_loading; }
-    QString errorString() const { return m_error; }
+    const QString &errorString() const { return m_error; }
     const QSet<QString> &installed() const { return m_installed; }
     const QSet<QString> &owned() const { return m_owned; }
     const QSet<QString> &persistent() const { return m_persistent; }

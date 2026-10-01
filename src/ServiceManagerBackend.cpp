@@ -367,8 +367,28 @@ void ServiceManagerBackend::handleFinished(Task task, int exitCode, int outcome,
 
         std::sort(m_pendingServices.begin(), m_pendingServices.end(),
                   [](const QVariant &a, const QVariant &b) {
-            return a.toMap().value(QStringLiteral("unit")).toString()
-                < b.toMap().value(QStringLiteral("unit")).toString();
+            const QVariantMap left = a.toMap();
+            const QVariantMap right = b.toMap();
+
+            const QString leftState = left.value(QStringLiteral("active")).toString();
+            const QString rightState = right.value(QStringLiteral("active")).toString();
+
+            const auto activityRank = [](const QString &state) {
+                return (state == QStringLiteral("active")
+                        || state == QStringLiteral("activating")) ? 0 : 1;
+            };
+
+            const int leftRank = activityRank(leftState);
+            const int rightRank = activityRank(rightState);
+
+            if (leftRank != rightRank)
+                return leftRank < rightRank;
+
+            const QString leftUnit = left.value(QStringLiteral("unit")).toString();
+            const QString rightUnit = right.value(QStringLiteral("unit")).toString();
+
+            const int insensitive = QString::compare(leftUnit, rightUnit, Qt::CaseInsensitive);
+            return insensitive != 0 ? insensitive < 0 : leftUnit < rightUnit;
         });
         m_services = m_pendingServices;
         m_pendingServices.clear();

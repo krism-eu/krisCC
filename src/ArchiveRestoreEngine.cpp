@@ -79,9 +79,14 @@ public:
     {
         m_library.setFileName(QStringLiteral("archive"));
         if (!m_library.load()) {
-            if (error)
-                *error = QStringLiteral("libarchive non disponibile: %1").arg(m_library.errorString());
-            return false;
+            // Fedora runtime packages provide the versioned SONAME
+            // (libarchive.so.13) without the unversioned development symlink.
+            m_library.setFileNameAndVersion(QStringLiteral("archive"), 13);
+            if (!m_library.load()) {
+                if (error)
+                    *error = QStringLiteral("libarchive non disponibile: %1").arg(m_library.errorString());
+                return false;
+            }
         }
 
         bool ok = true;
