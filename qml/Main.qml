@@ -37,7 +37,8 @@ Kirigami.ApplicationWindow {
         return BootcBackend.operationRunning
             || RkBackend.operationRunning
             || MaintenanceBackend.running
-            || SystemBackend.bootSelectionRunning
+            || ServiceManagerBackend.busy
+            || SystemBackend.mutationRunning
     }
 
     onVisibleChanged: syncResourceMonitoring()

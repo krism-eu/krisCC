@@ -11,11 +11,14 @@ class SystemdJobCoordinator;
 
 class SystemBackendRuntime final : public SystemBackend
 {
+    Q_OBJECT
+    Q_PROPERTY(bool mutationRunning READ mutationRunning NOTIFY mutationRunningChanged)
+
 public:
-    explicit SystemBackendRuntime(PolkitHelper *polkit, QObject *parent = nullptr)
-        : SystemBackend(polkit, parent) {}
+    explicit SystemBackendRuntime(PolkitHelper *polkit, QObject *parent = nullptr);
     ~SystemBackendRuntime() override;
 
+    bool mutationRunning() const;
     bool createSnapshot(const QString &kind) override;
     bool cancelSnapshot() override;
     QVariantList backups() const override;
@@ -32,6 +35,9 @@ public:
     void refreshUefiEntries() override;
     void refreshUefiEntriesPrivileged() override;
     void refreshGrubEntries() override;
+
+signals:
+    void mutationRunningChanged();
 
 private:
     bool appendBackupDestinationExclusions(const QString &kind, const QString &home,

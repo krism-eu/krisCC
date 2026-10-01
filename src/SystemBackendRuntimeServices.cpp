@@ -48,6 +48,7 @@ SystemdJobCoordinator *SystemBackendRuntime::systemdJobs()
     });
     connect(m_systemdJobCoordinator, &SystemdJobCoordinator::stateMayHaveChanged, this,
             [this] {
+        emit mutationRunningChanged();
         QTimer::singleShot(150, this, &SystemBackendRuntime::refreshServiceStates);
     });
     return m_systemdJobCoordinator;
@@ -187,6 +188,7 @@ bool SystemBackendRuntime::startSystemdJob(const QString &service, const QString
         notify(tr("Operazione servizio non riuscita"), tr("Impossibile avviare o sottoscrivere il job systemd."));
         return false;
     }
+    emit mutationRunningChanged();
     return true;
 }
 

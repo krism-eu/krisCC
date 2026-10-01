@@ -22,8 +22,7 @@ qt_add_executable(krisCC
     src/SystemBackendRuntimeArchive.cpp src/SystemBackendRuntimeLifecycle.cpp
     src/SystemBackendRuntimeServices.cpp src/SystemBackendRuntimeBoot.cpp
     src/BackupSafety.cpp src/BackupSafety.h
-    src/SoftwareBackend.cpp src/SoftwareBackend.h
-    src/PackageSearch.cpp src/PackageSearch.h
+    src/SoftwareBackend.cpp src/SoftwareBackend.h src/PackageSearch.cpp src/PackageSearch.h
     src/PackageInventoryCache.cpp src/PackageInventoryCache.h
     src/PolkitHelper.cpp src/PolkitHelper.h src/RkBackend.cpp src/RkBackend.h
     src/MaintenanceBackend.cpp src/MaintenanceBackend.h src/UtilityBackend.cpp src/UtilityBackend.h
@@ -112,6 +111,7 @@ if(BUILD_TESTING)
     add_test(NAME maintenance-trash COMMAND kriscc-test-maintenance-trash)
 
     add_test(NAME cleanup-estimate COMMAND /usr/bin/bash ${CMAKE_SOURCE_DIR}/tests/test_cleanup_estimate.sh)
+    add_test(NAME lifecycle-contract COMMAND /usr/bin/bash ${CMAKE_SOURCE_DIR}/tests/test_lifecycle_contract.sh)
 
     add_executable(kriscc-test-package-inventory tests/test_package_inventory.cpp src/PackageInventoryCache.cpp src/PackageInventoryCache.h)
     target_include_directories(kriscc-test-package-inventory PRIVATE src)

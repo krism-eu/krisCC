@@ -2,6 +2,7 @@
 
 #include "PolkitHelper.h"
 #include "ProcessRunner.h"
+#include "SystemdJobCoordinator.h"
 
 #include <QProcess>
 
@@ -16,6 +17,22 @@ void stopBootReader(const QPointer<QProcess> &process)
         process->waitForFinished(1000);
     }
 }
+}
+
+SystemBackendRuntime::SystemBackendRuntime(PolkitHelper *polkit, QObject *parent)
+    : SystemBackend(polkit, parent)
+{
+    if (m_polkit) {
+        connect(m_polkit, &PolkitHelper::runningChanged,
+                this, &SystemBackendRuntime::mutationRunningChanged);
+    }
+}
+
+bool SystemBackendRuntime::mutationRunning() const
+{
+    return (m_polkit && m_polkit->running())
+        || m_bootSelectionRunning
+        || (m_systemdJobCoordinator && m_systemdJobCoordinator->busy());
 }
 
 SystemBackendRuntime::~SystemBackendRuntime()
@@ -37,9 +54,9 @@ void SystemBackendRuntime::requestReboot()
                             tr("Riavvio rimandato: attendere il completamento o annullare backup/verifica/ripristino."));
         return;
     }
-    if ((m_polkit && m_polkit->running()) || m_bootSelectionRunning) {
+    if (mutationRunning()) {
         emit rebootFinished(false,
-                            tr("Riavvio rimandato: è ancora in corso un'operazione amministrativa."));
+                            tr("Riavvio rimandato: è ancora in corso una modifica di sistema o un'operazione amministrativa."));
         return;
     }
     SystemBackend::requestReboot();
