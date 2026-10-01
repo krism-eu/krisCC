@@ -1,11 +1,12 @@
 #pragma once
 
 #include <QAbstractListModel>
-#include <QDateTime>
 #include <QPointer>
 #include <QProcess>
 #include <QSet>
 #include <QString>
+
+class PackageInventoryCache;
 
 class PackageSearch : public QAbstractListModel
 {
@@ -38,6 +39,9 @@ public:
     Q_INVOKABLE void loadInstalled(const QString &filter = QString());
     Q_INVOKABLE void loadUpgrades();
     Q_INVOKABLE void setLocalFilter(const QString &text);
+    Q_INVOKABLE void refreshInventory();
+    static void invalidateSharedInventory();
+
     bool searching() const { return m_searching; }
     int count() const { return m_results.size(); }
     bool truncated() const { return m_truncated; }
@@ -50,6 +54,13 @@ signals:
     void searchError(const QString &message);
 
 private:
+    enum class PendingQuery {
+        None,
+        Search,
+        Installed,
+        Upgrades
+    };
+
     struct Entry {
         QString name;
         QString summary;
@@ -65,23 +76,26 @@ private:
 
     void clearResults();
     void setSearching(bool searching);
-    void startInstalledQuery(const QString &term);
+    void requestInventory(PendingQuery query, const QString &value, bool force);
+    void onInventoryReady(bool success, const QString &error);
     void startRepoQuery(const QString &term);
     void startListQuery(const QString &filter, bool installedEntries);
     void stopActiveProcess();
-    void refreshPersistentSet();
     void applyLocalFilter();
     static QString sanitizeTerm(const QString &term);
 
     QList<Entry> m_results;
     QList<Entry> m_sourceResults;
-    QSet<QString> m_owned;
-    QSet<QString> m_installed;
-    QSet<QString> m_persistent;
     QPointer<QProcess> m_process;
+    PackageInventoryCache *m_inventory = nullptr;
+    PendingQuery m_pendingQuery = PendingQuery::None;
+    QString m_pendingValue;
     QString m_installedFilter = QStringLiteral("all");
     QString m_localFilter;
     bool m_searching = false;
     bool m_truncated = false;
+    bool m_loadedInstalledOnce = false;
+    bool m_loadedUpgradesOnce = false;
     quint64 m_generation = 0;
+    quint64 m_pendingGeneration = 0;
 };
