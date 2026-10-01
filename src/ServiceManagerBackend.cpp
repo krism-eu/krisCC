@@ -19,12 +19,6 @@ QString scopeName(bool userScope)
     return userScope ? QStringLiteral("user") : QStringLiteral("system");
 }
 
-bool structuredTask(ServiceManagerBackend::Task task)
-{
-    return task == ServiceManagerBackend::Task::ServicesUnits
-        || task == ServiceManagerBackend::Task::ServicesFiles
-        || task == ServiceManagerBackend::Task::FailedUnits;
-}
 }
 
 ServiceManagerBackend::ServiceManagerBackend(QObject *parent)
