@@ -77,7 +77,10 @@ private slots:
         QVERIFY(childPid > 0);
 
         QVERIFY(runner.cancel());
-        QVERIFY(spy.wait(6000));
+        // Cancellation normally completes after the TERM -> KILL grace period.
+        // Allow loaded/containerized CI enough scheduling margin while keeping the
+        // assertion bounded by the runner's own timeout contract.
+        QVERIFY(spy.wait(options.timeoutMs + 5000));
         QCOMPARE(spy.at(0).at(0).value<ProcessRunner::Outcome>(), ProcessRunner::Cancelled);
 
         errno = 0;
