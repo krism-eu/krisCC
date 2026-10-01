@@ -22,7 +22,9 @@ qt_add_executable(krisCC
     src/SystemBackendRuntimeArchive.cpp src/SystemBackendRuntimeLifecycle.cpp
     src/SystemBackendRuntimeServices.cpp src/SystemBackendRuntimeBoot.cpp
     src/BackupSafety.cpp src/BackupSafety.h
-    src/SoftwareBackend.cpp src/SoftwareBackend.h src/PackageSearch.cpp src/PackageSearch.h
+    src/SoftwareBackend.cpp src/SoftwareBackend.h
+    src/PackageSearch.cpp src/PackageSearch.h
+    src/PackageInventoryCache.cpp src/PackageInventoryCache.h
     src/PolkitHelper.cpp src/PolkitHelper.h src/RkBackend.cpp src/RkBackend.h
     src/MaintenanceBackend.cpp src/MaintenanceBackend.h src/UtilityBackend.cpp src/UtilityBackend.h
     src/RepairBackend.cpp src/RepairBackend.h src/InstanceController.cpp src/InstanceController.h
@@ -85,6 +87,11 @@ if(BUILD_TESTING)
     target_link_libraries(kriscc-test-maintenance-trash PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME maintenance-trash COMMAND kriscc-test-maintenance-trash)
     add_test(NAME cleanup-estimate COMMAND /usr/bin/bash ${CMAKE_SOURCE_DIR}/tests/test_cleanup_estimate.sh)
+    add_executable(kriscc-test-package-inventory tests/test_package_inventory.cpp src/PackageInventoryCache.cpp src/PackageInventoryCache.h)
+    target_include_directories(kriscc-test-package-inventory PRIVATE src)
+    target_link_libraries(kriscc-test-package-inventory PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME package-inventory COMMAND kriscc-test-package-inventory)
+    set_tests_properties(package-inventory PROPERTIES TIMEOUT 15)
     add_executable(kriscc-test-parsers tests/test_contract_parsers.cpp src/ContractParsers.cpp src/ContractParsers.h src/Validators.cpp src/Validators.h)
     target_include_directories(kriscc-test-parsers PRIVATE src)
     target_link_libraries(kriscc-test-parsers PRIVATE Qt6::Core Qt6::Test)
