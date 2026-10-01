@@ -37,6 +37,15 @@ ProcessMap processesInGroup(qint64 pgid)
         if (fields.size() <= 19)
             continue;
 
+        const QByteArray &stateField = fields.at(0);
+        const char state = stateField.isEmpty() ? '\0' : stateField.at(0);
+
+        // A zombie/dead task cannot execute anymore. In containers it may remain
+        // visible in /proc until PID 1 reaps it, so it must not keep the process
+        // group logically alive.
+        if (state == 'Z' || state == 'X' || state == 'x')
+            continue;
+
         bool groupOk = false;
         bool startOk = false;
         const qint64 processGroup = fields.at(2).toLongLong(&groupOk);

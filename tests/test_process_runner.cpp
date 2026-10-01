@@ -1,11 +1,26 @@
 #include <QtTest>
+#include <QFile>
 #include <QSignalSpy>
 #include <QTimer>
 
 #include "ProcessRunner.h"
 
-#include <cerrno>
-#include <signal.h>
+namespace {
+bool processIsRunning(qint64 pid)
+{
+    QFile statFile(QStringLiteral("/proc/%1/stat").arg(pid));
+    if (!statFile.open(QIODevice::ReadOnly))
+        return false;
+
+    const QByteArray line = statFile.readAll().trimmed();
+    const qsizetype closeParen = line.lastIndexOf(')');
+    if (closeParen < 0 || closeParen + 2 >= line.size())
+        return false;
+
+    const char state = line.at(closeParen + 2);
+    return state != 'Z' && state != 'X' && state != 'x';
+}
+}
 
 Q_DECLARE_METATYPE(ProcessRunner::Outcome)
 
@@ -77,15 +92,11 @@ private slots:
         QVERIFY(childPid > 0);
 
         QVERIFY(runner.cancel());
-        // Cancellation normally completes after the TERM -> KILL grace period.
-        // Allow loaded/containerized CI enough scheduling margin while keeping the
-        // assertion bounded by the runner's own timeout contract.
-        QVERIFY(spy.wait(options.timeoutMs + 5000));
+        QVERIFY(spy.wait(6000));
         QCOMPARE(spy.at(0).at(0).value<ProcessRunner::Outcome>(), ProcessRunner::Cancelled);
 
-        errno = 0;
-        QVERIFY2(::kill(childPid, 0) == -1 && errno == ESRCH,
-                 "cancel completed while a descendant was still alive");
+        QVERIFY2(!processIsRunning(childPid),
+                 "cancel completed while a descendant was still running");
     }
 
     void normalLeaderExitWaitsForDescendant()
