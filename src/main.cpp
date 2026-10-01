@@ -22,7 +22,7 @@
 #include "ServiceManagerBackend.h"
 #include "MaintenanceBackend.h"
 #include "SoftwareBackend.h"
-#include "SystemBackend.h"
+#include "SystemBackendRuntime.h"
 #include "UtilityBackend.h"
 
 int main(int argc, char *argv[])
@@ -82,7 +82,7 @@ int main(int argc, char *argv[])
     RkBackend rkBackend(&polkitHelper);
     MaintenanceBackend maintenanceBackend;
     SoftwareBackend softwareBackend(&polkitHelper);
-    SystemBackend systemBackend(&polkitHelper);
+    SystemBackendRuntime systemBackend(&polkitHelper);
     CustomActionsBackend customActionsBackend;
     CronBackend cronBackend;
     ServiceManagerBackend serviceManagerBackend;

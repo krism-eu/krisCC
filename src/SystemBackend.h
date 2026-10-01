@@ -124,12 +124,12 @@ public:
     Q_INVOKABLE bool openRootFolder() const;
     Q_INVOKABLE bool programAvailable(const QString &program) const;
     Q_INVOKABLE void checkControlCenterUpdate();
-    Q_INVOKABLE void refreshServiceStates();
-    Q_INVOKABLE bool startService(const QString &service);
-    Q_INVOKABLE bool stopService(const QString &service);
-    Q_INVOKABLE bool restartService(const QString &service);
+    Q_INVOKABLE virtual void refreshServiceStates();
+    Q_INVOKABLE virtual bool startService(const QString &service);
+    Q_INVOKABLE virtual bool stopService(const QString &service);
+    Q_INVOKABLE virtual bool restartService(const QString &service);
     Q_INVOKABLE bool resetFailedService(const QString &service);
-    Q_INVOKABLE void requestReboot();
+    Q_INVOKABLE virtual void requestReboot();
     Q_INVOKABLE void requestFirmwareReboot();
     Q_INVOKABLE QStringList kernelArguments() const;
     Q_INVOKABLE bool vacuumJournal();
@@ -137,9 +137,9 @@ public:
     Q_INVOKABLE bool openNetworkSettings() const;
     Q_INVOKABLE void checkInternetIdentity();
     Q_INVOKABLE void setResourceMonitoringEnabled(bool enabled);
-    Q_INVOKABLE void refreshUefiEntries();
-    Q_INVOKABLE void refreshUefiEntriesPrivileged();
-    Q_INVOKABLE void refreshGrubEntries();
+    Q_INVOKABLE virtual void refreshUefiEntries();
+    Q_INVOKABLE virtual void refreshUefiEntriesPrivileged();
+    Q_INVOKABLE virtual void refreshGrubEntries();
     Q_INVOKABLE bool selectNextUefi(const QString &token);
     Q_INVOKABLE bool clearNextUefi();
     Q_INVOKABLE bool deleteUefiEntry(const QString &token);
@@ -147,13 +147,13 @@ public:
     Q_INVOKABLE bool selectNextGrub(const QString &entry);
     Q_INVOKABLE void notify(const QString &summary, const QString &body = QString()) const;
 
-    Q_INVOKABLE bool createSnapshot(const QString &kind);
+    Q_INVOKABLE virtual bool createSnapshot(const QString &kind);
     Q_INVOKABLE bool setBackupDirectory(const QString &pathOrUrl);
-    Q_INVOKABLE bool cancelSnapshot();
-    Q_INVOKABLE QVariantList backups() const;
-    Q_INVOKABLE bool verifySnapshot(const QString &path);
-    Q_INVOKABLE bool restoreSnapshot(const QString &path);
-    Q_INVOKABLE bool deleteSnapshot(const QString &path);
+    Q_INVOKABLE virtual bool cancelSnapshot();
+    Q_INVOKABLE virtual QVariantList backups() const;
+    Q_INVOKABLE virtual bool verifySnapshot(const QString &path);
+    Q_INVOKABLE virtual bool restoreSnapshot(const QString &path);
+    Q_INVOKABLE virtual bool deleteSnapshot(const QString &path);
     Q_INVOKABLE bool openBackupFolder() const;
     Q_INVOKABLE QVariantList backupPreview(const QString &kind) const;
 
@@ -177,7 +177,7 @@ signals:
     void controlCenterUpdateChanged();
     void adminMaintenanceFinished(const QString &operation, bool success, const QString &output);
 
-private:
+protected:
     bool setWifiRadio(bool enabled, bool restartAfter);
     QString readOsName() const;
     QString toolProgram(const QString &toolId) const;

@@ -25,6 +25,8 @@ qt_add_executable(krisCC
     src/CronParser.cpp src/CronParser.h
     src/ServiceManagerBackend.cpp src/ServiceManagerBackend.h
     src/SystemBackend.cpp src/SystemBackend.h
+    src/SystemBackendRuntime.cpp src/SystemBackendRuntime.h
+    src/BackupSafety.cpp src/BackupSafety.h
     src/SoftwareBackend.cpp src/SoftwareBackend.h
     src/PackageSearch.cpp src/PackageSearch.h
     src/PolkitHelper.cpp src/PolkitHelper.h
@@ -59,7 +61,6 @@ foreach(qml_file IN LISTS KRISCC_QML_FILES)
     get_filename_component(qml_name "${qml_file}" NAME)
     set_source_files_properties("${qml_file}" PROPERTIES QT_RESOURCE_ALIAS "${qml_name}")
 endforeach()
-
 
 qt_add_qml_module(krisCC
     URI org.kriscc
@@ -109,6 +110,14 @@ if(BUILD_TESTING)
     target_link_libraries(kriscc-test-process-runner PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME process-runner COMMAND kriscc-test-process-runner)
     set_tests_properties(process-runner PROPERTIES TIMEOUT 15)
+
+    add_executable(kriscc-test-backup-safety
+        tests/test_backup_safety.cpp
+        src/BackupSafety.cpp src/BackupSafety.h
+    )
+    target_include_directories(kriscc-test-backup-safety PRIVATE src)
+    target_link_libraries(kriscc-test-backup-safety PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME backup-safety COMMAND kriscc-test-backup-safety)
 
     add_executable(kriscc-test-parsers
         tests/test_contract_parsers.cpp
