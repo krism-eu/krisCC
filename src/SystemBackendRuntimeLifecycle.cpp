@@ -61,3 +61,20 @@ void SystemBackendRuntime::requestReboot()
     }
     SystemBackend::requestReboot();
 }
+
+void SystemBackendRuntime::requestFirmwareReboot()
+{
+    // SetRebootToFirmwareSetup changes persistent reboot intent in logind. Do not
+    // set it until the same lifecycle gate used by ordinary reboot is clear.
+    if (m_backupBusy) {
+        emit rebootFinished(false,
+                            tr("Riavvio nel firmware rimandato: attendere il completamento o annullare backup/verifica/ripristino."));
+        return;
+    }
+    if (mutationRunning()) {
+        emit rebootFinished(false,
+                            tr("Riavvio nel firmware rimandato: è ancora in corso una modifica di sistema o un'operazione amministrativa."));
+        return;
+    }
+    SystemBackend::requestFirmwareReboot();
+}

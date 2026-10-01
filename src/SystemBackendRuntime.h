@@ -35,6 +35,7 @@ public:
     bool restoreSnapshot(const QString &path) override;
     bool deleteSnapshot(const QString &path) override;
     void requestReboot() override;
+    Q_INVOKABLE void requestFirmwareReboot();
 
     void refreshServiceStates() override;
     bool startService(const QString &service) override;
