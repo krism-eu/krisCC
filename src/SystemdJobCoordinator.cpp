@@ -19,7 +19,7 @@ const QString kManagerInterface = QStringLiteral("org.freedesktop.systemd1.Manag
 SystemdJobCoordinator::SystemdJobCoordinator(QObject *parent)
     : QObject(parent)
 {
-    const QDBusConnection bus = QDBusConnection::systemBus();
+    QDBusConnection bus = QDBusConnection::systemBus();
     m_owner = currentOwner();
     m_serviceWatcher = new QDBusServiceWatcher(
         kService, bus, QDBusServiceWatcher::WatchForOwnerChange, this);
