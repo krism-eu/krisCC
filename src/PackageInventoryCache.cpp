@@ -5,6 +5,8 @@
 #include <QFileInfo>
 #include <QTimer>
 
+#include <utility>
+
 namespace {
 constexpr qsizetype kManifestLineLimit = 4096;
 }
