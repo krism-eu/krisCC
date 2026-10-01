@@ -1,9 +1,7 @@
 #include <QtTest>
 #include <QSignalSpy>
 
-#define private public
 #include "ServiceManagerBackend.h"
-#undef private
 #include "ProcessRunner.h"
 
 class ServiceManagerReentrancyTest final : public QObject
