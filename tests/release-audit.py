@@ -123,7 +123,7 @@ require('run_git(root, "ls-tree", "-r", "-z", "--full-tree", commit)' in source_
         and 'hashlib.sha256' in source_snapshot,
         "source TXT generator does not snapshot and fingerprint the exact tracked Git tree")
 
-# Active runtime must be the hardened subclass, not the legacy base implementation.
+# Active runtime supplies the abstract base operations.
 require('SystemBackendRuntime systemBackend(&polkitHelper);' in main_cpp,
         "main does not instantiate the hardened SystemBackend runtime")
 for source in (
@@ -137,7 +137,7 @@ for source in (
 # Unit/regression coverage is part of the release contract.
 for target in (
     "kriscc-test-validators", "kriscc-test-admin-policy", "kriscc-test-process-runner",
-    "kriscc-test-service-json",
+    "kriscc-test-service-json", "kriscc-test-system-backend-contract",
     "kriscc-test-service-manager-reentrancy", "kriscc-test-systemd-job-coordinator",
     "kriscc-test-maintenance-trash", "cleanup-estimate", "kriscc-test-package-inventory",
     "kriscc-test-parsers", "kriscc-test-cron-parser",
@@ -285,14 +285,14 @@ require("kriscc-test-service-manager-reentrancy" in cmake
         and "kriscc-test-systemd-job-coordinator" in cmake,
         "service/systemd behavioral race regressions are missing")
 
-# KR-11: UEFI and GRUB readers are independent; aggregate busy/error is presentation only.
+# KR-11: UEFI and GRUB readers retain independent lifecycles and notifications.
 require("m_uefiProcess" in runtime_h and "m_grubProcess" in runtime_h
         and "m_uefiBusy" in runtime_h and "m_grubBusy" in runtime_h
         and "m_uefiRequestGeneration" in runtime_h and "m_grubRequestGeneration" in runtime_h,
         "UEFI and GRUB read lifecycles are still shared")
 require("SystemBackendRuntime::refreshUefiEntries" in runtime_boot
         and "SystemBackendRuntime::refreshGrubEntries" in runtime_boot
-        and "syncBootAggregate" in runtime_boot,
+        and "emit bootEntriesChanged();" in runtime_boot,
         "runtime boot readers are not independently implemented")
 
 # KR-17/KR-19: shared invalidatable RPM/base/persistent snapshot; no false local classification on errors.

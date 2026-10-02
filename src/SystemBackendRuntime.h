@@ -45,7 +45,6 @@ private:
     SystemdJobCoordinator *systemdJobs();
     bool startSystemdJob(const QString &service, const QString &action);
     void ensureBootRuntimeConnections();
-    void syncBootAggregate();
 
     SystemdJobCoordinator *m_systemdJobCoordinator = nullptr;
 

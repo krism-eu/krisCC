@@ -55,6 +55,21 @@ set_target_properties(kriscc-admin PROPERTIES OUTPUT_NAME admin)
 target_link_libraries(kriscc-admin PRIVATE Qt6::Core)
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(kriscc-test-system-backend-contract
+        tests/test_system_backend_contract.cpp
+        src/SystemBackend.cpp src/SystemBackend.h
+        src/SystemBackendRuntime.h src/SystemBackendRuntimeLifecycle.cpp
+        src/SystemBackendRuntimeBoot.cpp src/SystemBackendRuntimeServices.cpp
+        src/SystemdJobCoordinator.cpp src/SystemdJobCoordinator.h
+        src/PolkitHelper.cpp src/PolkitHelper.h src/OperationLog.cpp src/OperationLog.h
+        src/AdminPolicy.cpp src/AdminPolicy.h src/Validators.cpp src/Validators.h
+        src/ContractParsers.cpp src/ContractParsers.h)
+    target_include_directories(kriscc-test-system-backend-contract PRIVATE src)
+    target_link_libraries(kriscc-test-system-backend-contract PRIVATE
+        Qt6::Core Qt6::Gui Qt6::DBus Qt6::Network Qt6::Test)
+    add_test(NAME system-backend-contract COMMAND kriscc-test-system-backend-contract)
+    set_tests_properties(system-backend-contract PROPERTIES TIMEOUT 15)
+
     add_executable(kriscc-test-validators tests/test_validators.cpp src/Validators.cpp src/Validators.h)
     target_include_directories(kriscc-test-validators PRIVATE src)
     target_link_libraries(kriscc-test-validators PRIVATE Qt6::Core Qt6::Test)

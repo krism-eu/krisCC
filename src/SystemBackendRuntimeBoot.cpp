@@ -7,18 +7,6 @@
 #include <QProcess>
 #include <QTimer>
 
-void SystemBackendRuntime::syncBootAggregate()
-{
-    m_bootEntriesBusy = m_uefiBusy || m_grubBusy || m_runtimeBootReadOwned;
-    QStringList errors;
-    if (!m_uefiError.isEmpty())
-        errors.append(tr("UEFI: %1").arg(m_uefiError));
-    if (!m_grubError.isEmpty())
-        errors.append(tr("GRUB: %1").arg(m_grubError));
-    m_bootEntriesError = errors.join(QLatin1Char('\n'));
-    emit bootEntriesChanged();
-}
-
 void SystemBackendRuntime::ensureBootRuntimeConnections()
 {
     if (m_bootRuntimeConnectionsInitialized)
@@ -45,7 +33,7 @@ void SystemBackendRuntime::ensureBootRuntimeConnections()
                 ? tr("Impossibile leggere le voci con autorizzazione amministrativa.")
                 : output;
         }
-        syncBootAggregate();
+        emit bootEntriesChanged();
     });
 }
 
@@ -62,14 +50,14 @@ void SystemBackendRuntime::refreshUefiEntries()
         m_currentUefiBootCode.clear();
         m_uefiBootOrder.clear();
         m_uefiError = tr("efibootmgr non disponibile.");
-        syncBootAggregate();
+        emit bootEntriesChanged();
         return;
     }
 
     const quint64 generation = ++m_uefiRequestGeneration;
     m_uefiBusy = true;
     m_uefiError.clear();
-    syncBootAggregate();
+    emit bootEntriesChanged();
 
     auto *process = new QProcess(this);
     const QPointer<QProcess> guard(process);
@@ -98,7 +86,7 @@ void SystemBackendRuntime::refreshUefiEntries()
             applyUefiEntriesOutput(output);
             m_uefiError.clear();
         }
-        syncBootAggregate();
+        emit bootEntriesChanged();
     });
 
     connect(process, &QProcess::errorOccurred, this,
@@ -114,7 +102,7 @@ void SystemBackendRuntime::refreshUefiEntries()
         m_currentUefiBootCode.clear();
         m_uefiBootOrder.clear();
         m_uefiError = tr("Impossibile avviare efibootmgr.");
-        syncBootAggregate();
+        emit bootEntriesChanged();
     });
 
     process->start(program, {});
@@ -141,7 +129,7 @@ void SystemBackendRuntime::refreshUefiEntriesPrivileged()
     m_runtimeBootReadOwned = true;
     m_uefiBusy = true;
     m_uefiError.clear();
-    syncBootAggregate();
+    emit bootEntriesChanged();
     m_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin"),
                       {QStringLiteral("boot-read-uefi")});
 }
@@ -156,14 +144,14 @@ void SystemBackendRuntime::refreshGrubEntries()
     if (program.isEmpty()) {
         m_grubEntries.clear();
         m_grubError = tr("grubby non disponibile.");
-        syncBootAggregate();
+        emit bootEntriesChanged();
         return;
     }
 
     const quint64 generation = ++m_grubRequestGeneration;
     m_grubBusy = true;
     m_grubError.clear();
-    syncBootAggregate();
+    emit bootEntriesChanged();
 
     auto *process = new QProcess(this);
     const QPointer<QProcess> guard(process);
@@ -194,7 +182,7 @@ void SystemBackendRuntime::refreshGrubEntries()
                 m_grubError.clear();
             }
         }
-        syncBootAggregate();
+        emit bootEntriesChanged();
     });
 
     connect(process, &QProcess::errorOccurred, this,
@@ -207,7 +195,7 @@ void SystemBackendRuntime::refreshGrubEntries()
         m_grubBusy = false;
         m_grubEntries.clear();
         m_grubError = tr("Impossibile avviare grubby.");
-        syncBootAggregate();
+        emit bootEntriesChanged();
     });
 
     process->start(program, {QStringLiteral("--info=ALL")});

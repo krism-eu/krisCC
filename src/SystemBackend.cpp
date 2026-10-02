@@ -1,9 +1,7 @@
 #include "SystemBackend.h"
-#include "Validators.h"
 
 #include "OperationLog.h"
 #include "PolkitHelper.h"
-#include "ProcessRunner.h"
 #include "Validators.h"
 #include "ContractParsers.h"
 
@@ -11,7 +9,6 @@
 #include <QCoreApplication>
 #include <QDateTime>
 #include <QDBusInterface>
-#include <QDBusObjectPath>
 #include <QDBusPendingCallWatcher>
 #include <QDBusPendingReply>
 #include <QDBusReply>
@@ -86,23 +83,6 @@ SystemBackend::SystemBackend(PolkitHelper *polkit, QObject *parent)
         connect(m_polkit, &PolkitHelper::runningChanged, this, &SystemBackend::bootSelectionStateChanged);
         connect(m_polkit, &PolkitHelper::finished, this,
                 [this](bool success, const QString &output) {
-            if (m_bootReadOwned) {
-                m_bootReadOwned = false;
-                m_bootEntriesBusy = false;
-                if (success) {
-                    applyUefiEntriesOutput(output);
-                } else {
-                    m_uefiEntries.clear();
-                    m_nextUefiBootLabel.clear();
-                    m_currentUefiBootCode.clear();
-                    m_uefiBootOrder.clear();
-                    m_bootEntriesError = output.isEmpty()
-                        ? tr("Impossibile leggere le voci UEFI con autorizzazione amministrativa.")
-                        : output;
-                }
-                emit bootEntriesChanged();
-                return;
-            }
             if (m_adminMaintenanceOwned) {
                 const QString operation = m_adminMaintenanceOperation;
                 m_adminMaintenanceOwned = false;
@@ -153,82 +133,6 @@ bool SystemBackend::grubEntriesAvailable() const
 bool SystemBackend::grubNextBootAvailable() const
 {
     return !resolveExecutable(QStringLiteral("grub2-reboot")).isEmpty();
-}
-
-void SystemBackend::refreshUefiEntries()
-{
-    if (m_bootEntriesBusy)
-        return;
-
-    const QString program = resolveExecutable(QStringLiteral("efibootmgr"));
-    if (program.isEmpty()) {
-        m_uefiEntries.clear();
-        m_nextUefiBootLabel.clear();
-        m_bootEntriesError = tr("efibootmgr non disponibile.");
-        emit bootEntriesChanged();
-        return;
-    }
-
-    m_bootEntriesBusy = true;
-    m_bootEntriesError.clear();
-    emit bootEntriesChanged();
-
-    auto *process = new QProcess(this);
-    const QPointer<QProcess> guard(process);
-    m_bootEntriesProcess = process;
-    process->setProcessChannelMode(QProcess::MergedChannels);
-
-    connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-            [this, guard](int exitCode, QProcess::ExitStatus status) {
-        if (!guard || guard != m_bootEntriesProcess)
-            return;
-        const bool timedOut = guard->property("krisccTimedOut").toBool();
-        const QString output = QString::fromUtf8(guard->readAllStandardOutput());
-        m_bootEntriesProcess = nullptr;
-        guard->deleteLater();
-        m_bootEntriesBusy = false;
-
-        if (timedOut || status != QProcess::NormalExit || exitCode != 0) {
-            m_uefiEntries.clear();
-            m_nextUefiBootLabel.clear();
-            m_currentUefiBootCode.clear();
-            m_uefiBootOrder.clear();
-            m_bootEntriesError = timedOut ? tr("Tempo massimo superato leggendo le voci UEFI.")
-                                          : tr("Impossibile leggere le voci UEFI senza privilegi. Usa “Leggi con autorizzazione” per riprovare.");
-            emit bootEntriesChanged();
-            return;
-        }
-
-        applyUefiEntriesOutput(output);
-        emit bootEntriesChanged();
-    });
-
-    connect(process, &QProcess::errorOccurred, this,
-            [this, guard](QProcess::ProcessError error) {
-        if (!guard || guard != m_bootEntriesProcess || error != QProcess::FailedToStart)
-            return;
-        m_bootEntriesProcess = nullptr;
-        guard->deleteLater();
-        m_bootEntriesBusy = false;
-        m_uefiEntries.clear();
-        m_nextUefiBootLabel.clear();
-        m_currentUefiBootCode.clear();
-        m_uefiBootOrder.clear();
-        m_bootEntriesError = tr("Impossibile avviare efibootmgr.");
-        emit bootEntriesChanged();
-    });
-
-    process->start(program, {});
-    QTimer::singleShot(15000, process, [this, guard] {
-        if (!guard || guard != m_bootEntriesProcess || guard->state() == QProcess::NotRunning)
-            return;
-        guard->setProperty("krisccTimedOut", true);
-        guard->terminate();
-        QTimer::singleShot(2000, guard, [guard] {
-            if (guard && guard->state() != QProcess::NotRunning)
-                guard->kill();
-        });
-    });
 }
 
 void SystemBackend::applyUefiEntriesOutput(const QString &output)
@@ -285,91 +189,6 @@ void SystemBackend::applyUefiEntriesOutput(const QString &output)
 
     if (m_nextUefiBootLabel.isEmpty() && !nextCode.isEmpty())
         m_nextUefiBootLabel = nextCode;
-    m_bootEntriesError.clear();
-}
-
-void SystemBackend::refreshUefiEntriesPrivileged()
-{
-    if (m_bootEntriesBusy || !m_polkit || m_polkit->running() || !uefiBootAvailable())
-        return;
-
-    m_bootReadOwned = true;
-    m_bootEntriesBusy = true;
-    m_bootEntriesError.clear();
-    emit bootEntriesChanged();
-    m_polkit->execute(QStringLiteral("/usr/libexec/kriscc/admin"),
-                      {QStringLiteral("boot-read-uefi")});
-}
-
-void SystemBackend::refreshGrubEntries()
-{
-    if (m_bootEntriesBusy)
-        return;
-
-    const QString program = resolveExecutable(QStringLiteral("grubby"));
-    if (program.isEmpty()) {
-        m_grubEntries.clear();
-        m_bootEntriesError = tr("grubby non disponibile.");
-        emit bootEntriesChanged();
-        return;
-    }
-
-    m_bootEntriesBusy = true;
-    m_bootEntriesError.clear();
-    emit bootEntriesChanged();
-
-    auto *process = new QProcess(this);
-    const QPointer<QProcess> guard(process);
-    m_bootEntriesProcess = process;
-    process->setProcessChannelMode(QProcess::MergedChannels);
-
-    connect(process, qOverload<int, QProcess::ExitStatus>(&QProcess::finished), this,
-            [this, guard](int exitCode, QProcess::ExitStatus status) {
-        if (!guard || guard != m_bootEntriesProcess)
-            return;
-        const bool timedOut = guard->property("krisccTimedOut").toBool();
-        const QString output = QString::fromUtf8(guard->readAllStandardOutput());
-        m_bootEntriesProcess = nullptr;
-        guard->deleteLater();
-        m_bootEntriesBusy = false;
-
-        if (timedOut || status != QProcess::NormalExit || exitCode != 0) {
-            m_grubEntries.clear();
-            m_bootEntriesError = timedOut ? tr("Tempo massimo superato leggendo le voci GRUB/BLS.")
-                                          : tr("Impossibile leggere le voci GRUB/BLS.");
-            emit bootEntriesChanged();
-            return;
-        }
-
-        const auto parsed = ContractParsers::parseGrubbyEntries(output.toUtf8());
-        m_grubEntries = parsed.values;
-        m_bootEntriesError.clear();
-        emit bootEntriesChanged();
-    });
-
-    connect(process, &QProcess::errorOccurred, this,
-            [this, guard](QProcess::ProcessError error) {
-        if (!guard || guard != m_bootEntriesProcess || error != QProcess::FailedToStart)
-            return;
-        m_bootEntriesProcess = nullptr;
-        guard->deleteLater();
-        m_bootEntriesBusy = false;
-        m_grubEntries.clear();
-        m_bootEntriesError = tr("Impossibile avviare grubby.");
-        emit bootEntriesChanged();
-    });
-
-    process->start(program, {QStringLiteral("--info=ALL")});
-    QTimer::singleShot(15000, process, [this, guard] {
-        if (!guard || guard != m_bootEntriesProcess || guard->state() == QProcess::NotRunning)
-            return;
-        guard->setProperty("krisccTimedOut", true);
-        guard->terminate();
-        QTimer::singleShot(2000, guard, [guard] {
-            if (guard && guard->state() != QProcess::NotRunning)
-                guard->kill();
-        });
-    });
 }
 
 bool SystemBackend::selectNextUefi(const QString &value)
@@ -1088,104 +907,6 @@ void SystemBackend::checkControlCenterUpdate()
     });
 }
 
-void SystemBackend::refreshServiceStates()
-{
-    const quint64 generation = ++m_serviceRefreshGeneration;
-    for (const QString &service : allowedServices())
-        m_serviceStates.insert(service, QStringLiteral("loading"));
-    m_serviceStates.insert(QStringLiteral("wifi"), QStringLiteral("loading"));
-    emit serviceStatesChanged();
-
-    for (const QString &service : allowedServices()) {
-        QDBusInterface manager(QStringLiteral("org.freedesktop.systemd1"),
-                               QStringLiteral("/org/freedesktop/systemd1"),
-                               QStringLiteral("org.freedesktop.systemd1.Manager"),
-                               QDBusConnection::systemBus());
-        if (!manager.isValid()) {
-            if (generation == m_serviceRefreshGeneration) {
-                m_serviceStates.insert(service, QStringLiteral("missing"));
-                emit serviceStatesChanged();
-            }
-            continue;
-        }
-
-        auto *unitWatcher = new QDBusPendingCallWatcher(
-            manager.asyncCall(QStringLiteral("GetUnit"), service), this);
-        connect(unitWatcher, &QDBusPendingCallWatcher::finished, this,
-                [this, service, generation](QDBusPendingCallWatcher *call) {
-            const QDBusPendingReply<QDBusObjectPath> unitReply(*call);
-            call->deleteLater();
-            if (generation != m_serviceRefreshGeneration)
-                return;
-
-            if (unitReply.isError()) {
-                m_serviceStates.insert(service, QStringLiteral("missing"));
-                emit serviceStatesChanged();
-                return;
-            }
-
-            QDBusInterface properties(QStringLiteral("org.freedesktop.systemd1"),
-                                      unitReply.value().path(),
-                                      QStringLiteral("org.freedesktop.DBus.Properties"),
-                                      QDBusConnection::systemBus());
-            if (!properties.isValid()) {
-                m_serviceStates.insert(service, QStringLiteral("unknown"));
-                emit serviceStatesChanged();
-                return;
-            }
-
-            auto *stateWatcher = new QDBusPendingCallWatcher(
-                properties.asyncCall(QStringLiteral("Get"),
-                                     QStringLiteral("org.freedesktop.systemd1.Unit"),
-                                     QStringLiteral("ActiveState")),
-                this);
-            connect(stateWatcher, &QDBusPendingCallWatcher::finished, this,
-                    [this, service, generation](QDBusPendingCallWatcher *stateCall) {
-                const QDBusPendingReply<QDBusVariant> stateReply(*stateCall);
-                stateCall->deleteLater();
-                if (generation != m_serviceRefreshGeneration)
-                    return;
-
-                m_serviceStates.insert(
-                    service,
-                    stateReply.isError()
-                        ? QStringLiteral("unknown")
-                        : stateReply.value().variant().toString());
-                emit serviceStatesChanged();
-            });
-        });
-    }
-
-    QDBusInterface nmProperties(QStringLiteral("org.freedesktop.NetworkManager"),
-                                QStringLiteral("/org/freedesktop/NetworkManager"),
-                                QStringLiteral("org.freedesktop.DBus.Properties"),
-                                QDBusConnection::systemBus());
-    if (!nmProperties.isValid()) {
-        m_serviceStates.insert(QStringLiteral("wifi"), QStringLiteral("missing"));
-        emit serviceStatesChanged();
-    } else {
-        auto *wifiWatcher = new QDBusPendingCallWatcher(
-            nmProperties.asyncCall(QStringLiteral("Get"),
-                                   QStringLiteral("org.freedesktop.NetworkManager"),
-                                   QStringLiteral("WirelessEnabled")),
-            this);
-        connect(wifiWatcher, &QDBusPendingCallWatcher::finished, this,
-                [this, generation](QDBusPendingCallWatcher *call) {
-            const QDBusPendingReply<QDBusVariant> reply(*call);
-            call->deleteLater();
-            if (generation != m_serviceRefreshGeneration)
-                return;
-            m_serviceStates.insert(
-                QStringLiteral("wifi"),
-                reply.isError() ? QStringLiteral("missing")
-                                : (reply.value().variant().toBool()
-                                       ? QStringLiteral("active")
-                                       : QStringLiteral("inactive")));
-            emit serviceStatesChanged();
-        });
-    }
-}
-
 bool SystemBackend::setWifiRadio(bool enabled, bool restartAfter)
 {
     QDBusInterface properties(QStringLiteral("org.freedesktop.NetworkManager"),
@@ -1222,60 +943,6 @@ bool SystemBackend::setWifiRadio(bool enabled, bool restartAfter)
     return true;
 }
 
-bool SystemBackend::startService(const QString &service)
-{
-    if (service == QStringLiteral("wifi"))
-        return setWifiRadio(true, false);
-    if (!allowedServices().contains(service)) {
-        notify(tr("Avvio servizio non riuscito"), tr("Servizio non autorizzato dal Control Center: %1").arg(service));
-        return false;
-    }
-    QDBusInterface manager(QStringLiteral("org.freedesktop.systemd1"), QStringLiteral("/org/freedesktop/systemd1"),
-                           QStringLiteral("org.freedesktop.systemd1.Manager"), QDBusConnection::systemBus());
-    if (!manager.isValid()) {
-        notify(tr("Avvio servizio non riuscito"), tr("systemd non è disponibile sul bus di sistema."));
-        return false;
-    }
-    manager.setInteractiveAuthorizationAllowed(true);
-    auto *watcher = new QDBusPendingCallWatcher(
-        manager.asyncCall(QStringLiteral("StartUnit"), service, QStringLiteral("replace")), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, service](QDBusPendingCallWatcher *call) {
-        const QDBusPendingReply<QDBusObjectPath> reply(*call);
-        notify(reply.isError() ? tr("Avvio servizio non riuscito") : tr("Servizio avviato"),
-               reply.isError() ? reply.error().message() : service);
-        call->deleteLater();
-        QTimer::singleShot(400, this, &SystemBackend::refreshServiceStates);
-    });
-    return true;
-}
-
-bool SystemBackend::stopService(const QString &service)
-{
-    if (service == QStringLiteral("wifi"))
-        return setWifiRadio(false, false);
-    if (!allowedServices().contains(service)) {
-        notify(tr("Arresto servizio non riuscito"), tr("Servizio non autorizzato dal Control Center: %1").arg(service));
-        return false;
-    }
-    QDBusInterface manager(QStringLiteral("org.freedesktop.systemd1"), QStringLiteral("/org/freedesktop/systemd1"),
-                           QStringLiteral("org.freedesktop.systemd1.Manager"), QDBusConnection::systemBus());
-    if (!manager.isValid()) {
-        notify(tr("Arresto servizio non riuscito"), tr("systemd non è disponibile sul bus di sistema."));
-        return false;
-    }
-    manager.setInteractiveAuthorizationAllowed(true);
-    auto *watcher = new QDBusPendingCallWatcher(
-        manager.asyncCall(QStringLiteral("StopUnit"), service, QStringLiteral("replace")), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this, [this, service](QDBusPendingCallWatcher *call) {
-        const QDBusPendingReply<QDBusObjectPath> reply(*call);
-        notify(reply.isError() ? tr("Arresto servizio non riuscito") : tr("Servizio arrestato"),
-               reply.isError() ? reply.error().message() : service);
-        call->deleteLater();
-        QTimer::singleShot(400, this, &SystemBackend::refreshServiceStates);
-    });
-    return true;
-}
-
 bool SystemBackend::resetFailedService(const QString &service)
 {
     if (!allowedServices().contains(service)) {
@@ -1299,38 +966,6 @@ bool SystemBackend::resetFailedService(const QString &service)
         const QDBusPendingReply<> reply(*call);
         notify(reply.isError() ? tr("Reset stato fallito non riuscito")
                                : tr("Stato fallito reimpostato"),
-               reply.isError() ? reply.error().message() : service);
-        call->deleteLater();
-        QTimer::singleShot(400, this, &SystemBackend::refreshServiceStates);
-    });
-    return true;
-}
-
-bool SystemBackend::restartService(const QString &service)
-{
-    if (service == QStringLiteral("wifi"))
-        return setWifiRadio(false, true);
-    if (!allowedServices().contains(service)) {
-        notify(tr("Riavvio servizio non riuscito"), tr("Servizio non autorizzato dal Control Center: %1").arg(service));
-        return false;
-    }
-
-    QDBusInterface manager(QStringLiteral("org.freedesktop.systemd1"),
-                           QStringLiteral("/org/freedesktop/systemd1"),
-                           QStringLiteral("org.freedesktop.systemd1.Manager"),
-                           QDBusConnection::systemBus());
-    if (!manager.isValid()) {
-        notify(tr("Riavvio servizio non riuscito"), tr("systemd non è disponibile sul bus di sistema."));
-        return false;
-    }
-    manager.setInteractiveAuthorizationAllowed(true);
-
-    auto *watcher = new QDBusPendingCallWatcher(
-        manager.asyncCall(QStringLiteral("RestartUnit"), service, QStringLiteral("replace")), this);
-    connect(watcher, &QDBusPendingCallWatcher::finished, this,
-            [this, service](QDBusPendingCallWatcher *call) {
-        const QDBusPendingReply<QDBusObjectPath> reply(*call);
-        notify(reply.isError() ? tr("Riavvio servizio non riuscito") : tr("Servizio riavviato"),
                reply.isError() ? reply.error().message() : service);
         call->deleteLater();
         QTimer::singleShot(400, this, &SystemBackend::refreshServiceStates);

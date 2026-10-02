@@ -37,8 +37,6 @@ class SystemBackend : public QObject
     Q_PROPERTY(QString currentUefiBootCode READ currentUefiBootCode NOTIFY bootEntriesChanged)
     Q_PROPERTY(QStringList uefiBootOrder READ uefiBootOrder NOTIFY bootEntriesChanged)
     Q_PROPERTY(QVariantList grubEntries READ grubEntries NOTIFY bootEntriesChanged)
-    Q_PROPERTY(bool bootEntriesBusy READ bootEntriesBusy NOTIFY bootEntriesChanged)
-    Q_PROPERTY(QString bootEntriesError READ bootEntriesError NOTIFY bootEntriesChanged)
     Q_PROPERTY(int cpuUsagePercent READ cpuUsagePercent NOTIFY resourcesChanged)
     Q_PROPERTY(qint64 memoryUsedMiB READ memoryUsedMiB NOTIFY resourcesChanged)
     Q_PROPERTY(qint64 memoryTotalMiB READ memoryTotalMiB NOTIFY resourcesChanged)
@@ -80,8 +78,6 @@ public:
     const QString &currentUefiBootCode() const { return m_currentUefiBootCode; }
     const QStringList &uefiBootOrder() const { return m_uefiBootOrder; }
     const QVariantList &grubEntries() const { return m_grubEntries; }
-    bool bootEntriesBusy() const { return m_bootEntriesBusy; }
-    const QString &bootEntriesError() const { return m_bootEntriesError; }
     int cpuUsagePercent() const { return m_cpuUsagePercent; }
     qint64 memoryUsedMiB() const { return m_memoryUsedMiB; }
     qint64 memoryTotalMiB() const { return m_memoryTotalMiB; }
@@ -112,10 +108,11 @@ public:
     Q_INVOKABLE bool openRootFolder() const;
     Q_INVOKABLE bool programAvailable(const QString &program) const;
     Q_INVOKABLE void checkControlCenterUpdate();
-    Q_INVOKABLE virtual void refreshServiceStates();
-    Q_INVOKABLE virtual bool startService(const QString &service);
-    Q_INVOKABLE virtual bool stopService(const QString &service);
-    Q_INVOKABLE virtual bool restartService(const QString &service);
+    // Implemented only by the runtime; keep Qt invocations on the virtual interface.
+    Q_INVOKABLE virtual void refreshServiceStates() = 0;
+    Q_INVOKABLE virtual bool startService(const QString &service) = 0;
+    Q_INVOKABLE virtual bool stopService(const QString &service) = 0;
+    Q_INVOKABLE virtual bool restartService(const QString &service) = 0;
     Q_INVOKABLE bool resetFailedService(const QString &service);
     Q_INVOKABLE virtual void requestReboot();
     Q_INVOKABLE virtual void requestFirmwareReboot();
@@ -125,9 +122,9 @@ public:
     Q_INVOKABLE bool openNetworkSettings() const;
     Q_INVOKABLE void checkInternetIdentity();
     Q_INVOKABLE void setResourceMonitoringEnabled(bool enabled);
-    Q_INVOKABLE virtual void refreshUefiEntries();
-    Q_INVOKABLE virtual void refreshUefiEntriesPrivileged();
-    Q_INVOKABLE virtual void refreshGrubEntries();
+    Q_INVOKABLE virtual void refreshUefiEntries() = 0;
+    Q_INVOKABLE virtual void refreshUefiEntriesPrivileged() = 0;
+    Q_INVOKABLE virtual void refreshGrubEntries() = 0;
     Q_INVOKABLE bool selectNextUefi(const QString &token);
     Q_INVOKABLE bool clearNextUefi();
     Q_INVOKABLE bool deleteUefiEntry(const QString &token);
@@ -167,7 +164,6 @@ protected:
     PolkitHelper *m_polkit = nullptr;
     QNetworkAccessManager *m_networkAccess = nullptr;
     bool m_bootSelectionOwned = false;
-    bool m_bootReadOwned = false;
     bool m_adminMaintenanceOwned = false;
     QString m_adminMaintenanceOperation;
     bool m_bootSelectionRunning = false;
@@ -178,9 +174,6 @@ protected:
     QString m_currentUefiBootCode;
     QStringList m_uefiBootOrder;
     QVariantList m_grubEntries;
-    QPointer<QProcess> m_bootEntriesProcess;
-    bool m_bootEntriesBusy = false;
-    QString m_bootEntriesError;
     QTimer *m_resourceTimer = nullptr;
     bool m_resourceMonitoringEnabled = false;
     quint64 m_previousCpuTotal = 0;
