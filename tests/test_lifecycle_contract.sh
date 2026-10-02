@@ -21,3 +21,37 @@ grep -Fq 'SystemBackend.mutationRunning' "$MAIN_QML"
 grep -Fq 'ServiceManagerBackend.busy' "$MAIN_QML"
 grep -Fq 'if (SystemBackend.backupBusy)' "$MAIN_QML"
 grep -Fq 'closeAfterBackupCancel && !SystemBackend.backupBusy' "$MAIN_QML"
+
+
+# F1: recheck non-backup mutations after backup cancellation
+F1_BLOCK="$(
+    awk '
+        /function onBackupBusyChanged\(\)/ {capture=1}
+        capture {print}
+        capture && /function showIndex\(/ {exit}
+    ' "$MAIN_QML"
+)"
+
+printf '%s\n' "$F1_BLOCK" \
+    | grep -Fq 'if (root.nonBackupMutationActive())'
+
+printf '%s\n' "$F1_BLOCK" \
+    | grep -Fq 'operationInProgressDialog.open()'
+
+printf '%s\n' "$F1_BLOCK" | awk '
+    /if \(root\.nonBackupMutationActive\(\)\)/ {
+        mutation_check = NR
+    }
+    /root\.allowClose = true/ {
+        allow_close = NR
+    }
+    /Qt\.callLater\(Qt\.quit\)/ {
+        quit_call = NR
+    }
+    END {
+        if (!mutation_check || !allow_close || !quit_call)
+            exit 1
+        if (!(mutation_check < allow_close && allow_close < quit_call))
+            exit 1
+    }
+'

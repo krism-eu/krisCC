@@ -64,6 +64,12 @@ Kirigami.ApplicationWindow {
         function onBackupBusyChanged() {
             if (root.closeAfterBackupCancel && !SystemBackend.backupBusy) {
                 root.closeAfterBackupCancel = false
+
+                if (root.nonBackupMutationActive()) {
+                    operationInProgressDialog.open()
+                    return
+                }
+
                 root.allowClose = true
                 Qt.callLater(Qt.quit)
             }
