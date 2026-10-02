@@ -55,6 +55,45 @@ Kirigami.ScrollablePage {
 
         Kirigami.AbstractCard {
             Layout.fillWidth: true
+
+            contentItem: RowLayout {
+                spacing: Kirigami.Units.largeSpacing
+
+                Kirigami.Icon {
+                    Layout.preferredWidth: 42
+                    Layout.preferredHeight: 42
+                    source: "document-save-all"
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: Kirigami.Units.smallSpacing
+
+                    Kirigami.Heading {
+                        level: 2
+                        font.bold: true
+                        text: qsTr("Backup personali")
+                    }
+
+                    Controls.Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        opacity: UiMetrics.secondaryOpacity
+                        text: qsTr("Per i backup dei file personali KrisOS usa Back In Time, applicazione grafica dedicata.")
+                    }
+                }
+
+                Controls.Button {
+                    text: qsTr("Apri Back In Time")
+                    icon.name: "document-save-all"
+                    enabled: SystemBackend.toolAvailable("backintime")
+                    onClicked: SystemBackend.launchTool("backintime")
+                }
+            }
+        }
+
+        Kirigami.AbstractCard {
+            Layout.fillWidth: true
             contentItem: ColumnLayout {
                 spacing: Kirigami.Units.smallSpacing
                 Kirigami.Heading { level: 2; font.bold: true; text: qsTr("Crea backup") }

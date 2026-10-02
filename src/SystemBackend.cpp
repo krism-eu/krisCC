@@ -954,6 +954,7 @@ QString SystemBackend::toolProgram(const QString &toolId) const
         {QStringLiteral("kinfocenter"), QStringLiteral("kinfocenter")},
         {QStringLiteral("partitionmanager"), QStringLiteral("partitionmanager")},
         {QStringLiteral("discover"), QStringLiteral("plasma-discover")},
+        {QStringLiteral("backintime"), QStringLiteral("backintime-qt")},
         {QStringLiteral("ksystemlog"), QStringLiteral("ksystemlog")},
         {QStringLiteral("systemmonitor"), QStringLiteral("plasma-systemmonitor")},
         {QStringLiteral("qdirstat"), QStringLiteral("qdirstat")},
