@@ -47,6 +47,7 @@ target_link_libraries(krisCC PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6:
 target_compile_definitions(krisCC PRIVATE KRISCC_VERSION="${PROJECT_VERSION}")
 
 add_executable(kriscc-energy-profile src/EnergyProfileHelper.cpp)
+set_target_properties(kriscc-energy-profile PROPERTIES OUTPUT_NAME energy-profile)
 target_link_libraries(kriscc-energy-profile PRIVATE Qt6::Core Qt6::Gui Qt6::DBus KF6::IdleTime)
 
 add_executable(kriscc-admin src/AdminHelper.cpp src/AdminPolicy.cpp src/AdminPolicy.h src/Validators.cpp src/Validators.h)
@@ -143,7 +144,7 @@ set_target_properties(kriscc-maintenance PROPERTIES OUTPUT_NAME maintenance)
 target_link_libraries(kriscc-maintenance PRIVATE Qt6::Core)
 install(TARGETS krisCC RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(TARGETS kriscc-admin kriscc-maintenance RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/kriscc)
-install(TARGETS kriscc-energy-profile RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/kriscc RENAME energy-profile)
+install(TARGETS kriscc-energy-profile RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/kriscc)
 install(PROGRAMS src/bootc-status.sh DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/kriscc RENAME bootc-status)
 install(PROGRAMS src/cleanup-estimate.sh DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/kriscc RENAME cleanup-estimate)
 install(FILES data/krisCC.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)

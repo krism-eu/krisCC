@@ -685,7 +685,7 @@ bool CustomActionsBackend::setTemporaryEnergyProfile(const QString &profileId)
     if (helper.isEmpty()) {
         const QString sibling =
             QDir(QCoreApplication::applicationDirPath())
-                .filePath(QStringLiteral("kriscc-energy-profile"));
+                .filePath(QStringLiteral("energy-profile"));
         if (QFileInfo(sibling).isExecutable())
             helper = sibling;
         else
