@@ -351,7 +351,11 @@ Kirigami.ApplicationWindow {
                         property bool visited: false
                         active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 3)
                         onLoaded: Qt.callLater(function() { visited = true })
-                        sourceComponent: Component { SystemModule { Layout.fillWidth: true; Layout.fillHeight: true } }
+                        sourceComponent: Component { SystemModule {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            appMutationRunning: root.nonBackupMutationActive()
+                        } }
                     }
                     Loader {
                         Layout.fillWidth: true

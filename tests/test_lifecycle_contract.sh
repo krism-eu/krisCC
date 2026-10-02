@@ -6,6 +6,7 @@ RUNTIME_H="$ROOT/src/SystemBackendRuntime.h"
 LIFECYCLE_CPP="$ROOT/src/SystemBackendRuntimeLifecycle.cpp"
 SERVICES_CPP="$ROOT/src/SystemBackendRuntimeServices.cpp"
 MAIN_QML="$ROOT/qml/Main.qml"
+SYSTEM_QML="$ROOT/qml/modules/SystemModule.qml"
 
 grep -Fq 'Q_PROPERTY(bool mutationRunning READ mutationRunning NOTIFY mutationRunningChanged)' "$RUNTIME_H"
 grep -Fq 'Q_INVOKABLE void requestFirmwareReboot() override;' "$RUNTIME_H"
@@ -55,3 +56,14 @@ printf '%s\n' "$F1_BLOCK" | awk '
             exit 1
     }
 '
+
+
+# F2: reboot uses the application mutation gate
+grep -Fq 'appMutationRunning: root.nonBackupMutationActive()' "$MAIN_QML"
+grep -Fq 'property bool appMutationRunning: false' "$SYSTEM_QML"
+grep -Fq 'function requestRebootSafely(firmware)' "$SYSTEM_QML"
+grep -Fq 'root.requestRebootSafely(false)' "$SYSTEM_QML"
+grep -Fq 'root.requestRebootSafely(true)' "$SYSTEM_QML"
+
+test "$(grep -Fc 'SystemBackend.requestReboot()' "$SYSTEM_QML")" -eq 1
+test "$(grep -Fc 'SystemBackend.requestFirmwareReboot()' "$SYSTEM_QML")" -eq 1
