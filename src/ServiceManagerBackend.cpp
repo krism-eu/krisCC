@@ -30,15 +30,21 @@ ServiceManagerBackend::~ServiceManagerBackend() = default;
 
 bool ServiceManagerBackend::validUnit(const QString &unit) const
 {
+    if (unit.size() > 255)
+        return false;
+
     static const QRegularExpression pattern(
-        QStringLiteral("^[A-Za-z0-9_.@:-]{1,120}\\.service$"));
+        QStringLiteral("^(?:[A-Za-z0-9_.@:-]|\\\\x[0-9A-Fa-f]{2})+\\.service$"));
     return pattern.match(unit).hasMatch();
 }
 
 bool ServiceManagerBackend::validJournalUnit(const QString &unit) const
 {
+    if (unit.size() > 255)
+        return false;
+
     static const QRegularExpression pattern(
-        QStringLiteral("^[A-Za-z0-9_.@:-]{1,120}\\.(?:service|socket|timer)$"));
+        QStringLiteral("^(?:[A-Za-z0-9_.@:-]|\\\\x[0-9A-Fa-f]{2})+\\.(?:service|socket|timer)$"));
     return pattern.match(unit).hasMatch();
 }
 

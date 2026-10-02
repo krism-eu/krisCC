@@ -8,6 +8,30 @@ class ServiceManagerReentrancyTest final : public QObject
 {
     Q_OBJECT
 private slots:
+    void escapedSystemdUnitIsAccepted()
+    {
+        ServiceManagerBackend backend;
+
+        const QString unit =
+            QStringLiteral(R"(systemd-fsck@dev-disk-by\x2duuid-AAF2\x2d59EB.service)");
+
+        QVERIFY(backend.validUnit(unit));
+        QVERIFY(backend.validJournalUnit(unit));
+
+        const QString longUnit =
+            QStringLiteral("systemd-fsck@")
+            + QString(150, QLatin1Char('a'))
+            + QStringLiteral(R"(\x2duuid.service)");
+
+        QVERIFY(longUnit.size() > 128);
+        QVERIFY(longUnit.size() <= 255);
+        QVERIFY(backend.validUnit(longUnit));
+        QVERIFY(backend.validJournalUnit(longUnit));
+
+        QVERIFY(!backend.validUnit(QStringLiteral(R"(bad\q.service)")));
+        QVERIFY(!backend.validUnit(QStringLiteral(R"(bad\xZZ.service)")));
+    }
+
     void successStateIsFinalBeforeControlSignal()
     {
         ServiceManagerBackend backend;
