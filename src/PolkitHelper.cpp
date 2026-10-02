@@ -72,6 +72,8 @@ void PolkitHelper::onProcessFinished(int exitCode, QProcess::ExitStatus status)
             output = tr("Autorizzazione amministrativa non ottenuta oppure errore di pkexec.");
         else if (output.isEmpty())
             output = tr("Operazione terminata con codice %1.").arg(exitCode);
+
+        output = userFacingOutput(output);
     }
 
     OperationLog::append(QStringLiteral("Amministrazione"), operationLabel(),
@@ -111,6 +113,27 @@ QString PolkitHelper::operationLabel() const
     return QFileInfo(m_program).fileName();
 }
 
+QString PolkitHelper::userFacingOutput(const QString &output) const
+{
+    static const QString dnfLockMarker =
+        QStringLiteral("Another package transaction holds the DNF system lock");
+
+    if (!output.contains(dnfLockMarker, Qt::CaseInsensitive))
+        return output;
+
+    QStringList lines = output.split(QLatin1Char('\n'));
+    const QString friendly =
+        tr("Un'altra operazione sui pacchetti è in corso. "
+           "Attendi che termini e riprova.");
+
+    for (QString &line : lines) {
+        if (line.contains(dnfLockMarker, Qt::CaseInsensitive))
+            line = friendly;
+    }
+
+    return lines.join(QLatin1Char('\n'));
+}
+
 void PolkitHelper::consumeOutput(const QByteArray &data, bool flushPartial)
 {
     if (!data.isEmpty()) {
@@ -131,11 +154,11 @@ void PolkitHelper::consumeOutput(const QByteArray &data, bool flushPartial)
         if (!lineData.isEmpty() && lineData.endsWith('\r'))
             lineData.chop(1);
         if (!lineData.isEmpty())
-            emit line(QString::fromUtf8(lineData));
+            emit line(userFacingOutput(QString::fromUtf8(lineData)));
     }
 
     if (flushPartial && !m_lineBuffer.isEmpty()) {
-        emit line(QString::fromUtf8(m_lineBuffer));
+        emit line(userFacingOutput(QString::fromUtf8(m_lineBuffer)));
         m_lineBuffer.clear();
     }
 }

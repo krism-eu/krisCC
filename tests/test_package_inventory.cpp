@@ -79,6 +79,68 @@ private slots:
         QCOMPARE(lineCount(counter), 2);
     }
 
+    void invalidationBeforeDeferredCacheHitRefreshesAgain()
+    {
+        QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+
+        const QString owned =
+            dir.filePath(QStringLiteral("owned.txt"));
+        const QString rpm =
+            dir.filePath(QStringLiteral("rpm"));
+        const QString counter =
+            dir.filePath(QStringLiteral("counter"));
+
+        writeFile(owned, "base\n");
+
+        writeFile(
+            rpm,
+            QStringLiteral(
+                "#!/usr/bin/bash\n"
+                "echo x >> '%1'\n"
+                "printf 'base\\n'\n")
+                .arg(counter).toUtf8(),
+            QFileDevice::ReadOwner
+                | QFileDevice::WriteOwner
+                | QFileDevice::ExeOwner);
+
+        PackageInventoryCache::Config config;
+        config.rpmProgram = rpm;
+        config.ownedManifest = owned;
+        config.persistentManifest =
+            dir.filePath(QStringLiteral("none"));
+        config.ttlMs = 60 * 1000;
+
+        PackageInventoryCache cache(config);
+        QSignalSpy spy(
+            &cache,
+            &PackageInventoryCache::refreshFinished);
+
+        // Primo caricamento reale.
+        cache.ensureFresh();
+        QVERIFY(spy.wait(3000));
+        QVERIFY(spy.takeFirst().at(0).toBool());
+        QVERIFY(cache.ready());
+        QCOMPARE(cache.loadCount(), quint64(1));
+
+        // Cache ancora fresca: ensureFresh() programma un callback
+        // differito. Invalidiamola prima che quel callback venga
+        // eseguito.
+        cache.ensureFresh();
+        cache.invalidate();
+
+        // Non deve arrivare un falso "success" con ready()==false.
+        // Il callback deve invece provocare un nuovo caricamento RPM.
+        QVERIFY(spy.wait(3000));
+        QVERIFY(spy.takeFirst().at(0).toBool());
+        QVERIFY(cache.ready());
+
+        QCOMPARE(cache.loadCount(), quint64(2));
+        QCOMPARE(lineCount(counter), 2);
+        QVERIFY(cache.installed().contains(
+            QStringLiteral("base")));
+    }
+
     void missingOwnedManifestRecovers()
     {
         QTemporaryDir dir;

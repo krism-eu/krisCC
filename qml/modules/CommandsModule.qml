@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as Controls
 import QtQuick.Controls.Basic as Basic
+import QtQuick.Dialogs
 import org.kde.kirigami as Kirigami
 import org.kriscc
 
@@ -16,6 +17,16 @@ Kirigami.ScrollablePage {
     property string pendingCustomName: ""
     property string deleteCustomId: ""
     property string deleteCustomName: ""
+    property string combinedTextPath: ""
+    property string bashPromptState: CustomActionsBackend.bashPromptStatus()
+    property string bashPromptFeedback: ""
+    property string energyProfileFeedback: ""
+
+    property var bashPromptPresets: [
+        { presetId: "readable", label: qsTr("krisCC leggibile"), preview: qsTr("riga vuota · utente@host · percorso · prompt su nuova riga") },
+        { presetId: "compact", label: qsTr("Compatto"), preview: qsTr("utente@host:percorso $") },
+        { presetId: "minimal", label: qsTr("Minimal"), preview: qsTr("riga vuota · percorso · prompt su nuova riga") }
+    ]
 
     property var commands: [
         { id: "services-all", title: qsTr("Tutti i servizi"), command: "systemctl list-units --type=service --all --no-pager --plain", note: qsTr("Elenco completo dei servizi systemd, inclusi quelli inattivi.") },
@@ -242,6 +253,158 @@ Kirigami.ScrollablePage {
                         spacing: Kirigami.Units.smallSpacing
                         RowLayout {
                             Layout.fillWidth: true
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 0
+                                Kirigami.Heading {
+                                    level: 3
+                                    font.bold: true
+                                    text: qsTr("Strumenti predefiniti")
+                                }
+                                Controls.Label {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                    opacity: UiMetrics.secondaryOpacity
+                                    text: qsTr("Crea un unico file di testo dai file UTF-8 leggibili presenti direttamente in una cartella. Ordina per nome, ignora sottocartelle, collegamenti simbolici e file binari, e non sovrascrive file esistenti.")
+                                }
+                            }
+                            Controls.Button {
+                                text: qsTr("Cartella → testo unico")
+                                icon.name: "document-new"
+                                enabled: !CustomActionsBackend.running
+                                onClicked: {
+                                    root.combinedTextPath = ""
+                                    combineFolderDialog.open()
+                                }
+                            }
+                        }
+                        Kirigami.InlineMessage {
+                            Layout.fillWidth: true
+                            visible: root.combinedTextPath.length > 0
+                            type: Kirigami.MessageType.Positive
+                            text: qsTr("Creato: %1").arg(root.combinedTextPath)
+                        }
+
+                        Kirigami.Separator {
+                            Layout.fillWidth: true
+                        }
+
+                        Kirigami.Heading {
+                            level: 3
+                            font.bold: true
+                            text: qsTr("Prompt Bash")
+                        }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            opacity: UiMetrics.secondaryOpacity
+                            text: qsTr("Personalizza solo un blocco krisCC marcato in ~/.bashrc. I preset non sostituiscono il resto del file e si applicano ai nuovi terminali.")
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Controls.ComboBox {
+                                id: bashPromptPreset
+                                Layout.fillWidth: true
+                                model: root.bashPromptPresets
+                                textRole: "label"
+                            }
+                            Controls.Button {
+                                text: qsTr("Applica")
+                                icon.name: "dialog-ok-apply"
+                                enabled: !CustomActionsBackend.running
+                                      && root.bashPromptState !== "invalid"
+                                      && root.bashPromptState !== "symlink"
+                                      && root.bashPromptState !== "error"
+                                onClicked: bashPromptApplyDialog.open()
+                            }
+                            Controls.Button {
+                                text: qsTr("Ripristina")
+                                icon.name: "edit-undo"
+                                enabled: !CustomActionsBackend.running
+                                      && root.bashPromptState === "managed"
+                                onClicked: bashPromptResetDialog.open()
+                            }
+                        }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            font.family: Kirigami.Theme.fixedWidthFont.family
+                            wrapMode: Text.WordWrap
+                            text: root.bashPromptPresets[bashPromptPreset.currentIndex].preview
+                        }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            opacity: UiMetrics.secondaryOpacity
+                            text: root.bashPromptState === "managed"
+                                  ? qsTr("Stato: blocco krisCC attivo")
+                                  : root.bashPromptState === "unmanaged"
+                                    ? qsTr("Stato: ~/.bashrc non gestito da krisCC")
+                                    : root.bashPromptState === "missing"
+                                      ? qsTr("Stato: ~/.bashrc assente; verrà creato al primo Applica")
+                                      : root.bashPromptState === "invalid"
+                                        ? qsTr("Stato: marker krisCC incompleti o duplicati; nessuna modifica automatica")
+                                        : root.bashPromptState === "symlink"
+                                          ? qsTr("Stato: ~/.bashrc è un collegamento simbolico; modifica rifiutata")
+                                          : qsTr("Stato: ~/.bashrc non modificabile in sicurezza")
+                        }
+                        Kirigami.InlineMessage {
+                            Layout.fillWidth: true
+                            visible: root.bashPromptFeedback.length > 0
+                            type: Kirigami.MessageType.Positive
+                            text: root.bashPromptFeedback
+                        }
+
+                        Kirigami.Separator {
+                            Layout.fillWidth: true
+                        }
+
+                        Kirigami.Heading {
+                            level: 3
+                            font.bold: true
+                            text: qsTr("Profili energia temporanei")
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Controls.Button {
+                                Layout.fillWidth: true
+                                text: qsTr("Standard")
+                                onClicked: {
+                                    if (CustomActionsBackend.setTemporaryEnergyProfile("standard"))
+                                        root.energyProfileFeedback = qsTr("Profilo Standard attivo.")
+                                }
+                            }
+                            Controls.Button {
+                                Layout.fillWidth: true
+                                text: qsTr("60")
+                                onClicked: {
+                                    if (CustomActionsBackend.setTemporaryEnergyProfile("60"))
+                                        root.energyProfileFeedback = qsTr("Profilo 60 attivo: schermo 5 min, sospensione 60 min.")
+                                }
+                            }
+                            Controls.Button {
+                                Layout.fillWidth: true
+                                text: qsTr("180")
+                                onClicked: {
+                                    if (CustomActionsBackend.setTemporaryEnergyProfile("180"))
+                                        root.energyProfileFeedback = qsTr("Profilo 180 attivo: schermo 3 min, sospensione 180 min.")
+                                }
+                            }
+                        }
+                        Kirigami.InlineMessage {
+                            Layout.fillWidth: true
+                            visible: root.energyProfileFeedback.length > 0
+                            type: Kirigami.MessageType.Information
+                            text: root.energyProfileFeedback
+                        }
+                    }
+                }
+
+                Kirigami.AbstractCard {
+                    Layout.fillWidth: true
+                    contentItem: ColumnLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        RowLayout {
+                            Layout.fillWidth: true
                             Kirigami.Heading {
                                 Layout.fillWidth: true
                                 level: 3
@@ -250,7 +413,7 @@ Kirigami.ScrollablePage {
                             }
                             Controls.Label {
                                 opacity: UiMetrics.secondaryOpacity
-                                text: qsTr("%1 / 4 assegnate").arg(CustomActionsBackend.quickActions.length)
+                                text: qsTr("%1 / 8 assegnate").arg(CustomActionsBackend.quickActions.length)
                             }
                         }
                         Controls.Label {
@@ -258,7 +421,7 @@ Kirigami.ScrollablePage {
                             visible: CustomActionsBackend.quickActions.length === 0
                             wrapMode: Text.WordWrap
                             opacity: UiMetrics.secondaryOpacity
-                            text: qsTr("Assegna fino a quattro comandi salvati come pulsanti rapidi usando la stella sulle schede qui sotto.")
+                            text: qsTr("Assegna fino a otto comandi salvati come pulsanti rapidi usando la stella sulle schede qui sotto.")
                         }
                         GridLayout {
                             Layout.fillWidth: true
@@ -272,7 +435,8 @@ Kirigami.ScrollablePage {
                                     required property var modelData
                                     Layout.fillWidth: true
                                     text: modelData.name
-                                    icon.name: "media-playback-start"
+                                    icon.name: modelData.icon && modelData.icon.length > 0
+                                               ? modelData.icon : "utilities-terminal"
                                     enabled: !CustomActionsBackend.running
                                     onClicked: root.runCustom(modelData)
                                 }
@@ -313,6 +477,12 @@ Kirigami.ScrollablePage {
                                 spacing: Kirigami.Units.smallSpacing
                                 RowLayout {
                                     Layout.fillWidth: true
+                                    Kirigami.Icon {
+                                        source: modelData.icon && modelData.icon.length > 0
+                                                ? modelData.icon : "utilities-terminal"
+                                        Layout.preferredWidth: Kirigami.Units.gridUnit * 2
+                                        Layout.preferredHeight: Kirigami.Units.gridUnit * 2
+                                    }
                                     ColumnLayout {
                                         Layout.fillWidth: true
                                         spacing: 0
@@ -565,6 +735,55 @@ Kirigami.ScrollablePage {
         }
     }
 
+    FolderDialog {
+        id: combineFolderDialog
+        title: qsTr("Scegli la cartella con i file di testo")
+        onAccepted: {
+            root.combinedTextPath = CustomActionsBackend.combineTextFiles(selectedFolder)
+        }
+    }
+
+    Controls.Dialog {
+        id: bashPromptApplyDialog
+        modal: true
+        parent: Controls.Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
+        title: qsTr("Applicare il prompt Bash?")
+        standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
+        contentItem: Controls.Label {
+            wrapMode: Text.WordWrap
+            text: qsTr("krisCC modificherà solo il proprio blocco marcato in ~/.bashrc. Il nuovo prompt sarà visibile nei nuovi terminali.")
+        }
+        onAccepted: {
+            var preset = root.bashPromptPresets[bashPromptPreset.currentIndex]
+            if (CustomActionsBackend.applyBashPromptPreset(preset.presetId)) {
+                root.bashPromptState = CustomActionsBackend.bashPromptStatus()
+                root.bashPromptFeedback = qsTr("Prompt Bash applicato. Apri un nuovo terminale per verificarlo.")
+            }
+        }
+    }
+
+    Controls.Dialog {
+        id: bashPromptResetDialog
+        modal: true
+        parent: Controls.Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
+        title: qsTr("Ripristinare il prompt Bash?")
+        standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
+        contentItem: Controls.Label {
+            wrapMode: Text.WordWrap
+            text: qsTr("Verrà rimosso solo il blocco marcato krisCC da ~/.bashrc. Il resto del file resterà invariato.")
+        }
+        onAccepted: {
+            if (CustomActionsBackend.resetBashPrompt()) {
+                root.bashPromptState = CustomActionsBackend.bashPromptStatus()
+                root.bashPromptFeedback = qsTr("Blocco prompt krisCC rimosso.")
+            }
+        }
+    }
+
     Controls.Dialog {
         id: editActionDialog
         property string actionId: ""
@@ -581,6 +800,7 @@ Kirigami.ScrollablePage {
             actionName.text = ""
             actionDescription.text = ""
             actionScript.text = ""
+            actionIcon.currentIndex = 0
             actionConfirm.checked = true
             open()
         }
@@ -590,6 +810,7 @@ Kirigami.ScrollablePage {
             actionName.text = qsTr("Cron: %1").arg(job.summary).substring(0, 80)
             actionDescription.text = qsTr("Importato dal cron utente (%1). Verifica ambiente e variabili prima dell'esecuzione manuale.").arg(job.schedule)
             actionScript.text = job.command
+            actionIcon.currentIndex = 0
             actionConfirm.checked = true
             open()
         }
@@ -599,6 +820,8 @@ Kirigami.ScrollablePage {
             actionName.text = action.name
             actionDescription.text = action.description
             actionScript.text = action.script
+            var iconIndex = actionIcon.find(action.icon || "utilities-terminal")
+            actionIcon.currentIndex = iconIndex >= 0 ? iconIndex : 0
             actionConfirm.checked = action.confirm
             open()
         }
@@ -618,6 +841,21 @@ Kirigami.ScrollablePage {
                 Layout.fillWidth: true
                 placeholderText: qsTr("A cosa serve e quando usarlo")
                 selectByMouse: true
+            }
+            Controls.Label { text: qsTr("Icona"); font.bold: false }
+            RowLayout {
+                Layout.fillWidth: true
+                Kirigami.Icon {
+                    source: actionIcon.currentText.length > 0
+                            ? actionIcon.currentText : "utilities-terminal"
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 2
+                    Layout.preferredHeight: Kirigami.Units.gridUnit * 2
+                }
+                Controls.ComboBox {
+                    id: actionIcon
+                    Layout.fillWidth: true
+                    model: CustomActionsBackend.actionIcons
+                }
             }
             Controls.Label { text: qsTr("Comando / script Bash"); font.bold: false }
             Controls.ScrollView {
@@ -653,7 +891,8 @@ Kirigami.ScrollablePage {
                             actionName.text,
                             actionDescription.text,
                             actionScript.text,
-                            actionConfirm.checked))
+                            actionConfirm.checked,
+                            actionIcon.currentText))
                         editActionDialog.close()
                 }
             }

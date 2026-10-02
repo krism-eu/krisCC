@@ -6,7 +6,7 @@ krisCC 0.8.1 è un'applicazione standalone Qt 6/Kirigami pensata per uso persona
 
 - Qt 6 Core/Gui/Qml/Quick/DBus
 - KF6 Kirigami
-- `bootc`, `rpm`, `dnf5`, `dnf5-plugins` (config-manager), `pkexec`, `tar`, `bash`, `libarchive`
+- `bootc`, `rpm`, `dnf5`, `dnf5-plugins` (config-manager), `pkexec`, `bash`
 - CLI runtime richieste per percorso: `/usr/bin/timeout`, `systemctl`, `loginctl`, `resolvectl` e `journalctl`; lo spec non forza i nomi dei pacchetti provider
 - `systemctl` deve supportare l'output JSON tabellare usato da `list-units` e `list-unit-files` (`--output=json`); Fedora 45 soddisfa questo contratto
 - `/usr/bin/rk` come helper del layer persistente KrisOS
@@ -76,12 +76,10 @@ rpm -q krisCC
 rpm -V krisCC
 ```
 
-Poi verificare manualmente `rk plan/add/rm/sync`, ricerca RPM, apertura e gestione Flatpak tramite Discover, gestione container esterna, Tools & Fix e Servizi & Rete, update BootC, backup create/verify/restore, cronologia locale e selezione one-shot UEFI/GRUB quando disponibile.
+Poi verificare manualmente `rk plan/add/rm/sync`, ricerca RPM, apertura e gestione Flatpak tramite Discover, gestione container esterna, Tools & Fix e Servizi & Rete, update BootC, apertura di Back In Time, cronologia locale e selezione one-shot UEFI/GRUB quando disponibile.
 
 Repository: https://github.com/krism-eu/krisCC
 
-## Backup home K1.0
+## Backup personali
 
-Il profilo home esclude cache, cestino, backup precedenti, `~/.local/share/flatpak` e `~/.local/share/containers`. Questi ultimi sono runtime/app Flatpak e storage Podman ricostruibili; eventuali volumi Podman sono quindi fuori dal backup. I dati personali delle applicazioni Flatpak in `~/.var/app` restano inclusi.
-
-La verifica e il ripristino usano `/usr/libexec/kriscc/archive`, che legge i record tar/gzip tramite `libarchive`, costruisce un piano strutturato e applica i dati con attraversamento ancorato a directory descriptor senza seguire symlink nei componenti del percorso. Lo snapshot appena creato viene validato dallo stesso motore prima di essere pubblicato come backup riuscito.
+I backup dei file personali sono delegati a Back In Time (`backintime-qt`), avviabile dalla pagina **Backup & Recovery**. krisCC non crea, valida, ripristina o elimina archivi personali.

@@ -12,21 +12,23 @@ BuildRequires:  ninja-build
 BuildRequires:  qt6-qtbase-devel
 BuildRequires:  qt6-qtdeclarative-devel
 BuildRequires:  kf6-kirigami-devel
+BuildRequires:  kf6-kidletime-devel
 
 Requires:       qt6-qtbase
 Requires:       qt6-qtdeclarative
 Requires:       kf6-kirigami
+Requires:       kf6-kidletime
 Requires:       polkit
 Requires:       rpm
 Requires:       dnf5
 Requires:       dnf5-plugins
 Requires:       NetworkManager
 Requires:       bootc
-Requires:       tar
 Requires:       bash
-Requires:       libarchive
 Requires:       /usr/bin/timeout
 Requires:       /usr/bin/systemctl
+Requires:       /usr/bin/systemd-run
+Requires:       /usr/bin/kscreen-doctor
 Requires:       /usr/bin/loginctl
 Requires:       /usr/bin/resolvectl
 Requires:       /usr/bin/journalctl
@@ -34,10 +36,10 @@ Requires:       /usr/bin/journalctl
 %description
 krisCC is a compact personal Kirigami control center for KrisOS and Fedora bootc
 systems. It focuses on persistent KrisOS software management, operational repair
-tools, services/network controls, bootc updates, diagnostics, recovery and local
-configuration/home backups without duplicating dedicated application managers.
-Flatpak application management is delegated to KDE Discover and containers are
-delegated to a dedicated external application.
+tools, services/network controls, bootc updates, diagnostics and recovery
+without duplicating dedicated application managers. Personal backups are delegated
+to Back In Time, Flatpak application management to KDE Discover and containers to
+a dedicated external application.
 
 %prep
 %autosetup -n %{name}-%{version}
@@ -54,10 +56,10 @@ delegated to a dedicated external application.
 %doc README.md
 %{_bindir}/krisCC
 %{_libexecdir}/kriscc/admin
-%{_libexecdir}/kriscc/archive
 %{_libexecdir}/kriscc/bootc-status
 %{_libexecdir}/kriscc/cleanup-estimate
 %{_libexecdir}/kriscc/maintenance
+%{_libexecdir}/kriscc/energy-profile
 %{_datadir}/applications/krisCC.desktop
 %{_datadir}/polkit-1/actions/org.kriscc.controlcenter.policy
 %{_datadir}/metainfo/org.kriscc.KrisCC.metainfo.xml

@@ -22,6 +22,7 @@ Kirigami.ScrollablePage {
 
     property string journalUnit: ""
     property bool journalUserScope: false
+    property bool refreshAllAfterActive: false
 
     property var services: [
         { id: "NetworkManager.service", title: qsTr("Rete") },
@@ -93,22 +94,53 @@ Kirigami.ScrollablePage {
         if (serviceTabs.currentIndex === 0) {
             SystemBackend.refreshServiceStates()
         } else if (serviceTabs.currentIndex === 1) {
-            ServiceManagerBackend.refreshServices(serviceScope.currentIndex === 1)
+            root.refreshAllAfterActive = allServicesToggle.checked
+            ServiceManagerBackend.refreshActiveServices(
+                serviceScope.currentIndex === 1)
         } else if (serviceTabs.currentIndex === 2) {
             ServiceManagerBackend.refreshFailedUnits(failedScope.currentIndex === 1)
         }
     }
 
-    Component.onCompleted: SystemBackend.refreshServiceStates()
+    Component.onCompleted: {
+        SystemBackend.refreshServiceStates()
+
+        Qt.callLater(function() {
+            var bar = root.contentItem.Controls.ScrollBar.vertical
+            if (bar)
+                bar.width = Math.max(bar.implicitWidth, 12)
+        })
+    }
     onVisibleChanged: if (visible) refreshCurrentTab()
 
     Connections {
         target: ServiceManagerBackend
+
         function onControlFinished(userScope, unit, action, success) {
-            if (serviceTabs.currentIndex === 1)
-                ServiceManagerBackend.refreshServices(serviceScope.currentIndex === 1)
-            else if (serviceTabs.currentIndex === 2)
-                ServiceManagerBackend.refreshFailedUnits(failedScope.currentIndex === 1)
+            if (serviceTabs.currentIndex === 1) {
+                root.refreshAllAfterActive = allServicesToggle.checked
+                ServiceManagerBackend.refreshActiveServices(
+                    serviceScope.currentIndex === 1)
+            } else if (serviceTabs.currentIndex === 2) {
+                ServiceManagerBackend.refreshFailedUnits(
+                    failedScope.currentIndex === 1)
+            }
+        }
+
+        function onStateChanged() {
+            if (!root.refreshAllAfterActive || ServiceManagerBackend.busy)
+                return
+
+            var refreshComplete =
+                ServiceManagerBackend.state === "success"
+                && serviceTabs.currentIndex === 1
+                && allServicesToggle.checked
+
+            root.refreshAllAfterActive = false
+
+            if (refreshComplete)
+                ServiceManagerBackend.refreshServices(
+                    serviceScope.currentIndex === 1)
         }
     }
 
@@ -232,22 +264,46 @@ Kirigami.ScrollablePage {
 
                 RowLayout {
                     Layout.fillWidth: true
+
                     Controls.ComboBox {
                         id: serviceScope
                         model: [qsTr("Sistema"), qsTr("Utente")]
-                        onActivated: ServiceManagerBackend.refreshServices(currentIndex === 1)
+                        enabled: !ServiceManagerBackend.busy
+                        onActivated: {
+                            root.refreshAllAfterActive = false
+                            allServicesToggle.checked = false
+                            ServiceManagerBackend.refreshActiveServices(
+                                currentIndex === 1)
+                        }
                     }
-                    Controls.TextField {
-                        id: serviceFilter
-                        Layout.fillWidth: true
-                        placeholderText: qsTr("Cerca servizio o descrizione…")
-                    }
+
+                    Item { Layout.fillWidth: true }
+
                     Controls.Button {
                         text: qsTr("Aggiorna")
                         icon.name: "view-refresh"
                         enabled: !ServiceManagerBackend.busy
-                        onClicked: ServiceManagerBackend.refreshServices(serviceScope.currentIndex === 1)
+                        onClicked: {
+                            root.refreshAllAfterActive =
+                                allServicesToggle.checked
+                            ServiceManagerBackend.refreshActiveServices(
+                                serviceScope.currentIndex === 1)
+                        }
                     }
+                }
+
+                Kirigami.Heading {
+                    Layout.fillWidth: true
+                    level: 2
+                    font.bold: true
+                    text: qsTr("Attivi e problematici")
+                }
+
+                Controls.Label {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    opacity: UiMetrics.secondaryOpacity
+                    text: qsTr("Caricati subito: servizi attivi, in avvio o falliti.")
                 }
 
                 Kirigami.InlineMessage {
@@ -268,13 +324,15 @@ Kirigami.ScrollablePage {
                 Kirigami.InlineMessage {
                     Layout.fillWidth: true
                     visible: !ServiceManagerBackend.busy
-                          && ServiceManagerBackend.services.length === 0
+                          && ServiceManagerBackend.state === "success"
+                          && ServiceManagerBackend.activeServices.length === 0
                     type: Kirigami.MessageType.Information
-                    text: qsTr("Nessun servizio caricato. Premi Aggiorna.")
+                    text: qsTr("Nessun servizio attivo o problematico.")
                 }
 
                 Repeater {
-                    model: root.filteredServices()
+                    model: ServiceManagerBackend.activeServices
+
                     delegate: Kirigami.AbstractCard {
                         required property var modelData
                         Layout.fillWidth: true
@@ -284,15 +342,18 @@ Kirigami.ScrollablePage {
 
                             RowLayout {
                                 Layout.fillWidth: true
+
                                 ColumnLayout {
                                     Layout.fillWidth: true
                                     spacing: 0
+
                                     Controls.Label {
                                         Layout.fillWidth: true
                                         font.bold: true
                                         text: modelData.unit
                                         elide: Text.ElideRight
                                     }
+
                                     Controls.Label {
                                         Layout.fillWidth: true
                                         visible: modelData.description.length > 0
@@ -301,13 +362,9 @@ Kirigami.ScrollablePage {
                                         text: modelData.description
                                     }
                                 }
+
                                 Controls.Label {
                                     text: root.stateLabel(modelData.active)
-                                }
-                                Controls.Label {
-                                    Layout.preferredWidth: 100
-                                    opacity: UiMetrics.secondaryOpacity
-                                    text: modelData.enabled || qsTr("n/d")
                                 }
                             }
 
@@ -319,65 +376,285 @@ Kirigami.ScrollablePage {
                                     text: qsTr("Avvia")
                                     enabled: !ServiceManagerBackend.busy
                                           && modelData.active !== "active"
+                                          && modelData.active !== "activating"
                                     onClicked: {
                                         root.pendingManagedUnit = modelData.unit
-                                        root.pendingManagedUserScope = modelData.scope === "user"
+                                        root.pendingManagedUserScope =
+                                            modelData.scope === "user"
                                         root.pendingManagedAction = "start"
                                         managedServiceConfirmDialog.open()
                                     }
                                 }
+
                                 Controls.Button {
                                     text: qsTr("Ferma")
                                     enabled: !ServiceManagerBackend.busy
-                                          && modelData.active === "active"
+                                          && (modelData.active === "active"
+                                              || modelData.active === "activating")
                                     onClicked: {
                                         root.pendingManagedUnit = modelData.unit
-                                        root.pendingManagedUserScope = modelData.scope === "user"
+                                        root.pendingManagedUserScope =
+                                            modelData.scope === "user"
                                         root.pendingManagedAction = "stop"
                                         managedServiceConfirmDialog.open()
                                     }
                                 }
+
                                 Controls.Button {
                                     text: qsTr("Riavvia")
                                     enabled: !ServiceManagerBackend.busy
                                     onClicked: {
                                         root.pendingManagedUnit = modelData.unit
-                                        root.pendingManagedUserScope = modelData.scope === "user"
+                                        root.pendingManagedUserScope =
+                                            modelData.scope === "user"
                                         root.pendingManagedAction = "restart"
                                         managedServiceConfirmDialog.open()
                                     }
                                 }
-                                Controls.Button {
-                                    text: modelData.enabled === "enabled"
-                                          ? qsTr("Disabilita")
-                                          : qsTr("Abilita")
-                                    enabled: !ServiceManagerBackend.busy
-                                          && modelData.enabled !== "static"
-                                          && modelData.enabled !== "masked"
-                                    onClicked: {
-                                        root.pendingManagedUnit = modelData.unit
-                                        root.pendingManagedUserScope = modelData.scope === "user"
-                                        root.pendingManagedAction =
-                                            modelData.enabled === "enabled" ? "disable" : "enable"
-                                        managedServiceConfirmDialog.open()
-                                    }
-                                }
+
                                 Controls.Button {
                                     visible: modelData.active === "failed"
                                     text: qsTr("Reset failed")
                                     enabled: !ServiceManagerBackend.busy
                                     onClicked: {
                                         root.pendingManagedUnit = modelData.unit
-                                        root.pendingManagedUserScope = modelData.scope === "user"
+                                        root.pendingManagedUserScope =
+                                            modelData.scope === "user"
                                         root.pendingManagedAction = "reset-failed"
                                         managedServiceConfirmDialog.open()
                                     }
                                 }
+
                                 Controls.Button {
                                     text: qsTr("Log")
                                     icon.name: "utilities-log-viewer"
                                     onClicked: root.openJournal(
-                                        modelData.unit, modelData.scope === "user")
+                                        modelData.unit,
+                                        modelData.scope === "user")
+                                }
+                            }
+                        }
+                    }
+                }
+
+                Controls.Button {
+                    id: allServicesToggle
+                    Layout.fillWidth: true
+                    checkable: true
+                    enabled: !ServiceManagerBackend.busy
+                    icon.name: checked ? "arrow-up" : "arrow-down"
+                    text: checked
+                        ? qsTr("Nascondi altri servizi")
+                        : qsTr("Mostra inattivi e disabilitati")
+
+                    onToggled: {
+                        root.refreshAllAfterActive = false
+                        if (checked) {
+                            ServiceManagerBackend.refreshServices(
+                                serviceScope.currentIndex === 1)
+                        }
+                    }
+                }
+
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    visible: allServicesToggle.checked
+                    spacing: Kirigami.Units.largeSpacing
+
+                    RowLayout {
+                        Layout.fillWidth: true
+
+                        Controls.TextField {
+                            id: serviceFilter
+                            Layout.fillWidth: true
+                            placeholderText:
+                                qsTr("Cerca servizio o descrizione…")
+                        }
+
+                        Controls.Button {
+                            text: qsTr("Aggiorna elenco completo")
+                            icon.name: "view-refresh"
+                            enabled: !ServiceManagerBackend.busy
+                            onClicked: ServiceManagerBackend.refreshServices(
+                                serviceScope.currentIndex === 1)
+                        }
+                    }
+
+                    Kirigami.InlineMessage {
+                        Layout.fillWidth: true
+                        visible: !ServiceManagerBackend.busy
+                              && ServiceManagerBackend.state === "success"
+                              && ServiceManagerBackend.services.length === 0
+                        type: Kirigami.MessageType.Information
+                        text: qsTr("Nessun servizio disponibile.")
+                    }
+
+                    ListView {
+                        id: allServicesList
+
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Math.max(
+                            Kirigami.Units.gridUnit * 10,
+                            Math.min(contentHeight,
+                                     Kirigami.Units.gridUnit * 26))
+
+                        clip: true
+                        reuseItems: true
+                        spacing: Kirigami.Units.smallSpacing
+                        boundsBehavior: Flickable.StopAtBounds
+
+                        model: root.filteredServices()
+
+                        rightMargin: Controls.ScrollBar.vertical.visible
+                            ? Controls.ScrollBar.vertical.width
+                              + Kirigami.Units.smallSpacing
+                            : 0
+
+                        Controls.ScrollBar.vertical: Controls.ScrollBar {
+                            policy: Controls.ScrollBar.AsNeeded
+                        }
+
+                        delegate: Kirigami.AbstractCard {
+                            required property var modelData
+
+                            width: allServicesList.width
+                                   - allServicesList.rightMargin
+
+                            contentItem: ColumnLayout {
+                                spacing: Kirigami.Units.smallSpacing
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 0
+
+                                        Controls.Label {
+                                            Layout.fillWidth: true
+                                            font.bold: true
+                                            text: modelData.unit
+                                            elide: Text.ElideRight
+                                        }
+
+                                        Controls.Label {
+                                            Layout.fillWidth: true
+                                            visible:
+                                                modelData.description.length > 0
+                                            wrapMode: Text.WordWrap
+                                            opacity:
+                                                UiMetrics.secondaryOpacity
+                                            text: modelData.description
+                                        }
+                                    }
+
+                                    Controls.Label {
+                                        text:
+                                            root.stateLabel(modelData.active)
+                                    }
+
+                                    Controls.Label {
+                                        Layout.preferredWidth: 100
+                                        opacity: UiMetrics.secondaryOpacity
+                                        text:
+                                            modelData.enabled || qsTr("n/d")
+                                    }
+                                }
+
+                                Flow {
+                                    Layout.fillWidth: true
+                                    spacing: Kirigami.Units.smallSpacing
+
+                                    Controls.Button {
+                                        text: qsTr("Avvia")
+                                        enabled:
+                                            !ServiceManagerBackend.busy
+                                            && modelData.active !== "active"
+                                        onClicked: {
+                                            root.pendingManagedUnit =
+                                                modelData.unit
+                                            root.pendingManagedUserScope =
+                                                modelData.scope === "user"
+                                            root.pendingManagedAction = "start"
+                                            managedServiceConfirmDialog.open()
+                                        }
+                                    }
+
+                                    Controls.Button {
+                                        text: qsTr("Ferma")
+                                        enabled:
+                                            !ServiceManagerBackend.busy
+                                            && modelData.active === "active"
+                                        onClicked: {
+                                            root.pendingManagedUnit =
+                                                modelData.unit
+                                            root.pendingManagedUserScope =
+                                                modelData.scope === "user"
+                                            root.pendingManagedAction = "stop"
+                                            managedServiceConfirmDialog.open()
+                                        }
+                                    }
+
+                                    Controls.Button {
+                                        text: qsTr("Riavvia")
+                                        enabled:
+                                            !ServiceManagerBackend.busy
+                                        onClicked: {
+                                            root.pendingManagedUnit =
+                                                modelData.unit
+                                            root.pendingManagedUserScope =
+                                                modelData.scope === "user"
+                                            root.pendingManagedAction =
+                                                "restart"
+                                            managedServiceConfirmDialog.open()
+                                        }
+                                    }
+
+                                    Controls.Button {
+                                        text:
+                                            modelData.enabled === "enabled"
+                                            ? qsTr("Disabilita")
+                                            : qsTr("Abilita")
+                                        enabled:
+                                            !ServiceManagerBackend.busy
+                                            && modelData.enabled !== "static"
+                                            && modelData.enabled !== "masked"
+                                        onClicked: {
+                                            root.pendingManagedUnit =
+                                                modelData.unit
+                                            root.pendingManagedUserScope =
+                                                modelData.scope === "user"
+                                            root.pendingManagedAction =
+                                                modelData.enabled === "enabled"
+                                                ? "disable" : "enable"
+                                            managedServiceConfirmDialog.open()
+                                        }
+                                    }
+
+                                    Controls.Button {
+                                        visible:
+                                            modelData.active === "failed"
+                                        text: qsTr("Reset failed")
+                                        enabled:
+                                            !ServiceManagerBackend.busy
+                                        onClicked: {
+                                            root.pendingManagedUnit =
+                                                modelData.unit
+                                            root.pendingManagedUserScope =
+                                                modelData.scope === "user"
+                                            root.pendingManagedAction =
+                                                "reset-failed"
+                                            managedServiceConfirmDialog.open()
+                                        }
+                                    }
+
+                                    Controls.Button {
+                                        text: qsTr("Log")
+                                        icon.name: "utilities-log-viewer"
+                                        onClicked: root.openJournal(
+                                            modelData.unit,
+                                            modelData.scope === "user")
+                                    }
                                 }
                             }
                         }

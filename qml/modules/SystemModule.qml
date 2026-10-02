@@ -15,6 +15,22 @@ Kirigami.ScrollablePage {
     property bool rebootAfterDownloadedApply: false
     property string pendingUefiDeleteToken: ""
     property string pendingUefiDeleteLabel: ""
+    property bool appMutationRunning: false
+
+    function requestRebootSafely(firmware) {
+        if (root.appMutationRunning) {
+            SystemBackend.notify(
+                qsTr("Riavvio rimandato"),
+                qsTr("È ancora in corso un'altra modifica di sistema. Attendere il completamento dell'operazione.")
+            )
+            return
+        }
+
+        if (firmware)
+            SystemBackend.requestFirmwareReboot()
+        else
+            SystemBackend.requestReboot()
+    }
 
     function bootedDeployment() {
         var entries = BootcBackend.deployments
@@ -64,7 +80,7 @@ Kirigami.ScrollablePage {
             if (root.rebootAfterDownloadedApply) {
                 root.rebootAfterDownloadedApply = false
                 if (success)
-                    SystemBackend.requestReboot()
+                    root.requestRebootSafely(false)
             }
         }
     }
@@ -655,7 +671,7 @@ Kirigami.ScrollablePage {
             wrapMode: Text.WordWrap
             text: qsTr("Il prossimo riavvio entrerà direttamente nel firmware UEFI, se supportato dal sistema.")
         }
-        onAccepted: SystemBackend.requestFirmwareReboot()
+        onAccepted: root.requestRebootSafely(true)
     }
 
     Controls.Dialog {
@@ -680,7 +696,7 @@ Kirigami.ScrollablePage {
                 if (!BootcBackend.applyDownloaded())
                     root.rebootAfterDownloadedApply = false
             } else {
-                SystemBackend.requestReboot()
+                root.requestRebootSafely(false)
             }
         }
     }

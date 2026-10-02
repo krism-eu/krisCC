@@ -237,3 +237,21 @@ main -> CI completa -> RPM candidato immutabile -> acceptance host KrisOS -> pro
 La promozione stable non deve ricompilare il pacchetto. Deve verificare checksum, identità EVR e appartenenza del commit a `main`, quindi cambiare soltanto lo stato della release già validata.
 
 Una vecchia stable resta disponibile tramite tag, release e ramo congelato. Non si introducono fallback nel codice corrente solo per mantenerla compatibile.
+# Manutenzione 0.8.1: backend di sistema
+
+`SystemBackend` espone l'interfaccia Qt e le funzioni comuni. Le sette operazioni
+di lettura UEFI/GRUB e gestione servizi sostituite da `SystemBackendRuntime`
+sono virtuali pure: non esiste una seconda implementazione eseguibile nella base.
+`main.cpp` continua a costruire il runtime. Non si tratta di un flatten generale.
+
+Restano nella base i percorsi di reboot richiamati dal runtime, il controllo
+Wi-Fi e il reset dello stato fallito dei servizi con la propria allowlist.
+I timer che richiamano `SystemBackend::refreshServiceStates` effettuano dispatch
+virtuale. Il test `system-backend-contract` verifica il dispatch del metaobject
+ereditato e del timer, oltre al completamento indipendente delle letture boot
+con programmi simulati, senza modificare NVRAM o servizi dell'host.
+
+Le proprietà UEFI/GRUB separate e `bootEntriesChanged` sono conservate. Lo stato
+aggregato boot, il processo condiviso e il vecchio ramo Polkit di lettura della
+base sono rimossi insieme ai corpi superati, dopo la verifica dei riferimenti.
+Le due proprietà aggregate non avevano consumatori nel progetto.

@@ -30,15 +30,21 @@ ServiceManagerBackend::~ServiceManagerBackend() = default;
 
 bool ServiceManagerBackend::validUnit(const QString &unit) const
 {
+    if (unit.size() > 255)
+        return false;
+
     static const QRegularExpression pattern(
-        QStringLiteral("^[A-Za-z0-9_.@:-]{1,120}\\.service$"));
+        QStringLiteral("^(?:[A-Za-z0-9_.@:-]|\\\\x[0-9A-Fa-f]{2})+\\.service$"));
     return pattern.match(unit).hasMatch();
 }
 
 bool ServiceManagerBackend::validJournalUnit(const QString &unit) const
 {
+    if (unit.size() > 255)
+        return false;
+
     static const QRegularExpression pattern(
-        QStringLiteral("^[A-Za-z0-9_.@:-]{1,120}\\.(?:service|socket|timer)$"));
+        QStringLiteral("^(?:[A-Za-z0-9_.@:-]|\\\\x[0-9A-Fa-f]{2})+\\.(?:service|socket|timer)$"));
     return pattern.match(unit).hasMatch();
 }
 
@@ -98,6 +104,27 @@ void ServiceManagerBackend::finish(const QString &state, const QString &message)
     m_state = state;
     m_message = message;
     emit stateChanged();
+}
+
+bool ServiceManagerBackend::refreshActiveServices(bool userScope)
+{
+    if (m_busy)
+        return false;
+
+    m_userScope = userScope;
+
+    QStringList args;
+    if (userScope)
+        args << QStringLiteral("--user");
+
+    args << QStringLiteral("list-units")
+         << QStringLiteral("--type=service")
+         << QStringLiteral("--all")
+         << QStringLiteral("--state=active,activating,failed")
+         << QStringLiteral("--output=json")
+         << QStringLiteral("--no-pager");
+
+    return startProcess(args, Task::ActiveServices);
 }
 
 bool ServiceManagerBackend::refreshServices(bool userScope)
@@ -312,12 +339,29 @@ void ServiceManagerBackend::handleFinished(Task task, int exitCode, int outcome,
         return;
     }
 
-    if (outputTruncated && (task == Task::ServicesUnits
+    if (outputTruncated && (task == Task::ActiveServices
+                            || task == Task::ServicesUnits
                             || task == Task::ServicesFiles
                             || task == Task::FailedUnits)) {
         m_pendingServices.clear();
         finish(QStringLiteral("error"),
                tr("Output JSON systemd troncato: stato non disponibile."));
+        return;
+    }
+
+    if (task == Task::ActiveServices) {
+        const ServiceJsonResult parsed = ServiceJson::parseUnitList(
+            stdoutData, scopeName(m_userScope));
+        if (!parsed.ok()) {
+            finish(QStringLiteral("error"),
+                   tr("Impossibile interpretare i servizi attivi: %1").arg(parsed.error));
+            return;
+        }
+
+        m_activeServices = parsed.rows;
+        finish(QStringLiteral("success"),
+               tr("%1 servizi attivi o problematici caricati.")
+                   .arg(m_activeServices.size()));
         return;
     }
 

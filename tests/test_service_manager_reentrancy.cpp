@@ -8,6 +8,59 @@ class ServiceManagerReentrancyTest final : public QObject
 {
     Q_OBJECT
 private slots:
+    void escapedSystemdUnitIsAccepted()
+    {
+        ServiceManagerBackend backend;
+
+        const QString unit =
+            QStringLiteral(R"(systemd-fsck@dev-disk-by\x2duuid-AAF2\x2d59EB.service)");
+
+        QVERIFY(backend.validUnit(unit));
+        QVERIFY(backend.validJournalUnit(unit));
+
+        const QString longUnit =
+            QStringLiteral("systemd-fsck@")
+            + QString(150, QLatin1Char('a'))
+            + QStringLiteral(R"(\x2duuid.service)");
+
+        QVERIFY(longUnit.size() > 128);
+        QVERIFY(longUnit.size() <= 255);
+        QVERIFY(backend.validUnit(longUnit));
+        QVERIFY(backend.validJournalUnit(longUnit));
+
+        QVERIFY(!backend.validUnit(QStringLiteral(R"(bad\q.service)")));
+        QVERIFY(!backend.validUnit(QStringLiteral(R"(bad\xZZ.service)")));
+    }
+
+    void activeServicesStaySeparateFromFullInventory()
+    {
+        ServiceManagerBackend backend;
+        backend.m_userScope = false;
+
+        QVariantMap completeOnly;
+        completeOnly.insert(QStringLiteral("unit"),
+                            QStringLiteral("complete-only.service"));
+        backend.m_services = {completeOnly};
+
+        const QByteArray json =
+            R"([{"unit":"alpha.service","active":"active","sub":"running","description":"Alpha"},)"
+            R"({"unit":"broken.service","active":"failed","sub":"failed","description":"Broken"}])";
+
+        backend.handleFinished(ServiceManagerBackend::Task::ActiveServices, 0,
+                               int(ProcessRunner::Success),
+                               json, {}, {}, false);
+
+        QCOMPARE(backend.activeServices().size(), 2);
+        QCOMPARE(backend.services().size(), 1);
+
+        QCOMPARE(
+            backend.services().first().toMap()
+                .value(QStringLiteral("unit")).toString(),
+            QStringLiteral("complete-only.service"));
+
+        QCOMPARE(backend.state(), QStringLiteral("success"));
+    }
+
     void successStateIsFinalBeforeControlSignal()
     {
         ServiceManagerBackend backend;

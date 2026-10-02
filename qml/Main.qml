@@ -13,9 +13,8 @@ Kirigami.ApplicationWindow {
     minimumHeight: 640
     visible: !KrisccStartHidden
     title: qsTr("krisCC")
+    palette.highlight: Qt.darker(Kirigami.Theme.highlightColor, 1.12)
     property int currentSection: 0
-    property bool closeAfterBackupCancel: false
-    property bool allowClose: false
 
     readonly property var navigationModel: [
         { section: 0, label: qsTr("Dashboard"), icon: "go-home" },
@@ -33,7 +32,7 @@ Kirigami.ApplicationWindow {
         SystemBackend.setResourceMonitoringEnabled(root.visible && root.currentSection === 0)
     }
 
-    function nonBackupMutationActive() {
+    function mutationActive() {
         return BootcBackend.operationRunning
             || RkBackend.operationRunning
             || MaintenanceBackend.running
@@ -46,27 +45,9 @@ Kirigami.ApplicationWindow {
     Component.onCompleted: syncResourceMonitoring()
 
     onClosing: function(close) {
-        if (root.allowClose)
-            return
-        if (SystemBackend.backupBusy) {
-            close.accepted = false
-            closeDuringBackupDialog.open()
-            return
-        }
-        if (root.nonBackupMutationActive()) {
+        if (root.mutationActive()) {
             close.accepted = false
             operationInProgressDialog.open()
-        }
-    }
-
-    Connections {
-        target: SystemBackend
-        function onBackupBusyChanged() {
-            if (root.closeAfterBackupCancel && !SystemBackend.backupBusy) {
-                root.closeAfterBackupCancel = false
-                root.allowClose = true
-                Qt.callLater(Qt.quit)
-            }
         }
     }
 
@@ -173,7 +154,8 @@ Kirigami.ApplicationWindow {
                                 Controls.Label {
                                     Layout.fillWidth: true
                                     text: modelData.label
-                                    font.bold: parent.parent.checked
+                                    font.bold: true
+                                    font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
                                     color: parent.parent.checked
                                            ? Kirigami.Theme.highlightColor
                                            : Kirigami.Theme.textColor
@@ -344,7 +326,11 @@ Kirigami.ApplicationWindow {
                         property bool visited: false
                         active: visited || ((root.visible || KrisccSmokeTest) && root.currentSection === 3)
                         onLoaded: Qt.callLater(function() { visited = true })
-                        sourceComponent: Component { SystemModule { Layout.fillWidth: true; Layout.fillHeight: true } }
+                        sourceComponent: Component { SystemModule {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            appMutationRunning: root.mutationActive()
+                        } }
                     }
                     Loader {
                         Layout.fillWidth: true
@@ -401,31 +387,6 @@ Kirigami.ApplicationWindow {
                 text: qsTr("Copia")
                 icon.name: "edit-copy"
                 onClicked: SystemBackend.copyToClipboard(informationText.text)
-            }
-        }
-    }
-
-    Controls.Dialog {
-        id: closeDuringBackupDialog
-        modal: true
-        parent: Controls.Overlay.overlay
-        anchors.centerIn: parent
-        width: Math.min(Kirigami.Units.gridUnit * 32,
-                        parent ? parent.width - Kirigami.Units.largeSpacing * 2
-                               : Kirigami.Units.gridUnit * 32)
-        implicitHeight: Kirigami.Units.gridUnit * 12
-        title: qsTr("Operazione di backup attiva")
-        standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
-        contentItem: Controls.Label {
-            wrapMode: Text.WordWrap
-            text: qsTr("Backup, verifica o ripristino è ancora in corso. Annullare l'operazione, attendere la bonifica e chiudere krisCC?")
-        }
-        onAccepted: {
-            root.closeAfterBackupCancel = true
-            if (!SystemBackend.cancelSnapshot()) {
-                root.closeAfterBackupCancel = false
-                SystemBackend.notify(qsTr("Chiusura rimandata"),
-                                     qsTr("Non è stato possibile avviare l'annullamento dell'operazione."))
             }
         }
     }

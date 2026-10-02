@@ -25,8 +25,11 @@ private slots:
     void onProcessError(QProcess::ProcessError error);
 
 private:
+    friend class PolkitHelperMessageTest;
+
     bool isPrivilegedInvocationAllowed(const QString &program, const QStringList &args) const;
     QString operationLabel() const;
+    QString userFacingOutput(const QString &output) const;
     void consumeOutput(const QByteArray &data, bool flushPartial = false);
     void finishWithError(const QString &message);
 

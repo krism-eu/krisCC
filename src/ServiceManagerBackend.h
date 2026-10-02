@@ -10,6 +10,7 @@ class ProcessRunner;
 class ServiceManagerBackend : public QObject
 {
     Q_OBJECT
+    Q_PROPERTY(QVariantList activeServices READ activeServices NOTIFY stateChanged)
     Q_PROPERTY(QVariantList services READ services NOTIFY stateChanged)
     Q_PROPERTY(QVariantList failedUnits READ failedUnits NOTIFY stateChanged)
     Q_PROPERTY(bool busy READ busy NOTIFY stateChanged)
@@ -21,6 +22,7 @@ class ServiceManagerBackend : public QObject
 public:
     enum class Task {
         None,
+        ActiveServices,
         ServicesUnits,
         ServicesFiles,
         FailedUnits,
@@ -31,6 +33,7 @@ public:
     explicit ServiceManagerBackend(QObject *parent = nullptr);
     ~ServiceManagerBackend() override;
 
+    const QVariantList &activeServices() const { return m_activeServices; }
     const QVariantList &services() const { return m_services; }
     const QVariantList &failedUnits() const { return m_failedUnits; }
     bool busy() const { return m_busy; }
@@ -39,6 +42,7 @@ public:
     const QString &journalText() const { return m_journalText; }
     bool userScope() const { return m_userScope; }
 
+    Q_INVOKABLE bool refreshActiveServices(bool userScope);
     Q_INVOKABLE bool refreshServices(bool userScope);
     Q_INVOKABLE bool refreshFailedUnits(bool userScope);
     Q_INVOKABLE bool loadJournal(const QString &unit, bool userScope,
@@ -63,6 +67,7 @@ private:
     void finish(const QString &state, const QString &message = QString());
     void startUnitFilesQuery();
 
+    QVariantList m_activeServices;
     QVariantList m_services;
     QVariantList m_failedUnits;
     QVariantList m_pendingServices;

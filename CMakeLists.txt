@@ -8,20 +8,20 @@ set(CMAKE_AUTOMOC ON)
 include(GNUInstallDirs)
 find_package(Qt6 6.7 REQUIRED COMPONENTS Core Gui Qml Quick DBus Network Test)
 find_package(KF6Kirigami REQUIRED)
+find_package(KF6IdleTime REQUIRED)
 qt_standard_project_setup(REQUIRES 6.7)
 
 qt_add_executable(krisCC
     src/main.cpp
     src/BootcBackend.cpp src/BootcBackend.h
-    src/CustomActionsBackend.cpp src/CustomActionsBackend.h
+    src/CustomActionsBackend.cpp src/CustomActionsBackend.h src/BashPromptConfig.cpp src/BashPromptConfig.h
     src/CronBackend.cpp src/CronBackend.h src/CronParser.cpp src/CronParser.h
     src/ServiceManagerBackend.cpp src/ServiceManagerBackend.h src/ServiceJson.cpp src/ServiceJson.h
     src/SystemdJobCoordinator.cpp src/SystemdJobCoordinator.h
     src/SystemBackend.cpp src/SystemBackend.h
-    src/SystemBackendRuntime.cpp src/SystemBackendRuntime.h
-    src/SystemBackendRuntimeArchive.cpp src/SystemBackendRuntimeLifecycle.cpp
+    src/SystemBackendRuntime.h
+    src/SystemBackendRuntimeLifecycle.cpp
     src/SystemBackendRuntimeServices.cpp src/SystemBackendRuntimeBoot.cpp
-    src/BackupSafety.cpp src/BackupSafety.h
     src/SoftwareBackend.cpp src/SoftwareBackend.h src/PackageSearch.cpp src/PackageSearch.h
     src/PackageInventoryCache.cpp src/PackageInventoryCache.h
     src/PolkitHelper.cpp src/PolkitHelper.h src/RkBackend.cpp src/RkBackend.h
@@ -46,15 +46,30 @@ qt_add_qml_module(krisCC URI org.kriscc VERSION 1.0 RESOURCE_PREFIX /qt/qml QML_
 target_link_libraries(krisCC PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::DBus Qt6::Network KF6::Kirigami)
 target_compile_definitions(krisCC PRIVATE KRISCC_VERSION="${PROJECT_VERSION}")
 
+add_executable(kriscc-energy-profile src/EnergyProfileHelper.cpp)
+set_target_properties(kriscc-energy-profile PROPERTIES OUTPUT_NAME energy-profile)
+target_link_libraries(kriscc-energy-profile PRIVATE Qt6::Core Qt6::Gui Qt6::DBus KF6::IdleTime)
+
 add_executable(kriscc-admin src/AdminHelper.cpp src/AdminPolicy.cpp src/AdminPolicy.h src/Validators.cpp src/Validators.h)
 set_target_properties(kriscc-admin PROPERTIES OUTPUT_NAME admin)
 target_link_libraries(kriscc-admin PRIVATE Qt6::Core)
-add_executable(kriscc-archive src/ArchiveTool.cpp src/ArchiveRestoreEngine.cpp src/ArchiveRestoreEngine.h src/BackupSafety.cpp src/BackupSafety.h)
-set_target_properties(kriscc-archive PROPERTIES OUTPUT_NAME archive)
-target_link_libraries(kriscc-archive PRIVATE Qt6::Core)
-
 include(CTest)
 if(BUILD_TESTING)
+    add_executable(kriscc-test-system-backend-contract
+        tests/test_system_backend_contract.cpp
+        src/SystemBackend.cpp src/SystemBackend.h
+        src/SystemBackendRuntime.h src/SystemBackendRuntimeLifecycle.cpp
+        src/SystemBackendRuntimeBoot.cpp src/SystemBackendRuntimeServices.cpp
+        src/SystemdJobCoordinator.cpp src/SystemdJobCoordinator.h
+        src/PolkitHelper.cpp src/PolkitHelper.h src/OperationLog.cpp src/OperationLog.h
+        src/AdminPolicy.cpp src/AdminPolicy.h src/Validators.cpp src/Validators.h
+        src/ContractParsers.cpp src/ContractParsers.h)
+    target_include_directories(kriscc-test-system-backend-contract PRIVATE src)
+    target_link_libraries(kriscc-test-system-backend-contract PRIVATE
+        Qt6::Core Qt6::Gui Qt6::DBus Qt6::Network Qt6::Test)
+    add_test(NAME system-backend-contract COMMAND kriscc-test-system-backend-contract)
+    set_tests_properties(system-backend-contract PROPERTIES TIMEOUT 15)
+
     add_executable(kriscc-test-validators tests/test_validators.cpp src/Validators.cpp src/Validators.h)
     target_include_directories(kriscc-test-validators PRIVATE src)
     target_link_libraries(kriscc-test-validators PRIVATE Qt6::Core Qt6::Test)
@@ -65,22 +80,30 @@ if(BUILD_TESTING)
     target_link_libraries(kriscc-test-admin-policy PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME admin-policy COMMAND kriscc-test-admin-policy)
 
+    add_executable(kriscc-test-polkit-helper
+        tests/test_polkit_helper.cpp
+        src/PolkitHelper.cpp src/PolkitHelper.h
+        src/OperationLog.cpp src/OperationLog.h
+        src/AdminPolicy.cpp src/AdminPolicy.h
+        src/Validators.cpp src/Validators.h)
+    target_include_directories(kriscc-test-polkit-helper PRIVATE src)
+    target_link_libraries(kriscc-test-polkit-helper PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME polkit-helper COMMAND kriscc-test-polkit-helper)
+
     add_executable(kriscc-test-process-runner tests/test_process_runner.cpp src/ProcessRunner.cpp src/ProcessRunner.h)
     target_include_directories(kriscc-test-process-runner PRIVATE src)
     target_link_libraries(kriscc-test-process-runner PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME process-runner COMMAND kriscc-test-process-runner)
     set_tests_properties(process-runner PROPERTIES TIMEOUT 15)
 
-    add_executable(kriscc-test-backup-safety tests/test_backup_safety.cpp src/BackupSafety.cpp src/BackupSafety.h)
-    target_include_directories(kriscc-test-backup-safety PRIVATE src)
-    target_link_libraries(kriscc-test-backup-safety PRIVATE Qt6::Core Qt6::Test)
-    add_test(NAME backup-safety COMMAND kriscc-test-backup-safety)
-
-    add_executable(kriscc-test-archive-restore tests/test_archive_restore.cpp src/ArchiveRestoreEngine.cpp src/ArchiveRestoreEngine.h)
-    target_include_directories(kriscc-test-archive-restore PRIVATE src)
-    target_link_libraries(kriscc-test-archive-restore PRIVATE Qt6::Core Qt6::Test)
-    add_test(NAME archive-restore COMMAND kriscc-test-archive-restore)
-    set_tests_properties(archive-restore PROPERTIES TIMEOUT 30)
+    add_executable(kriscc-test-custom-actions
+        tests/test_custom_actions.cpp
+        src/CustomActionsBackend.cpp src/CustomActionsBackend.h
+        src/BashPromptConfig.cpp src/BashPromptConfig.h
+        src/ProcessRunner.cpp src/ProcessRunner.h)
+    target_include_directories(kriscc-test-custom-actions PRIVATE src)
+    target_link_libraries(kriscc-test-custom-actions PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME custom-actions COMMAND kriscc-test-custom-actions)
 
     add_executable(kriscc-test-service-json tests/test_service_json.cpp src/ServiceJson.cpp src/ServiceJson.h)
     target_include_directories(kriscc-test-service-json PRIVATE src)
@@ -135,7 +158,8 @@ add_executable(kriscc-maintenance src/MaintenanceHelper.cpp src/MaintenanceTrash
 set_target_properties(kriscc-maintenance PROPERTIES OUTPUT_NAME maintenance)
 target_link_libraries(kriscc-maintenance PRIVATE Qt6::Core)
 install(TARGETS krisCC RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-install(TARGETS kriscc-admin kriscc-archive kriscc-maintenance RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/kriscc)
+install(TARGETS kriscc-admin kriscc-maintenance RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/kriscc)
+install(TARGETS kriscc-energy-profile RUNTIME DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/kriscc)
 install(PROGRAMS src/bootc-status.sh DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/kriscc RENAME bootc-status)
 install(PROGRAMS src/cleanup-estimate.sh DESTINATION ${CMAKE_INSTALL_LIBEXECDIR}/kriscc RENAME cleanup-estimate)
 install(FILES data/krisCC.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)

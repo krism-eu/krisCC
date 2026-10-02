@@ -10,8 +10,11 @@
 namespace {
 bool validService(const QString &unit)
 {
+    if (unit.size() > 255)
+        return false;
+
     static const QRegularExpression pattern(
-        QStringLiteral("^[A-Za-z0-9_.@:-]{1,120}\\.service$"));
+        QStringLiteral("^(?:[A-Za-z0-9_.@:-]|\\\\x[0-9A-Fa-f]{2})+\\.service$"));
     return pattern.match(unit).hasMatch();
 }
 

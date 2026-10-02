@@ -37,8 +37,6 @@ class SystemBackend : public QObject
     Q_PROPERTY(QString currentUefiBootCode READ currentUefiBootCode NOTIFY bootEntriesChanged)
     Q_PROPERTY(QStringList uefiBootOrder READ uefiBootOrder NOTIFY bootEntriesChanged)
     Q_PROPERTY(QVariantList grubEntries READ grubEntries NOTIFY bootEntriesChanged)
-    Q_PROPERTY(bool bootEntriesBusy READ bootEntriesBusy NOTIFY bootEntriesChanged)
-    Q_PROPERTY(QString bootEntriesError READ bootEntriesError NOTIFY bootEntriesChanged)
     Q_PROPERTY(int cpuUsagePercent READ cpuUsagePercent NOTIFY resourcesChanged)
     Q_PROPERTY(qint64 memoryUsedMiB READ memoryUsedMiB NOTIFY resourcesChanged)
     Q_PROPERTY(qint64 memoryTotalMiB READ memoryTotalMiB NOTIFY resourcesChanged)
@@ -52,12 +50,6 @@ class SystemBackend : public QObject
     Q_PROPERTY(QString networkKind READ networkKind NOTIFY networkChanged)
     Q_PROPERTY(bool internetIdentityBusy READ internetIdentityBusy NOTIFY internetIdentityChanged)
     Q_PROPERTY(QString internetIdentity READ internetIdentity NOTIFY internetIdentityChanged)
-    Q_PROPERTY(bool backupBusy READ backupBusy NOTIFY backupBusyChanged)
-    Q_PROPERTY(QString backupStatus READ backupStatus NOTIFY backupStatusChanged)
-    Q_PROPERTY(QString backupPath READ backupPath NOTIFY backupStatusChanged)
-    Q_PROPERTY(QString backupState READ backupState NOTIFY backupStatusChanged)
-    Q_PROPERTY(QString backupDirectory READ backupDirectory NOTIFY backupDirectoryChanged)
-    Q_PROPERTY(bool backupIsLocalSnapshot READ backupIsLocalSnapshot NOTIFY backupDirectoryChanged)
     Q_PROPERTY(bool controlCenterUpdateBusy READ controlCenterUpdateBusy NOTIFY controlCenterUpdateChanged)
     Q_PROPERTY(bool controlCenterUpdateAvailable READ controlCenterUpdateAvailable NOTIFY controlCenterUpdateChanged)
     Q_PROPERTY(QString controlCenterLatestVersion READ controlCenterLatestVersion NOTIFY controlCenterUpdateChanged)
@@ -86,8 +78,6 @@ public:
     const QString &currentUefiBootCode() const { return m_currentUefiBootCode; }
     const QStringList &uefiBootOrder() const { return m_uefiBootOrder; }
     const QVariantList &grubEntries() const { return m_grubEntries; }
-    bool bootEntriesBusy() const { return m_bootEntriesBusy; }
-    const QString &bootEntriesError() const { return m_bootEntriesError; }
     int cpuUsagePercent() const { return m_cpuUsagePercent; }
     qint64 memoryUsedMiB() const { return m_memoryUsedMiB; }
     qint64 memoryTotalMiB() const { return m_memoryTotalMiB; }
@@ -102,12 +92,6 @@ public:
     bool internetIdentityBusy() const { return m_internetIdentityBusy; }
     const QString &internetIdentity() const { return m_internetIdentity; }
 
-    bool backupBusy() const { return m_backupBusy; }
-    const QString &backupStatus() const { return m_backupStatus; }
-    const QString &backupPath() const { return m_backupPath; }
-    const QString &backupState() const { return m_backupState; }
-    const QString &backupDirectory() const { return m_backupDirectory; }
-    bool backupIsLocalSnapshot() const;
     bool controlCenterUpdateBusy() const { return m_controlCenterUpdateBusy; }
     bool controlCenterUpdateAvailable() const { return m_controlCenterUpdateAvailable; }
     const QString &controlCenterLatestVersion() const { return m_controlCenterLatestVersion; }
@@ -124,10 +108,11 @@ public:
     Q_INVOKABLE bool openRootFolder() const;
     Q_INVOKABLE bool programAvailable(const QString &program) const;
     Q_INVOKABLE void checkControlCenterUpdate();
-    Q_INVOKABLE virtual void refreshServiceStates();
-    Q_INVOKABLE virtual bool startService(const QString &service);
-    Q_INVOKABLE virtual bool stopService(const QString &service);
-    Q_INVOKABLE virtual bool restartService(const QString &service);
+    // Implemented only by the runtime; keep Qt invocations on the virtual interface.
+    Q_INVOKABLE virtual void refreshServiceStates() = 0;
+    Q_INVOKABLE virtual bool startService(const QString &service) = 0;
+    Q_INVOKABLE virtual bool stopService(const QString &service) = 0;
+    Q_INVOKABLE virtual bool restartService(const QString &service) = 0;
     Q_INVOKABLE bool resetFailedService(const QString &service);
     Q_INVOKABLE virtual void requestReboot();
     Q_INVOKABLE virtual void requestFirmwareReboot();
@@ -137,9 +122,9 @@ public:
     Q_INVOKABLE bool openNetworkSettings() const;
     Q_INVOKABLE void checkInternetIdentity();
     Q_INVOKABLE void setResourceMonitoringEnabled(bool enabled);
-    Q_INVOKABLE virtual void refreshUefiEntries();
-    Q_INVOKABLE virtual void refreshUefiEntriesPrivileged();
-    Q_INVOKABLE virtual void refreshGrubEntries();
+    Q_INVOKABLE virtual void refreshUefiEntries() = 0;
+    Q_INVOKABLE virtual void refreshUefiEntriesPrivileged() = 0;
+    Q_INVOKABLE virtual void refreshGrubEntries() = 0;
     Q_INVOKABLE bool selectNextUefi(const QString &token);
     Q_INVOKABLE bool clearNextUefi();
     Q_INVOKABLE bool deleteUefiEntry(const QString &token);
@@ -147,23 +132,10 @@ public:
     Q_INVOKABLE bool selectNextGrub(const QString &entry);
     Q_INVOKABLE void notify(const QString &summary, const QString &body = QString()) const;
 
-    Q_INVOKABLE virtual bool createSnapshot(const QString &kind);
-    Q_INVOKABLE bool setBackupDirectory(const QString &pathOrUrl);
-    Q_INVOKABLE virtual bool cancelSnapshot();
-    Q_INVOKABLE virtual QVariantList backups() const;
-    Q_INVOKABLE virtual bool verifySnapshot(const QString &path);
-    Q_INVOKABLE virtual bool restoreSnapshot(const QString &path);
-    Q_INVOKABLE virtual bool deleteSnapshot(const QString &path);
-    Q_INVOKABLE bool openBackupFolder() const;
-    Q_INVOKABLE QVariantList backupPreview(const QString &kind) const;
-
     Q_INVOKABLE QVariantList operationHistoryEntries() const;
     Q_INVOKABLE bool clearOperationHistory();
 
 signals:
-    void backupBusyChanged();
-    void backupStatusChanged();
-    void backupDirectoryChanged();
     void rebootFinished(bool success, const QString &message);
     void bootSelectionStateChanged();
     void bootSelectionFinished(const QString &kind, bool success, const QString &output);
@@ -182,13 +154,6 @@ protected:
     QString readOsName() const;
     QString toolProgram(const QString &toolId) const;
     QString resolveExecutable(const QString &program) const;
-    bool validateBackupPath(const QString &path, QString *canonicalPath = nullptr) const;
-    QString defaultBackupDirectory() const;
-    bool validateBackupDirectory(const QString &path, QString *canonicalPath = nullptr) const;
-    QString currentBackupRoot() const;
-    void setBackupBusy(bool busy);
-    void setBackupResult(const QString &status, const QString &path = QString(),
-                         const QString &state = QStringLiteral("idle"));
     void refreshResources();
     void refreshTopMemoryProcesses();
     void refreshNetworkState();
@@ -199,7 +164,6 @@ protected:
     PolkitHelper *m_polkit = nullptr;
     QNetworkAccessManager *m_networkAccess = nullptr;
     bool m_bootSelectionOwned = false;
-    bool m_bootReadOwned = false;
     bool m_adminMaintenanceOwned = false;
     QString m_adminMaintenanceOperation;
     bool m_bootSelectionRunning = false;
@@ -210,9 +174,6 @@ protected:
     QString m_currentUefiBootCode;
     QStringList m_uefiBootOrder;
     QVariantList m_grubEntries;
-    QPointer<QProcess> m_bootEntriesProcess;
-    bool m_bootEntriesBusy = false;
-    QString m_bootEntriesError;
     QTimer *m_resourceTimer = nullptr;
     bool m_resourceMonitoringEnabled = false;
     quint64 m_previousCpuTotal = 0;
@@ -237,11 +198,4 @@ protected:
     bool m_controlCenterUpdateAvailable = false;
     QString m_controlCenterLatestVersion;
     QString m_controlCenterUpdateStatus;
-    QPointer<ProcessRunner> m_backupRunner;
-    bool m_backupBusy = false;
-    QString m_backupStatus;
-    QString m_backupPath;
-    QString m_backupState = QStringLiteral("idle");
-    QString m_backupDirectory;
-    QString m_backupPartialPath;
 };

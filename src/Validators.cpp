@@ -1,6 +1,5 @@
 #include "Validators.h"
 
-#include <QDir>
 #include <QRegularExpression>
 #include <QSet>
 #include <QUrl>
@@ -56,35 +55,6 @@ bool bootOrder(const QString &value)
         if (!bootToken(normalized) || seen.contains(normalized))
             return false;
         seen.insert(normalized);
-    }
-    return true;
-}
-
-bool archiveMemberPath(const QString &value)
-{
-    if (value.isEmpty() || value.startsWith(QLatin1Char('/')) || value.contains(QLatin1Char('\0')))
-        return false;
-    const QString normalized = QDir::cleanPath(value);
-    if (normalized == QStringLiteral("..") || normalized.startsWith(QStringLiteral("../")))
-        return false;
-    const QStringList parts = value.split(QLatin1Char('/'), Qt::KeepEmptyParts);
-    return !parts.contains(QStringLiteral(".."));
-}
-
-bool archiveVerboseEntry(const QString &line)
-{
-    if (line.isEmpty())
-        return false;
-    const QChar type = line.at(0);
-    if (type != QLatin1Char('-') && type != QLatin1Char('d') && type != QLatin1Char('l'))
-        return false;
-    if (type == QLatin1Char('l')) {
-        const qsizetype arrow = line.indexOf(QStringLiteral(" -> "));
-        if (arrow < 0)
-            return false;
-        const QString target = line.mid(arrow + 4).trimmed();
-        if (!archiveMemberPath(target))
-            return false;
     }
     return true;
 }

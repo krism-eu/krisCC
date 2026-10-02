@@ -1,6 +1,8 @@
 #include "CustomActionsBackend.h"
+#include "BashPromptConfig.h"
 #include "ProcessRunner.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -8,22 +10,62 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
+#include <QProcess>
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QSet>
 #include <QStandardPaths>
+#include <QStringConverter>
 #include <QUuid>
 
 #include <unistd.h>
 
+#include <algorithm>
+
 namespace {
 constexpr qsizetype kMaxActions = 100;
-constexpr qsizetype kMaxQuickActions = 4;
+constexpr qsizetype kMaxQuickActions = 8;
 constexpr qsizetype kMaxName = 80;
 constexpr qsizetype kMaxDescription = 240;
 constexpr qsizetype kMaxScript = 64 * 1024;
+constexpr qsizetype kMaxCombinedTextBytes = 16 * 1024 * 1024;
 constexpr int kActionTimeoutMs = 30 * 60 * 1000;
 const QString kShell = QStringLiteral("/usr/bin/bash");
+const QString kDefaultActionIcon = QStringLiteral("utilities-terminal");
+
+const QStringList &allowedActionIcons()
+{
+    static const QStringList icons = {
+        QStringLiteral("utilities-terminal"),
+        QStringLiteral("system-run"),
+        QStringLiteral("system-search"),
+        QStringLiteral("applications-system"),
+        QStringLiteral("preferences-system"),
+        QStringLiteral("drive-harddisk"),
+        QStringLiteral("folder"),
+        QStringLiteral("document-new"),
+        QStringLiteral("document-save"),
+        QStringLiteral("network-wired"),
+        QStringLiteral("dialog-information"),
+        QStringLiteral("tools-wizard")
+    };
+    return icons;
+}
+
+QString normalizedActionIcon(const QString &iconName)
+{
+    return allowedActionIcons().contains(iconName) ? iconName : kDefaultActionIcon;
+}
+
+bool isUtf8Text(const QByteArray &data)
+{
+    if (data.contains('\0'))
+        return false;
+
+    QStringDecoder decoder(QStringDecoder::Utf8);
+    decoder.decode(data);
+    return !decoder.hasError();
+}
 }
 
 CustomActionsBackend::CustomActionsBackend(QObject *parent)
@@ -129,7 +171,9 @@ void CustomActionsBackend::reload()
             || !object.value(QStringLiteral("script")).isString()
             || !object.value(QStringLiteral("confirm")).isBool()
             || (object.contains(QStringLiteral("quick"))
-                && !object.value(QStringLiteral("quick")).isBool())) {
+                && !object.value(QStringLiteral("quick")).isBool())
+            || (object.contains(QStringLiteral("icon"))
+                && !object.value(QStringLiteral("icon")).isString())) {
             m_storageValid = false;
             break;
         }
@@ -153,6 +197,8 @@ void CustomActionsBackend::reload()
         action.insert(QStringLiteral("script"), script);
         action.insert(QStringLiteral("confirm"), object.value(QStringLiteral("confirm")).toBool());
         action.insert(QStringLiteral("quick"), object.value(QStringLiteral("quick")).toBool(false));
+        action.insert(QStringLiteral("icon"),
+                      normalizedActionIcon(object.value(QStringLiteral("icon")).toString()));
         loaded.append(action);
     }
 
@@ -224,6 +270,8 @@ bool CustomActionsBackend::persist()
         object.insert(QStringLiteral("script"), action.value(QStringLiteral("script")).toString());
         object.insert(QStringLiteral("confirm"), action.value(QStringLiteral("confirm")).toBool());
         object.insert(QStringLiteral("quick"), action.value(QStringLiteral("quick")).toBool());
+        object.insert(QStringLiteral("icon"),
+                      normalizedActionIcon(action.value(QStringLiteral("icon")).toString()));
         array.append(object);
     }
 
@@ -249,6 +297,19 @@ bool CustomActionsBackend::persist()
 bool CustomActionsBackend::saveAction(const QString &id, const QString &name,
                                       const QString &description, const QString &script,
                                       bool confirmBeforeRun)
+{
+    QString iconName = kDefaultActionIcon;
+    const int existingIndex = indexForId(id.trimmed());
+    if (existingIndex >= 0) {
+        iconName = normalizedActionIcon(
+            m_actions.at(existingIndex).toMap().value(QStringLiteral("icon")).toString());
+    }
+    return saveAction(id, name, description, script, confirmBeforeRun, iconName);
+}
+
+bool CustomActionsBackend::saveAction(const QString &id, const QString &name,
+                                      const QString &description, const QString &script,
+                                      bool confirmBeforeRun, const QString &iconName)
 {
     if (m_running || !m_storageValid)
         return false;
@@ -289,6 +350,7 @@ bool CustomActionsBackend::saveAction(const QString &id, const QString &name,
     action.insert(QStringLiteral("script"), script);
     action.insert(QStringLiteral("confirm"), confirmBeforeRun);
     action.insert(QStringLiteral("quick"), wasQuick);
+    action.insert(QStringLiteral("icon"), normalizedActionIcon(iconName));
 
     const QVariantList previous = m_actions;
     if (index >= 0)
@@ -303,6 +365,11 @@ bool CustomActionsBackend::saveAction(const QString &id, const QString &name,
 
     emit actionsChanged();
     return true;
+}
+
+QStringList CustomActionsBackend::actionIcons() const
+{
+    return allowedActionIcons();
 }
 
 QVariantList CustomActionsBackend::quickActions() const
@@ -443,6 +510,221 @@ bool CustomActionsBackend::runAction(const QString &id)
         finish(QStringLiteral("error"), tr("Impossibile inizializzare lo script."));
         return false;
     }
+    return true;
+}
+
+QString CustomActionsBackend::combineTextFiles(const QUrl &folderUrl)
+{
+    auto fail = [this](const QString &message) {
+        m_errorText = message;
+        emit stateChanged();
+        return QString();
+    };
+
+    if (m_running)
+        return fail(tr("Attendi la fine del comando personale in esecuzione."));
+
+    if (!folderUrl.isLocalFile())
+        return fail(tr("Seleziona una cartella locale."));
+
+    const QFileInfo requested(folderUrl.toLocalFile());
+    if (!requested.exists() || !requested.isDir() || !requested.isReadable()
+        || requested.isSymLink()) {
+        return fail(tr("La cartella selezionata non è valida, leggibile o è un collegamento simbolico."));
+    }
+
+    const QString canonicalPath = requested.canonicalFilePath();
+    if (canonicalPath.isEmpty())
+        return fail(tr("Impossibile risolvere il percorso della cartella selezionata."));
+
+    const QFileInfo folderInfo(canonicalPath);
+    const QString folderName = folderInfo.fileName();
+    if (folderName.isEmpty())
+        return fail(tr("La radice del filesystem non può essere usata per questa operazione."));
+
+    const QString outputPath = QDir(folderInfo.absolutePath())
+                                   .filePath(folderName + QStringLiteral("-contenuto.txt"));
+    const QFileInfo outputInfo(outputPath);
+    if (outputInfo.exists() || outputInfo.isSymLink())
+        return fail(tr("Il file di destinazione esiste già: %1").arg(outputPath));
+
+    QDir sourceDir(canonicalPath);
+    QFileInfoList entries = sourceDir.entryInfoList(
+        QDir::Files | QDir::Readable | QDir::NoDotAndDotDot, QDir::NoSort);
+
+    std::sort(entries.begin(), entries.end(),
+              [](const QFileInfo &left, const QFileInfo &right) {
+        return QString::compare(left.fileName(), right.fileName(), Qt::CaseSensitive) < 0;
+    });
+
+    QByteArray combined;
+    qsizetype included = 0;
+
+    for (const QFileInfo &entry : entries) {
+        if (!entry.isFile() || !entry.isReadable() || entry.isSymLink())
+            continue;
+
+        if (entry.size() > kMaxCombinedTextBytes)
+            return fail(tr("Il file %1 supera il limite massimo consentito.").arg(entry.fileName()));
+
+        QFile input(entry.absoluteFilePath());
+        if (!input.open(QIODevice::ReadOnly))
+            continue;
+
+        const QByteArray data = input.readAll();
+        if (data.size() > kMaxCombinedTextBytes)
+            return fail(tr("Il file %1 supera il limite massimo consentito.").arg(entry.fileName()));
+
+        if (!isUtf8Text(data))
+            continue;
+
+        const QByteArray header =
+            QByteArrayLiteral("===== ") + entry.fileName().toUtf8() + QByteArrayLiteral(" =====\n");
+
+        qsizetype extra = header.size() + data.size() + 1;
+        if (!data.endsWith('\n'))
+            ++extra;
+
+        if (combined.size() + extra > kMaxCombinedTextBytes) {
+            return fail(tr("I file di testo superano complessivamente il limite di 16 MiB."));
+        }
+
+        combined += header;
+        combined += data;
+        if (!data.endsWith('\n'))
+            combined += '\n';
+        combined += '\n';
+        ++included;
+    }
+
+    if (included == 0)
+        return fail(tr("Nessun file di testo UTF-8 leggibile trovato nella cartella."));
+
+    QFile output(outputPath);
+    if (!output.open(QIODevice::WriteOnly | QIODevice::NewOnly))
+        return fail(tr("Impossibile creare il file di destinazione senza sovrascrivere dati esistenti."));
+
+    const qint64 written = output.write(combined);
+    const bool flushed = output.flush();
+    output.close();
+
+    if (written != combined.size() || !flushed) {
+        QFile::remove(outputPath);
+        return fail(tr("Scrittura del file di destinazione non riuscita."));
+    }
+
+    m_errorText.clear();
+    emit stateChanged();
+    return outputPath;
+}
+
+QString CustomActionsBackend::bashPromptStatus() const
+{
+    const QString path = QDir::home().filePath(QStringLiteral(".bashrc"));
+    return BashPromptConfig::statusId(BashPromptConfig::inspect(path));
+}
+
+bool CustomActionsBackend::applyBashPromptPreset(const QString &presetId)
+{
+    if (m_running) {
+        m_errorText = tr("Attendi la fine del comando personale in esecuzione.");
+        emit stateChanged();
+        return false;
+    }
+
+    QString error;
+    const QString path = QDir::home().filePath(QStringLiteral(".bashrc"));
+    if (!BashPromptConfig::applyPreset(path, presetId, &error)) {
+        m_errorText = error;
+        emit stateChanged();
+        return false;
+    }
+
+    m_errorText.clear();
+    emit stateChanged();
+    return true;
+}
+
+bool CustomActionsBackend::resetBashPrompt()
+{
+    if (m_running) {
+        m_errorText = tr("Attendi la fine del comando personale in esecuzione.");
+        emit stateChanged();
+        return false;
+    }
+
+    QString error;
+    const QString path = QDir::home().filePath(QStringLiteral(".bashrc"));
+    if (!BashPromptConfig::removeManagedBlock(path, &error)) {
+        m_errorText = error;
+        emit stateChanged();
+        return false;
+    }
+
+    m_errorText.clear();
+    emit stateChanged();
+    return true;
+}
+
+
+bool CustomActionsBackend::setTemporaryEnergyProfile(const QString &profileId)
+{
+    static const QSet<QString> allowed = {
+        QStringLiteral("standard"),
+        QStringLiteral("60"),
+        QStringLiteral("180")
+    };
+
+    if (!allowed.contains(profileId)) {
+        m_errorText = tr("Profilo energia temporaneo non valido.");
+        emit stateChanged();
+        return false;
+    }
+
+    QString helper = qEnvironmentVariable("KRISCC_ENERGY_HELPER");
+    if (helper.isEmpty()) {
+        const QString sibling =
+            QDir(QCoreApplication::applicationDirPath())
+                .filePath(QStringLiteral("energy-profile"));
+        if (QFileInfo(sibling).isExecutable())
+            helper = sibling;
+        else
+            helper = QStringLiteral("/usr/libexec/kriscc/energy-profile");
+    }
+
+    if (!QFileInfo(helper).isExecutable()) {
+        m_errorText = tr("Helper dei profili energia non disponibile.");
+        emit stateChanged();
+        return false;
+    }
+
+    QProcess process;
+    process.setProgram(helper);
+    process.setArguments({QStringLiteral("--apply"), profileId});
+    process.start();
+
+    if (!process.waitForStarted(3000)) {
+        m_errorText = tr("Impossibile avviare il profilo energia temporaneo.");
+        emit stateChanged();
+        return false;
+    }
+
+    if (!process.waitForFinished(10000)) {
+        process.kill();
+        process.waitForFinished(1000);
+        m_errorText = tr("Timeout durante l'applicazione del profilo energia.");
+        emit stateChanged();
+        return false;
+    }
+
+    if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
+        m_errorText = tr("Impossibile applicare il profilo energia temporaneo.");
+        emit stateChanged();
+        return false;
+    }
+
+    m_errorText.clear();
+    emit stateChanged();
     return true;
 }
 
