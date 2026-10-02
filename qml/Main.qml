@@ -13,6 +13,7 @@ Kirigami.ApplicationWindow {
     minimumHeight: 640
     visible: !KrisccStartHidden
     title: qsTr("krisCC")
+    palette.highlight: Qt.darker(Kirigami.Theme.highlightColor, 1.12)
     property int currentSection: 0
 
     readonly property var navigationModel: [
