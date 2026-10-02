@@ -210,11 +210,21 @@ jobs:
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/admin'
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/bootc-status'
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/maintenance'
+          rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/energy-profile'
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/share/applications/krisCC.desktop'
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/share/polkit-1/actions/org.kriscc.controlcenter.policy'
           rpm -qpR "$rpm_file" | grep -Eq '^polkit([[:space:]<=>]|$)'
           ! rpm -qp --provides "$rpm_file" | grep -Eq '^(kcc|k-controlc)([[:space:]=]|$)'
           (cd artifacts/rpm && sha256sum -c SHA256SUMS)
+          # Record the actual binary RPM payload separately from the source bundles.
+          {
+            stat --printf='Binary RPM bytes: %s\n' "$rpm_file"
+            rpm -qp --qf 'Installed bytes: %{SIZE}\nPayload compressor: %{PAYLOADCOMPRESSOR}\n' "$rpm_file"
+            echo 'Payload files: bytes, path (largest first)'
+            rpm -qp --qf '[%{FILESIZES}\t%{FILENAMES}\n]' "$rpm_file" | sort -nr
+            echo 'Separate CI artifacts: bytes, path'
+            find artifacts/rpm artifacts/srpm artifacts/source artifacts/stage -type f -printf '%s\t%p\n' | sort -nr
+          } | tee artifacts/logs/rpm-content.txt
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
