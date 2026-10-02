@@ -18,7 +18,7 @@
 
 namespace {
 constexpr qsizetype kMaxActions = 100;
-constexpr qsizetype kMaxQuickActions = 4;
+constexpr qsizetype kMaxQuickActions = 8;
 constexpr qsizetype kMaxName = 80;
 constexpr qsizetype kMaxDescription = 240;
 constexpr qsizetype kMaxScript = 64 * 1024;

@@ -250,7 +250,7 @@ Kirigami.ScrollablePage {
                             }
                             Controls.Label {
                                 opacity: UiMetrics.secondaryOpacity
-                                text: qsTr("%1 / 4 assegnate").arg(CustomActionsBackend.quickActions.length)
+                                text: qsTr("%1 / 8 assegnate").arg(CustomActionsBackend.quickActions.length)
                             }
                         }
                         Controls.Label {
@@ -258,7 +258,7 @@ Kirigami.ScrollablePage {
                             visible: CustomActionsBackend.quickActions.length === 0
                             wrapMode: Text.WordWrap
                             opacity: UiMetrics.secondaryOpacity
-                            text: qsTr("Assegna fino a quattro comandi salvati come pulsanti rapidi usando la stella sulle schede qui sotto.")
+                            text: qsTr("Assegna fino a otto comandi salvati come pulsanti rapidi usando la stella sulle schede qui sotto.")
                         }
                         GridLayout {
                             Layout.fillWidth: true
