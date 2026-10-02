@@ -45,6 +45,9 @@ public:
     Q_INVOKABLE bool setQuickAction(const QString &id, bool quick);
     Q_INVOKABLE bool runAction(const QString &id);
     Q_INVOKABLE QString combineTextFiles(const QUrl &folderUrl);
+    Q_INVOKABLE QString bashPromptStatus() const;
+    Q_INVOKABLE bool applyBashPromptPreset(const QString &presetId);
+    Q_INVOKABLE bool resetBashPrompt();
     Q_INVOKABLE void cancel();
 
 signals:

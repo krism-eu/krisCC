@@ -1,4 +1,5 @@
 #include "CustomActionsBackend.h"
+#include "BashPromptConfig.h"
 #include "ProcessRunner.h"
 
 #include <QDir>
@@ -613,6 +614,54 @@ QString CustomActionsBackend::combineTextFiles(const QUrl &folderUrl)
     m_errorText.clear();
     emit stateChanged();
     return outputPath;
+}
+
+QString CustomActionsBackend::bashPromptStatus() const
+{
+    const QString path = QDir::home().filePath(QStringLiteral(".bashrc"));
+    return BashPromptConfig::statusId(BashPromptConfig::inspect(path));
+}
+
+bool CustomActionsBackend::applyBashPromptPreset(const QString &presetId)
+{
+    if (m_running) {
+        m_errorText = tr("Attendi la fine del comando personale in esecuzione.");
+        emit stateChanged();
+        return false;
+    }
+
+    QString error;
+    const QString path = QDir::home().filePath(QStringLiteral(".bashrc"));
+    if (!BashPromptConfig::applyPreset(path, presetId, &error)) {
+        m_errorText = error;
+        emit stateChanged();
+        return false;
+    }
+
+    m_errorText.clear();
+    emit stateChanged();
+    return true;
+}
+
+bool CustomActionsBackend::resetBashPrompt()
+{
+    if (m_running) {
+        m_errorText = tr("Attendi la fine del comando personale in esecuzione.");
+        emit stateChanged();
+        return false;
+    }
+
+    QString error;
+    const QString path = QDir::home().filePath(QStringLiteral(".bashrc"));
+    if (!BashPromptConfig::removeManagedBlock(path, &error)) {
+        m_errorText = error;
+        emit stateChanged();
+        return false;
+    }
+
+    m_errorText.clear();
+    emit stateChanged();
+    return true;
 }
 
 void CustomActionsBackend::appendOutput(const QByteArray &data)

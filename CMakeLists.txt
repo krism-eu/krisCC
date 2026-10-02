@@ -13,7 +13,7 @@ qt_standard_project_setup(REQUIRES 6.7)
 qt_add_executable(krisCC
     src/main.cpp
     src/BootcBackend.cpp src/BootcBackend.h
-    src/CustomActionsBackend.cpp src/CustomActionsBackend.h
+    src/CustomActionsBackend.cpp src/CustomActionsBackend.h src/BashPromptConfig.cpp src/BashPromptConfig.h
     src/CronBackend.cpp src/CronBackend.h src/CronParser.cpp src/CronParser.h
     src/ServiceManagerBackend.cpp src/ServiceManagerBackend.h src/ServiceJson.cpp src/ServiceJson.h
     src/SystemdJobCoordinator.cpp src/SystemdJobCoordinator.h
@@ -79,6 +79,7 @@ if(BUILD_TESTING)
     add_executable(kriscc-test-custom-actions
         tests/test_custom_actions.cpp
         src/CustomActionsBackend.cpp src/CustomActionsBackend.h
+        src/BashPromptConfig.cpp src/BashPromptConfig.h
         src/ProcessRunner.cpp src/ProcessRunner.h)
     target_include_directories(kriscc-test-custom-actions PRIVATE src)
     target_link_libraries(kriscc-test-custom-actions PRIVATE Qt6::Core Qt6::Test)

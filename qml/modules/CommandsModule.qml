@@ -18,6 +18,14 @@ Kirigami.ScrollablePage {
     property string deleteCustomId: ""
     property string deleteCustomName: ""
     property string combinedTextPath: ""
+    property string bashPromptState: CustomActionsBackend.bashPromptStatus()
+    property string bashPromptFeedback: ""
+
+    property var bashPromptPresets: [
+        { presetId: "readable", label: qsTr("krisCC leggibile"), preview: qsTr("riga vuota · utente@host · percorso · prompt su nuova riga") },
+        { presetId: "compact", label: qsTr("Compatto"), preview: qsTr("utente@host:percorso $") },
+        { presetId: "minimal", label: qsTr("Minimal"), preview: qsTr("riga vuota · percorso · prompt su nuova riga") }
+    ]
 
     property var commands: [
         { id: "services-all", title: qsTr("Tutti i servizi"), command: "systemctl list-units --type=service --all --no-pager --plain", note: qsTr("Elenco completo dei servizi systemd, inclusi quelli inattivi.") },
@@ -274,6 +282,75 @@ Kirigami.ScrollablePage {
                             visible: root.combinedTextPath.length > 0
                             type: Kirigami.MessageType.Positive
                             text: qsTr("Creato: %1").arg(root.combinedTextPath)
+                        }
+
+                        Kirigami.Separator {
+                            Layout.fillWidth: true
+                        }
+
+                        Kirigami.Heading {
+                            level: 3
+                            font.bold: true
+                            text: qsTr("Prompt Bash")
+                        }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            opacity: UiMetrics.secondaryOpacity
+                            text: qsTr("Personalizza solo un blocco krisCC marcato in ~/.bashrc. I preset non sostituiscono il resto del file e si applicano ai nuovi terminali.")
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Controls.ComboBox {
+                                id: bashPromptPreset
+                                Layout.fillWidth: true
+                                model: root.bashPromptPresets
+                                textRole: "label"
+                            }
+                            Controls.Button {
+                                text: qsTr("Applica")
+                                icon.name: "dialog-ok-apply"
+                                enabled: !CustomActionsBackend.running
+                                      && root.bashPromptState !== "invalid"
+                                      && root.bashPromptState !== "symlink"
+                                      && root.bashPromptState !== "error"
+                                onClicked: bashPromptApplyDialog.open()
+                            }
+                            Controls.Button {
+                                text: qsTr("Ripristina")
+                                icon.name: "edit-undo"
+                                enabled: !CustomActionsBackend.running
+                                      && root.bashPromptState === "managed"
+                                onClicked: bashPromptResetDialog.open()
+                            }
+                        }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            font.family: Kirigami.Theme.fixedWidthFont.family
+                            wrapMode: Text.WordWrap
+                            text: root.bashPromptPresets[bashPromptPreset.currentIndex].preview
+                        }
+                        Controls.Label {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            opacity: UiMetrics.secondaryOpacity
+                            text: root.bashPromptState === "managed"
+                                  ? qsTr("Stato: blocco krisCC attivo")
+                                  : root.bashPromptState === "unmanaged"
+                                    ? qsTr("Stato: ~/.bashrc non gestito da krisCC")
+                                    : root.bashPromptState === "missing"
+                                      ? qsTr("Stato: ~/.bashrc assente; verrà creato al primo Applica")
+                                      : root.bashPromptState === "invalid"
+                                        ? qsTr("Stato: marker krisCC incompleti o duplicati; nessuna modifica automatica")
+                                        : root.bashPromptState === "symlink"
+                                          ? qsTr("Stato: ~/.bashrc è un collegamento simbolico; modifica rifiutata")
+                                          : qsTr("Stato: ~/.bashrc non modificabile in sicurezza")
+                        }
+                        Kirigami.InlineMessage {
+                            Layout.fillWidth: true
+                            visible: root.bashPromptFeedback.length > 0
+                            type: Kirigami.MessageType.Positive
+                            text: root.bashPromptFeedback
                         }
                     }
                 }
@@ -619,6 +696,47 @@ Kirigami.ScrollablePage {
         title: qsTr("Scegli la cartella con i file di testo")
         onAccepted: {
             root.combinedTextPath = CustomActionsBackend.combineTextFiles(selectedFolder)
+        }
+    }
+
+    Controls.Dialog {
+        id: bashPromptApplyDialog
+        modal: true
+        parent: Controls.Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
+        title: qsTr("Applicare il prompt Bash?")
+        standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
+        contentItem: Controls.Label {
+            wrapMode: Text.WordWrap
+            text: qsTr("krisCC modificherà solo il proprio blocco marcato in ~/.bashrc. Il nuovo prompt sarà visibile nei nuovi terminali.")
+        }
+        onAccepted: {
+            var preset = root.bashPromptPresets[bashPromptPreset.currentIndex]
+            if (CustomActionsBackend.applyBashPromptPreset(preset.presetId)) {
+                root.bashPromptState = CustomActionsBackend.bashPromptStatus()
+                root.bashPromptFeedback = qsTr("Prompt Bash applicato. Apri un nuovo terminale per verificarlo.")
+            }
+        }
+    }
+
+    Controls.Dialog {
+        id: bashPromptResetDialog
+        modal: true
+        parent: Controls.Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(Kirigami.Units.gridUnit * 30, parent ? parent.width - Kirigami.Units.largeSpacing * 2 : Kirigami.Units.gridUnit * 30)
+        title: qsTr("Ripristinare il prompt Bash?")
+        standardButtons: Controls.Dialog.Yes | Controls.Dialog.No
+        contentItem: Controls.Label {
+            wrapMode: Text.WordWrap
+            text: qsTr("Verrà rimosso solo il blocco marcato krisCC da ~/.bashrc. Il resto del file resterà invariato.")
+        }
+        onAccepted: {
+            if (CustomActionsBackend.resetBashPrompt()) {
+                root.bashPromptState = CustomActionsBackend.bashPromptStatus()
+                root.bashPromptFeedback = qsTr("Blocco prompt krisCC rimosso.")
+            }
         }
     }
 

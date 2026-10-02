@@ -1,4 +1,5 @@
 #include "CustomActionsBackend.h"
+#include "BashPromptConfig.h"
 
 #include <QDir>
 #include <QFile>
@@ -132,6 +133,127 @@ private slots:
                  QStringLiteral("utilities-terminal"));
 
         QFile::remove(configFile);
+    }
+
+    void bashPromptAddsManagedBlockWithoutReplacingExistingContent()
+    {
+        QTemporaryDir temp;
+        QVERIFY(temp.isValid());
+
+        const QString path = QDir(temp.path()).filePath(QStringLiteral(".bashrc"));
+        writeFile(path, QByteArrayLiteral("export KEEP_ME=1\n"));
+
+        QString error;
+        QVERIFY2(BashPromptConfig::applyPreset(path, QStringLiteral("readable"), &error),
+                 qPrintable(error));
+        QCOMPARE(BashPromptConfig::inspect(path), BashPromptConfig::Status::Managed);
+
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        const QByteArray data = file.readAll();
+
+        QVERIFY(data.contains("export KEEP_ME=1"));
+        QVERIFY(data.contains("# >>> krisCC prompt >>>"));
+        QVERIFY(data.contains("# <<< krisCC prompt <<<"));
+        QVERIFY(data.contains("\\\\u@\\\\h"));
+        QVERIFY(data.contains("\\\\w"));
+    }
+
+    void bashPromptReplacesExistingManagedBlock()
+    {
+        QTemporaryDir temp;
+        QVERIFY(temp.isValid());
+
+        const QString path = QDir(temp.path()).filePath(QStringLiteral(".bashrc"));
+        writeFile(path, QByteArrayLiteral("export KEEP_ME=1\n"));
+
+        QString error;
+        QVERIFY(BashPromptConfig::applyPreset(path, QStringLiteral("readable"), &error));
+        QVERIFY(BashPromptConfig::applyPreset(path, QStringLiteral("compact"), &error));
+
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        const QByteArray data = file.readAll();
+
+        QCOMPARE(data.count("# >>> krisCC prompt >>>"), 1);
+        QCOMPARE(data.count("# <<< krisCC prompt <<<"), 1);
+        QVERIFY(data.contains("export KEEP_ME=1"));
+    }
+
+    void bashPromptRejectsBrokenMarkersWithoutWriting()
+    {
+        QTemporaryDir temp;
+        QVERIFY(temp.isValid());
+
+        const QString path = QDir(temp.path()).filePath(QStringLiteral(".bashrc"));
+        const QByteArray original =
+            QByteArrayLiteral("export KEEP_ME=1\n# >>> krisCC prompt >>>\n");
+        writeFile(path, original);
+
+        QString error;
+        QVERIFY(!BashPromptConfig::applyPreset(path, QStringLiteral("readable"), &error));
+        QCOMPARE(BashPromptConfig::inspect(path), BashPromptConfig::Status::InvalidMarkers);
+
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        QCOMPARE(file.readAll(), original);
+    }
+
+    void bashPromptResetRemovesOnlyManagedBlock()
+    {
+        QTemporaryDir temp;
+        QVERIFY(temp.isValid());
+
+        const QString path = QDir(temp.path()).filePath(QStringLiteral(".bashrc"));
+        writeFile(path, QByteArrayLiteral("export KEEP_ME=1\n"));
+
+        QString error;
+        QVERIFY(BashPromptConfig::applyPreset(path, QStringLiteral("minimal"), &error));
+        QVERIFY(BashPromptConfig::removeManagedBlock(path, &error));
+        QCOMPARE(BashPromptConfig::inspect(path), BashPromptConfig::Status::Unmanaged);
+
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        const QByteArray data = file.readAll();
+
+        QVERIFY(data.contains("export KEEP_ME=1"));
+        QVERIFY(!data.contains("# >>> krisCC prompt >>>"));
+        QVERIFY(!data.contains("# <<< krisCC prompt <<<"));
+    }
+
+    void bashPromptRejectsSymlink()
+    {
+        QTemporaryDir temp;
+        QVERIFY(temp.isValid());
+
+        const QString target = QDir(temp.path()).filePath(QStringLiteral("real-bashrc"));
+        const QString link = QDir(temp.path()).filePath(QStringLiteral(".bashrc"));
+        writeFile(target, QByteArrayLiteral("export KEEP_ME=1\n"));
+        QVERIFY(QFile::link(target, link));
+
+        QString error;
+        QVERIFY(!BashPromptConfig::applyPreset(link, QStringLiteral("readable"), &error));
+        QCOMPARE(BashPromptConfig::inspect(link), BashPromptConfig::Status::Symlink);
+
+        QFile file(target);
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        QCOMPARE(file.readAll(), QByteArrayLiteral("export KEEP_ME=1\n"));
+    }
+
+    void bashPromptRejectsUnknownPreset()
+    {
+        QTemporaryDir temp;
+        QVERIFY(temp.isValid());
+
+        const QString path = QDir(temp.path()).filePath(QStringLiteral(".bashrc"));
+        writeFile(path, QByteArrayLiteral("export KEEP_ME=1\n"));
+
+        QString error;
+        QVERIFY(!BashPromptConfig::applyPreset(path, QStringLiteral("arbitrary"), &error));
+
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        QCOMPARE(file.readAll(), QByteArrayLiteral("export KEEP_ME=1\n"));
     }
 
     void refusesExistingDestination()
