@@ -47,7 +47,7 @@ target_link_libraries(krisCC PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6:
 target_compile_definitions(krisCC PRIVATE KRISCC_VERSION="${PROJECT_VERSION}")
 
 add_executable(kriscc-energy-profile src/EnergyProfileHelper.cpp)
-target_link_libraries(kriscc-energy-profile PRIVATE Qt6::Core Qt6::DBus KF6::IdleTime)
+target_link_libraries(kriscc-energy-profile PRIVATE Qt6::Core Qt6::Gui Qt6::DBus KF6::IdleTime)
 
 add_executable(kriscc-admin src/AdminHelper.cpp src/AdminPolicy.cpp src/AdminPolicy.h src/Validators.cpp src/Validators.h)
 set_target_properties(kriscc-admin PROPERTIES OUTPUT_NAME admin)

@@ -1,5 +1,5 @@
 #include <QCommandLineParser>
-#include <QCoreApplication>
+#include <QGuiApplication>
 #include <QDBusConnection>
 #include <QDBusInterface>
 #include <QDBusReply>
@@ -58,7 +58,7 @@ int applyProfile(const QString &profile)
     return 3;
 }
 
-int runProfile(QCoreApplication &app, int displaySeconds, int suspendSeconds)
+int runProfile(QGuiApplication &app, int displaySeconds, int suspendSeconds)
 {
     if (displaySeconds <= 0 || suspendSeconds <= displaySeconds)
         return 2;
@@ -137,8 +137,9 @@ int runProfile(QCoreApplication &app, int displaySeconds, int suspendSeconds)
 
 int main(int argc, char *argv[])
 {
-    QCoreApplication app(argc, argv);
-    QCoreApplication::setApplicationName(QStringLiteral("kriscc-energy-profile"));
+    QGuiApplication app(argc, argv);
+    app.setQuitOnLastWindowClosed(false);
+    QGuiApplication::setApplicationName(QStringLiteral("kriscc-energy-profile"));
 
     QCommandLineParser parser;
     parser.addHelpOption();
