@@ -102,7 +102,15 @@ Kirigami.ScrollablePage {
         }
     }
 
-    Component.onCompleted: SystemBackend.refreshServiceStates()
+    Component.onCompleted: {
+        SystemBackend.refreshServiceStates()
+
+        Qt.callLater(function() {
+            var bar = root.contentItem.Controls.ScrollBar.vertical
+            if (bar)
+                bar.width = Math.max(bar.implicitWidth, 12)
+        })
+    }
     onVisibleChanged: if (visible) refreshCurrentTab()
 
     Connections {
@@ -481,12 +489,36 @@ Kirigami.ScrollablePage {
                         text: qsTr("Nessun servizio disponibile.")
                     }
 
-                    Repeater {
+                    ListView {
+                        id: allServicesList
+
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Math.max(
+                            Kirigami.Units.gridUnit * 10,
+                            Math.min(contentHeight,
+                                     Kirigami.Units.gridUnit * 26))
+
+                        clip: true
+                        reuseItems: true
+                        spacing: Kirigami.Units.smallSpacing
+                        boundsBehavior: Flickable.StopAtBounds
+
                         model: root.filteredServices()
+
+                        rightMargin: Controls.ScrollBar.vertical.visible
+                            ? Controls.ScrollBar.vertical.width
+                              + Kirigami.Units.smallSpacing
+                            : 0
+
+                        Controls.ScrollBar.vertical: Controls.ScrollBar {
+                            policy: Controls.ScrollBar.AsNeeded
+                        }
 
                         delegate: Kirigami.AbstractCard {
                             required property var modelData
-                            Layout.fillWidth: true
+
+                            width: allServicesList.width
+                                   - allServicesList.rightMargin
 
                             contentItem: ColumnLayout {
                                 spacing: Kirigami.Units.smallSpacing
