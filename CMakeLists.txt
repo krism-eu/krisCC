@@ -65,6 +65,16 @@ if(BUILD_TESTING)
     target_link_libraries(kriscc-test-admin-policy PRIVATE Qt6::Core Qt6::Test)
     add_test(NAME admin-policy COMMAND kriscc-test-admin-policy)
 
+    add_executable(kriscc-test-polkit-helper
+        tests/test_polkit_helper.cpp
+        src/PolkitHelper.cpp src/PolkitHelper.h
+        src/OperationLog.cpp src/OperationLog.h
+        src/AdminPolicy.cpp src/AdminPolicy.h
+        src/Validators.cpp src/Validators.h)
+    target_include_directories(kriscc-test-polkit-helper PRIVATE src)
+    target_link_libraries(kriscc-test-polkit-helper PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME polkit-helper COMMAND kriscc-test-polkit-helper)
+
     add_executable(kriscc-test-process-runner tests/test_process_runner.cpp src/ProcessRunner.cpp src/ProcessRunner.h)
     target_include_directories(kriscc-test-process-runner PRIVATE src)
     target_link_libraries(kriscc-test-process-runner PRIVATE Qt6::Core Qt6::Test)
