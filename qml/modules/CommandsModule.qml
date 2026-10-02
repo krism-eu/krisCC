@@ -314,7 +314,8 @@ Kirigami.ScrollablePage {
                                     required property var modelData
                                     Layout.fillWidth: true
                                     text: modelData.name
-                                    icon.name: "media-playback-start"
+                                    icon.name: modelData.icon && modelData.icon.length > 0
+                                               ? modelData.icon : "utilities-terminal"
                                     enabled: !CustomActionsBackend.running
                                     onClicked: root.runCustom(modelData)
                                 }
@@ -355,6 +356,12 @@ Kirigami.ScrollablePage {
                                 spacing: Kirigami.Units.smallSpacing
                                 RowLayout {
                                     Layout.fillWidth: true
+                                    Kirigami.Icon {
+                                        source: modelData.icon && modelData.icon.length > 0
+                                                ? modelData.icon : "utilities-terminal"
+                                        Layout.preferredWidth: Kirigami.Units.gridUnit * 2
+                                        Layout.preferredHeight: Kirigami.Units.gridUnit * 2
+                                    }
                                     ColumnLayout {
                                         Layout.fillWidth: true
                                         spacing: 0
@@ -631,6 +638,7 @@ Kirigami.ScrollablePage {
             actionName.text = ""
             actionDescription.text = ""
             actionScript.text = ""
+            actionIcon.currentIndex = 0
             actionConfirm.checked = true
             open()
         }
@@ -640,6 +648,7 @@ Kirigami.ScrollablePage {
             actionName.text = qsTr("Cron: %1").arg(job.summary).substring(0, 80)
             actionDescription.text = qsTr("Importato dal cron utente (%1). Verifica ambiente e variabili prima dell'esecuzione manuale.").arg(job.schedule)
             actionScript.text = job.command
+            actionIcon.currentIndex = 0
             actionConfirm.checked = true
             open()
         }
@@ -649,6 +658,8 @@ Kirigami.ScrollablePage {
             actionName.text = action.name
             actionDescription.text = action.description
             actionScript.text = action.script
+            var iconIndex = actionIcon.find(action.icon || "utilities-terminal")
+            actionIcon.currentIndex = iconIndex >= 0 ? iconIndex : 0
             actionConfirm.checked = action.confirm
             open()
         }
@@ -668,6 +679,21 @@ Kirigami.ScrollablePage {
                 Layout.fillWidth: true
                 placeholderText: qsTr("A cosa serve e quando usarlo")
                 selectByMouse: true
+            }
+            Controls.Label { text: qsTr("Icona"); font.bold: false }
+            RowLayout {
+                Layout.fillWidth: true
+                Kirigami.Icon {
+                    source: actionIcon.currentText.length > 0
+                            ? actionIcon.currentText : "utilities-terminal"
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 2
+                    Layout.preferredHeight: Kirigami.Units.gridUnit * 2
+                }
+                Controls.ComboBox {
+                    id: actionIcon
+                    Layout.fillWidth: true
+                    model: CustomActionsBackend.actionIcons
+                }
             }
             Controls.Label { text: qsTr("Comando / script Bash"); font.bold: false }
             Controls.ScrollView {
@@ -703,7 +729,8 @@ Kirigami.ScrollablePage {
                             actionName.text,
                             actionDescription.text,
                             actionScript.text,
-                            actionConfirm.checked))
+                            actionConfirm.checked,
+                            actionIcon.currentText))
                         editActionDialog.close()
                 }
             }

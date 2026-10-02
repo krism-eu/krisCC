@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QString>
+#include <QStringList>
 #include <QUrl>
 #include <QVariantList>
 
@@ -13,6 +14,7 @@ class CustomActionsBackend : public QObject
     Q_OBJECT
     Q_PROPERTY(QVariantList actions READ actions NOTIFY actionsChanged)
     Q_PROPERTY(QVariantList quickActions READ quickActions NOTIFY actionsChanged)
+    Q_PROPERTY(QStringList actionIcons READ actionIcons CONSTANT)
     Q_PROPERTY(bool running READ running NOTIFY stateChanged)
     Q_PROPERTY(QString runningId READ runningId NOTIFY stateChanged)
     Q_PROPERTY(QString output READ output NOTIFY stateChanged)
@@ -25,6 +27,7 @@ public:
 
     const QVariantList &actions() const { return m_actions; }
     QVariantList quickActions() const;
+    QStringList actionIcons() const;
     bool running() const { return m_running; }
     const QString &runningId() const { return m_runningId; }
     const QString &output() const { return m_output; }
@@ -35,6 +38,9 @@ public:
     Q_INVOKABLE bool saveAction(const QString &id, const QString &name,
                                 const QString &description, const QString &script,
                                 bool confirmBeforeRun);
+    Q_INVOKABLE bool saveAction(const QString &id, const QString &name,
+                                const QString &description, const QString &script,
+                                bool confirmBeforeRun, const QString &iconName);
     Q_INVOKABLE bool removeAction(const QString &id);
     Q_INVOKABLE bool setQuickAction(const QString &id, bool quick);
     Q_INVOKABLE bool runAction(const QString &id);

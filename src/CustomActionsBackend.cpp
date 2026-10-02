@@ -28,6 +28,31 @@ constexpr qsizetype kMaxScript = 64 * 1024;
 constexpr qsizetype kMaxCombinedTextBytes = 16 * 1024 * 1024;
 constexpr int kActionTimeoutMs = 30 * 60 * 1000;
 const QString kShell = QStringLiteral("/usr/bin/bash");
+const QString kDefaultActionIcon = QStringLiteral("utilities-terminal");
+
+const QStringList &allowedActionIcons()
+{
+    static const QStringList icons = {
+        QStringLiteral("utilities-terminal"),
+        QStringLiteral("system-run"),
+        QStringLiteral("system-search"),
+        QStringLiteral("applications-system"),
+        QStringLiteral("preferences-system"),
+        QStringLiteral("drive-harddisk"),
+        QStringLiteral("folder"),
+        QStringLiteral("document-new"),
+        QStringLiteral("document-save"),
+        QStringLiteral("network-wired"),
+        QStringLiteral("dialog-information"),
+        QStringLiteral("tools-wizard")
+    };
+    return icons;
+}
+
+QString normalizedActionIcon(const QString &iconName)
+{
+    return allowedActionIcons().contains(iconName) ? iconName : kDefaultActionIcon;
+}
 
 bool isUtf8Text(const QByteArray &data)
 {
@@ -143,7 +168,9 @@ void CustomActionsBackend::reload()
             || !object.value(QStringLiteral("script")).isString()
             || !object.value(QStringLiteral("confirm")).isBool()
             || (object.contains(QStringLiteral("quick"))
-                && !object.value(QStringLiteral("quick")).isBool())) {
+                && !object.value(QStringLiteral("quick")).isBool())
+            || (object.contains(QStringLiteral("icon"))
+                && !object.value(QStringLiteral("icon")).isString())) {
             m_storageValid = false;
             break;
         }
@@ -167,6 +194,8 @@ void CustomActionsBackend::reload()
         action.insert(QStringLiteral("script"), script);
         action.insert(QStringLiteral("confirm"), object.value(QStringLiteral("confirm")).toBool());
         action.insert(QStringLiteral("quick"), object.value(QStringLiteral("quick")).toBool(false));
+        action.insert(QStringLiteral("icon"),
+                      normalizedActionIcon(object.value(QStringLiteral("icon")).toString()));
         loaded.append(action);
     }
 
@@ -238,6 +267,8 @@ bool CustomActionsBackend::persist()
         object.insert(QStringLiteral("script"), action.value(QStringLiteral("script")).toString());
         object.insert(QStringLiteral("confirm"), action.value(QStringLiteral("confirm")).toBool());
         object.insert(QStringLiteral("quick"), action.value(QStringLiteral("quick")).toBool());
+        object.insert(QStringLiteral("icon"),
+                      normalizedActionIcon(action.value(QStringLiteral("icon")).toString()));
         array.append(object);
     }
 
@@ -263,6 +294,19 @@ bool CustomActionsBackend::persist()
 bool CustomActionsBackend::saveAction(const QString &id, const QString &name,
                                       const QString &description, const QString &script,
                                       bool confirmBeforeRun)
+{
+    QString iconName = kDefaultActionIcon;
+    const int existingIndex = indexForId(id.trimmed());
+    if (existingIndex >= 0) {
+        iconName = normalizedActionIcon(
+            m_actions.at(existingIndex).toMap().value(QStringLiteral("icon")).toString());
+    }
+    return saveAction(id, name, description, script, confirmBeforeRun, iconName);
+}
+
+bool CustomActionsBackend::saveAction(const QString &id, const QString &name,
+                                      const QString &description, const QString &script,
+                                      bool confirmBeforeRun, const QString &iconName)
 {
     if (m_running || !m_storageValid)
         return false;
@@ -303,6 +347,7 @@ bool CustomActionsBackend::saveAction(const QString &id, const QString &name,
     action.insert(QStringLiteral("script"), script);
     action.insert(QStringLiteral("confirm"), confirmBeforeRun);
     action.insert(QStringLiteral("quick"), wasQuick);
+    action.insert(QStringLiteral("icon"), normalizedActionIcon(iconName));
 
     const QVariantList previous = m_actions;
     if (index >= 0)
@@ -317,6 +362,11 @@ bool CustomActionsBackend::saveAction(const QString &id, const QString &name,
 
     emit actionsChanged();
     return true;
+}
+
+QStringList CustomActionsBackend::actionIcons() const
+{
+    return allowedActionIcons();
 }
 
 QVariantList CustomActionsBackend::quickActions() const

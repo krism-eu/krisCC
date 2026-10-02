@@ -88,6 +88,52 @@ private slots:
         QVERIFY(!data.contains("nascosto.txt"));
     }
 
+    void storesAndReloadsActionIcon()
+    {
+        const QString configFile =
+            QDir(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation))
+                .filePath(QStringLiteral("custom-actions.json"));
+        QFile::remove(configFile);
+
+        {
+            CustomActionsBackend backend;
+            QVERIFY(backend.saveAction(QString(), QStringLiteral("Dischi"),
+                                       QStringLiteral("Test icona"),
+                                       QStringLiteral("printf ok"), true,
+                                       QStringLiteral("drive-harddisk")));
+            QCOMPARE(backend.actions().size(), 1);
+            QCOMPARE(backend.actions().first().toMap().value(QStringLiteral("icon")).toString(),
+                     QStringLiteral("drive-harddisk"));
+        }
+
+        {
+            CustomActionsBackend reloaded;
+            QCOMPARE(reloaded.actions().size(), 1);
+            QCOMPARE(reloaded.actions().first().toMap().value(QStringLiteral("icon")).toString(),
+                     QStringLiteral("drive-harddisk"));
+        }
+
+        QFile::remove(configFile);
+    }
+
+    void invalidActionIconFallsBackSafely()
+    {
+        const QString configFile =
+            QDir(QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation))
+                .filePath(QStringLiteral("custom-actions.json"));
+        QFile::remove(configFile);
+
+        CustomActionsBackend backend;
+        QVERIFY(backend.saveAction(QString(), QStringLiteral("Fallback"),
+                                   QString(), QStringLiteral("true"), false,
+                                   QStringLiteral("../../icona-arbitraria")));
+        QCOMPARE(backend.actions().size(), 1);
+        QCOMPARE(backend.actions().first().toMap().value(QStringLiteral("icon")).toString(),
+                 QStringLiteral("utilities-terminal"));
+
+        QFile::remove(configFile);
+    }
+
     void refusesExistingDestination()
     {
         QTemporaryDir temp;
