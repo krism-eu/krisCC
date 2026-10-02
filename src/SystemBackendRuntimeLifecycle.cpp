@@ -39,21 +39,10 @@ SystemBackendRuntime::~SystemBackendRuntime()
 {
     stopBootReader(m_uefiProcess);
     stopBootReader(m_grubProcess);
-
-    // A forced external shutdown cannot wait for the interactive coordinator.
-    // Keep a still-active workspace instead of deleting it under a running
-    // helper; the base destructor then terminates the tracked process group.
-    if (m_backupRunner && m_backupRunner->running() && m_backupWorkspace)
-        m_backupWorkspace->setAutoRemove(false);
 }
 
 void SystemBackendRuntime::requestReboot()
 {
-    if (m_backupBusy) {
-        emit rebootFinished(false,
-                            tr("Riavvio rimandato: attendere il completamento o annullare backup/verifica/ripristino."));
-        return;
-    }
     if (mutationRunning()) {
         emit rebootFinished(false,
                             tr("Riavvio rimandato: è ancora in corso una modifica di sistema o un'operazione amministrativa."));
@@ -66,11 +55,6 @@ void SystemBackendRuntime::requestFirmwareReboot()
 {
     // SetRebootToFirmwareSetup changes persistent reboot intent in logind. Do not
     // set it until the same lifecycle gate used by ordinary reboot is clear.
-    if (m_backupBusy) {
-        emit rebootFinished(false,
-                            tr("Riavvio nel firmware rimandato: attendere il completamento o annullare backup/verifica/ripristino."));
-        return;
-    }
     if (mutationRunning()) {
         emit rebootFinished(false,
                             tr("Riavvio nel firmware rimandato: è ancora in corso una modifica di sistema o un'operazione amministrativa."));

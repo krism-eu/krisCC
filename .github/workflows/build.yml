@@ -55,7 +55,7 @@ jobs:
         run: >-
           dnf -y --setopt=updates-testing.enabled=false install gcc-c++ cmake ninja-build gzip python3
           qt6-qtbase-devel qt6-qtdeclarative-devel kf6-kirigami-devel
-          bootc dnf5 dnf5-plugins rpm rpm-build tar qqc2-breeze-style libarchive
+          bootc dnf5 dnf5-plugins rpm rpm-build tar qqc2-breeze-style
 
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
@@ -95,58 +95,6 @@ jobs:
 
       - name: Cross-layer release audit
         run: python3 ./tests/release-audit.py
-
-      - name: GNU tar restore traversal contract
-        shell: bash
-        run: |
-          set -euo pipefail
-          tmp="$(mktemp -d)"
-          trap 'rm -rf "$tmp" /kriscc-absolute-escape-test' EXIT
-          mkdir -p "$tmp/out-parent" "$tmp/out-absolute" "$tmp/out-symlink"
-          python3 - "$tmp" <<'PY'
-          import io
-          import pathlib
-          import sys
-          import tarfile
-
-          root = pathlib.Path(sys.argv[1])
-          payload = b"blocked\n"
-
-          with tarfile.open(root / "parent.tar.gz", "w:gz") as tar:
-              info = tarfile.TarInfo("../escape.txt")
-              info.size = len(payload)
-              tar.addfile(info, io.BytesIO(payload))
-
-          with tarfile.open(root / "absolute.tar.gz", "w:gz") as tar:
-              info = tarfile.TarInfo("/kriscc-absolute-escape-test")
-              info.size = len(payload)
-              tar.addfile(info, io.BytesIO(payload))
-
-          with tarfile.open(root / "symlink.tar.gz", "w:gz") as tar:
-              link = tarfile.TarInfo("link")
-              link.type = tarfile.SYMTYPE
-              link.linkname = "../../kriscc-symlink-escape"
-              tar.addfile(link)
-              info = tarfile.TarInfo("link/pwn.txt")
-              info.size = len(payload)
-              tar.addfile(info, io.BytesIO(payload))
-          PY
-
-          if tar -xzf "$tmp/parent.tar.gz" --no-same-owner --no-same-permissions -C "$tmp/out-parent"; then
-            echo "ERROR: GNU tar accepted a ../ member" >&2
-            exit 1
-          fi
-          test ! -e "$tmp/escape.txt"
-
-          tar -xzf "$tmp/absolute.tar.gz" --no-same-owner --no-same-permissions -C "$tmp/out-absolute" || true
-          test ! -e /kriscc-absolute-escape-test
-          test -f "$tmp/out-absolute/kriscc-absolute-escape-test"
-
-          if tar -xzf "$tmp/symlink.tar.gz" --no-same-owner --no-same-permissions -C "$tmp/out-symlink"; then
-            echo "ERROR: GNU tar followed an escaping symlink member" >&2
-            exit 1
-          fi
-          test ! -e "$tmp/kriscc-symlink-escape"
 
       - name: Validate RPM spec
         env:

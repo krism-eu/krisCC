@@ -45,15 +45,10 @@ package_inventory_h = read("src/PackageInventoryCache.h")
 package_inventory_test = read("tests/test_package_inventory.cpp")
 system_cpp = read("src/SystemBackend.cpp")
 system_h = read("src/SystemBackend.h")
-runtime_cpp = read("src/SystemBackendRuntime.cpp")
 runtime_h = read("src/SystemBackendRuntime.h")
-runtime_archive = read("src/SystemBackendRuntimeArchive.cpp")
 runtime_lifecycle = read("src/SystemBackendRuntimeLifecycle.cpp")
 runtime_services = read("src/SystemBackendRuntimeServices.cpp")
 runtime_boot = read("src/SystemBackendRuntimeBoot.cpp")
-archive_tool = read("src/ArchiveTool.cpp")
-archive_restore = read("src/ArchiveRestoreEngine.cpp")
-backup_safety = read("src/BackupSafety.cpp")
 process_runner = read("src/ProcessRunner.cpp")
 service_manager_cpp = read("src/ServiceManagerBackend.cpp")
 service_json_cpp = read("src/ServiceJson.cpp")
@@ -89,10 +84,11 @@ require(all(f"Requires:       {path}" in spec for path in runtime_paths)
         and 'Requires:       coreutils' not in spec
         and 'Requires:       systemd' not in spec,
         "Fedora 45 runtime contract must use executable-path requirements")
-require('Requires:       libarchive' in spec
-        and '%{_libexecdir}/kriscc/archive' in spec
-        and '%{_libexecdir}/kriscc/cleanup-estimate' in spec,
-        "structured archive/cleanup helpers are not packaged with their runtime contract")
+require('%{_libexecdir}/kriscc/cleanup-estimate' in spec
+        and 'Requires:       libarchive' not in spec
+        and 'Requires:       tar' not in spec
+        and '%{_libexecdir}/kriscc/archive' not in spec,
+        "retired personal-backup runtime dependencies/helper are still packaged")
 require('KRISCC_VERSION="${PROJECT_VERSION}"' in cmake,
         "UI version must be exactly canonical X.Y.Z")
 require('KrisCCVersion.cmake' in workflow
@@ -131,10 +127,9 @@ require('run_git(root, "ls-tree", "-r", "-z", "--full-tree", commit)' in source_
 require('SystemBackendRuntime systemBackend(&polkitHelper);' in main_cpp,
         "main does not instantiate the hardened SystemBackend runtime")
 for source in (
-    "src/SystemBackendRuntime.cpp", "src/SystemBackendRuntime.h",
-    "src/SystemBackendRuntimeArchive.cpp", "src/SystemBackendRuntimeLifecycle.cpp",
+    "src/SystemBackendRuntime.h", "src/SystemBackendRuntimeLifecycle.cpp",
     "src/SystemBackendRuntimeServices.cpp", "src/SystemBackendRuntimeBoot.cpp",
-    "src/BackupSafety.cpp", "src/ArchiveRestoreEngine.cpp", "src/SystemdJobCoordinator.cpp",
+    "src/SystemdJobCoordinator.cpp",
     "src/ServiceJson.cpp", "src/PackageInventoryCache.cpp",
 ):
     require(source in cmake, f"active hardening source not linked: {source}")
@@ -142,7 +137,7 @@ for source in (
 # Unit/regression coverage is part of the release contract.
 for target in (
     "kriscc-test-validators", "kriscc-test-admin-policy", "kriscc-test-process-runner",
-    "kriscc-test-backup-safety", "kriscc-test-archive-restore", "kriscc-test-service-json",
+    "kriscc-test-service-json",
     "kriscc-test-service-manager-reentrancy", "kriscc-test-systemd-job-coordinator",
     "kriscc-test-maintenance-trash", "cleanup-estimate", "kriscc-test-package-inventory",
     "kriscc-test-parsers", "kriscc-test-cron-parser",
@@ -218,73 +213,27 @@ require("cancellationOutlivesLeaderAndKillsChild" in process_runner_test
 require("ProcessRunner" in custom_cpp and "ProcessRunner" in utility_cpp,
         "custom actions and utility commands must use the shared ProcessRunner")
 
-# KR-01/02/03/14/15: stable archive identity, structural records, bounded plan, confined apply.
-require("ArchiveRestoreEngine" in cmake
-        and "makeStableArchiveCopy" in archive_tool
-        and "validate-created" in archive_tool,
-        "active backup path does not use the structured archive helper")
-require('m_library.setFileName(QStringLiteral("archive"))' in archive_restore
-        and 'archive_read_next_header' in archive_restore
-        and 'archive_entry_pathname' in archive_restore
-        and 'archive_entry_symlink' in archive_restore
-        and 'archive_entry_hardlink' in archive_restore,
-        "archive validation reconstructs metadata instead of reading structured records")
-require("kMaxMembers" in archive_restore
-        and "kMaxPathBytes" in archive_restore
-        and "kMaxSingleFileBytes" in archive_restore
-        and "kMaxTotalFileBytes" in archive_restore,
-        "archive resource limits are missing")
-require("RESOLVE_BENEATH" in archive_restore
-        and "RESOLVE_NO_SYMLINKS" in archive_restore
-        and "RESOLVE_NO_XDEV" in archive_restore
-        and "O_NOFOLLOW" in archive_restore
-        and "openat2 non disponibile: ripristino confinato rifiutato" in archive_restore,
-        "restore path traversal is not fail-closed or mount-confined")
-require("Membro duplicato o ambiguo" in archive_restore
-        and "Ciclo di hard link" in archive_restore
-        and "Hard link verso membro assente" in archive_restore
-        and "Conflitto file/directory" in archive_restore,
-        "archive plan does not reject ambiguous link/type graphs")
-require("QTemporaryDir" in runtime_archive
-        and "setAutoRemove(true)" in runtime_archive
-        and "ReadOwner" in runtime_archive
-        and "m_backupWorkspace" in runtime_h,
-        "backup/restore workspace is not private and lifecycle-owned")
-require("BackupSafety::listBackups" in runtime_cpp
-        and "BackupSafety::removeBackup" in runtime_cpp
-        and "AT_SYMLINK_NOFOLLOW" in backup_safety
-        and "unlinkat" in backup_safety,
-        "backup inventory/delete does not share descriptor-anchored admissibility")
-require("appendBackupDestinationExclusions" in runtime_cpp
-        and "backupRoot == canonicalHome" in runtime_cpp
-        and 'QStringLiteral("--exclude=") + relative' in runtime_cpp,
-        "backup destination exclusion is not shared by config/home creation")
-require("partialFile.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner)" in runtime_cpp,
-        "backup partial file must be created as 0600")
-require("startCreatedArchiveValidation" in runtime_cpp
-        and "Snapshot creato e validato correttamente" in runtime_archive,
-        "created snapshots are published without restore-policy validation")
-require("kriscc-test-backup-safety" in cmake and "kriscc-test-archive-restore" in cmake,
-        "behavioral backup regressions are not wired")
-archive_restore_test = read("tests/test_archive_restore.cpp")
-for case in (
-    "internalRelativeLinkIsAccepted", "relativeTargetLeavingRootIsRejected",
-    "absoluteSymlinkIsPreservedButNeverTraversed", "preexistingDestinationSymlinkCannotEscape",
-    "internalHardLinkIsAcceptedAndRestored", "duplicateMemberIsRejected",
-    "missingHardLinkTargetIsRejected", "delimiterTextInRegularNameIsAccepted",
-):
-    require(case in archive_restore_test, f"missing archive restore regression: {case}")
+# Personal backups are delegated to Back In Time.
+require('QStringLiteral("backintime"), QStringLiteral("backintime-qt")' in system_cpp
+        and 'SystemBackend.toolAvailable("backintime")' in recovery_qml
+        and 'SystemBackend.launchTool("backintime")' in recovery_qml,
+        "personal backup is not delegated to Back In Time")
+require("createSnapshot" not in system_h
+        and "backupBusy" not in system_h
+        and "kriscc-archive" not in cmake
+        and "ArchiveRestoreEngine" not in cmake
+        and "BackupSafety" not in cmake,
+        "retired internal personal-backup engine is still exposed or built")
 
-# KR-13: close/reboot coordinate with active mutation and cancellation lifecycle.
+# KR-13: close/reboot coordinate with active mutations still owned by krisCC.
 require("onClosing: function(close)" in main_qml
-        and "SystemBackend.backupBusy" in main_qml
-        and "closeAfterBackupCancel" in main_qml
-        and "nonBackupMutationActive" in main_qml,
+        and "mutationActive" in main_qml
+        and "SystemBackend.mutationRunning" in main_qml,
         "window close does not coordinate with active mutations")
-require("if (m_backupBusy)" in runtime_lifecycle
+require("if (mutationRunning())" in runtime_lifecycle
         and "Riavvio rimandato" in runtime_lifecycle
-        and "m_backupWorkspace->setAutoRemove(false)" in runtime_lifecycle,
-        "reboot/destruction can race a running backup or restore")
+        and "Riavvio nel firmware rimandato" in runtime_lifecycle,
+        "reboot paths do not coordinate with active system mutations")
 
 # KR-05/KR-12/KR-16: trash metadata order, single cleanup session, reliable estimates.
 require("successfullyRemovedData" in maintenance_trash
@@ -405,12 +354,6 @@ require("qml/modules/PodmanModule.qml" not in cmake
 require('else if (pageId === "flatpak") SystemBackend.launchTool("discover")' in main_qml
         and '{ id: "flatpak", title: qsTr("Flatpak")' in dashboard_qml,
         "Dashboard Flatpak entry must delegate to KDE Discover")
-require("backupDirectory" in system_h and "setBackupDirectory" in system_cpp,
-        "selectable backup destination is missing")
-require('qsTr("Escluso: ")' not in recovery_qml
-        and 'qsTr("presente")' not in recovery_qml
-        and 'qsTr("assente")' not in recovery_qml,
-        "Backup preview must show only entries actually included")
 require("topMemoryProcesses" in system_h
         and "std::min<qsizetype>(10, entries.size())" in system_cpp,
         "Dashboard top-memory model regressed")
@@ -496,7 +439,7 @@ for ignored in ("stage/", "artifacts/", "audit-build/", "*.rpm"):
 require("--output=json" in read("INTEGRAZIONE.md")
         and "list-units" in read("INTEGRAZIONE.md")
         and "list-unit-files" in read("INTEGRAZIONE.md")
-        and "libarchive" in read("INTEGRAZIONE.md")
+        and "Back In Time" in read("INTEGRAZIONE.md")
         and "fotografia coerente" in read("INTEGRAZIONE.md"),
         "integration docs do not state current structured runtime/inventory contracts")
 require("auth_admin_keep" not in read("data/org.kriscc.controlcenter.policy"),

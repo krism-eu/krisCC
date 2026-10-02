@@ -20,46 +20,10 @@ grep -Fq 'Riavvio nel firmware rimandato' "$LIFECYCLE_CPP"
 grep -Fq 'emit mutationRunningChanged();' "$SERVICES_CPP"
 grep -Fq 'SystemBackend.mutationRunning' "$MAIN_QML"
 grep -Fq 'ServiceManagerBackend.busy' "$MAIN_QML"
-grep -Fq 'if (SystemBackend.backupBusy)' "$MAIN_QML"
-grep -Fq 'closeAfterBackupCancel && !SystemBackend.backupBusy' "$MAIN_QML"
-
-
-# F1: recheck non-backup mutations after backup cancellation
-F1_BLOCK="$(
-    awk '
-        /function onBackupBusyChanged\(\)/ {capture=1}
-        capture {print}
-        capture && /function showIndex\(/ {exit}
-    ' "$MAIN_QML"
-)"
-
-printf '%s\n' "$F1_BLOCK" \
-    | grep -Fq 'if (root.nonBackupMutationActive())'
-
-printf '%s\n' "$F1_BLOCK" \
-    | grep -Fq 'operationInProgressDialog.open()'
-
-printf '%s\n' "$F1_BLOCK" | awk '
-    /if \(root\.nonBackupMutationActive\(\)\)/ {
-        mutation_check = NR
-    }
-    /root\.allowClose = true/ {
-        allow_close = NR
-    }
-    /Qt\.callLater\(Qt\.quit\)/ {
-        quit_call = NR
-    }
-    END {
-        if (!mutation_check || !allow_close || !quit_call)
-            exit 1
-        if (!(mutation_check < allow_close && allow_close < quit_call))
-            exit 1
-    }
-'
 
 
 # F2: reboot uses the application mutation gate
-grep -Fq 'appMutationRunning: root.nonBackupMutationActive()' "$MAIN_QML"
+grep -Fq 'appMutationRunning: root.mutationActive()' "$MAIN_QML"
 grep -Fq 'property bool appMutationRunning: false' "$SYSTEM_QML"
 grep -Fq 'function requestRebootSafely(firmware)' "$SYSTEM_QML"
 grep -Fq 'root.requestRebootSafely(false)' "$SYSTEM_QML"
@@ -67,3 +31,8 @@ grep -Fq 'root.requestRebootSafely(true)' "$SYSTEM_QML"
 
 test "$(grep -Fc 'SystemBackend.requestReboot()' "$SYSTEM_QML")" -eq 1
 test "$(grep -Fc 'SystemBackend.requestFirmwareReboot()' "$SYSTEM_QML")" -eq 1
+
+# Internal personal backup is retired.
+! grep -Fq 'SystemBackend.backupBusy' "$MAIN_QML"
+! grep -Fq 'cancelSnapshot' "$MAIN_QML"
+grep -Fq 'if (root.mutationActive())' "$MAIN_QML"

@@ -23,7 +23,7 @@ jobs:
           gcc-c++ cmake ninja-build gzip python3 bash
           qt6-qtbase-devel qt6-qtdeclarative-devel kf6-kirigami-devel
           bootc dnf5 dnf5-plugins rpm rpm-build tar qqc2-breeze-style
-          ShellCheck cppcheck libxml2 appstream desktop-file-utils libarchive
+          ShellCheck cppcheck libxml2 appstream desktop-file-utils
       - name: Shell syntax
         shell: bash
         run: |
@@ -77,7 +77,6 @@ jobs:
           DESTDIR="$PWD/stage" cmake --install audit-build --prefix /usr
           test -x stage/usr/bin/krisCC
           test -x stage/usr/libexec/kriscc/admin
-          test -x stage/usr/libexec/kriscc/archive
           test -x stage/usr/libexec/kriscc/cleanup-estimate
           test -x stage/usr/libexec/kriscc/maintenance
       - name: Build RPM
@@ -93,5 +92,4 @@ jobs:
           test -n "$rpm_file"
           rpm -qpl "$rpm_file" > /tmp/kriscc-rpm-files
           grep -Fxq '/usr/bin/krisCC' /tmp/kriscc-rpm-files
-          grep -Fxq '/usr/libexec/kriscc/archive' /tmp/kriscc-rpm-files
           grep -Fxq '/usr/libexec/kriscc/cleanup-estimate' /tmp/kriscc-rpm-files

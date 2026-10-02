@@ -52,12 +52,6 @@ class SystemBackend : public QObject
     Q_PROPERTY(QString networkKind READ networkKind NOTIFY networkChanged)
     Q_PROPERTY(bool internetIdentityBusy READ internetIdentityBusy NOTIFY internetIdentityChanged)
     Q_PROPERTY(QString internetIdentity READ internetIdentity NOTIFY internetIdentityChanged)
-    Q_PROPERTY(bool backupBusy READ backupBusy NOTIFY backupBusyChanged)
-    Q_PROPERTY(QString backupStatus READ backupStatus NOTIFY backupStatusChanged)
-    Q_PROPERTY(QString backupPath READ backupPath NOTIFY backupStatusChanged)
-    Q_PROPERTY(QString backupState READ backupState NOTIFY backupStatusChanged)
-    Q_PROPERTY(QString backupDirectory READ backupDirectory NOTIFY backupDirectoryChanged)
-    Q_PROPERTY(bool backupIsLocalSnapshot READ backupIsLocalSnapshot NOTIFY backupDirectoryChanged)
     Q_PROPERTY(bool controlCenterUpdateBusy READ controlCenterUpdateBusy NOTIFY controlCenterUpdateChanged)
     Q_PROPERTY(bool controlCenterUpdateAvailable READ controlCenterUpdateAvailable NOTIFY controlCenterUpdateChanged)
     Q_PROPERTY(QString controlCenterLatestVersion READ controlCenterLatestVersion NOTIFY controlCenterUpdateChanged)
@@ -102,12 +96,6 @@ public:
     bool internetIdentityBusy() const { return m_internetIdentityBusy; }
     const QString &internetIdentity() const { return m_internetIdentity; }
 
-    bool backupBusy() const { return m_backupBusy; }
-    const QString &backupStatus() const { return m_backupStatus; }
-    const QString &backupPath() const { return m_backupPath; }
-    const QString &backupState() const { return m_backupState; }
-    const QString &backupDirectory() const { return m_backupDirectory; }
-    bool backupIsLocalSnapshot() const;
     bool controlCenterUpdateBusy() const { return m_controlCenterUpdateBusy; }
     bool controlCenterUpdateAvailable() const { return m_controlCenterUpdateAvailable; }
     const QString &controlCenterLatestVersion() const { return m_controlCenterLatestVersion; }
@@ -147,23 +135,10 @@ public:
     Q_INVOKABLE bool selectNextGrub(const QString &entry);
     Q_INVOKABLE void notify(const QString &summary, const QString &body = QString()) const;
 
-    Q_INVOKABLE virtual bool createSnapshot(const QString &kind);
-    Q_INVOKABLE bool setBackupDirectory(const QString &pathOrUrl);
-    Q_INVOKABLE virtual bool cancelSnapshot();
-    Q_INVOKABLE virtual QVariantList backups() const;
-    Q_INVOKABLE virtual bool verifySnapshot(const QString &path);
-    Q_INVOKABLE virtual bool restoreSnapshot(const QString &path);
-    Q_INVOKABLE virtual bool deleteSnapshot(const QString &path);
-    Q_INVOKABLE bool openBackupFolder() const;
-    Q_INVOKABLE QVariantList backupPreview(const QString &kind) const;
-
     Q_INVOKABLE QVariantList operationHistoryEntries() const;
     Q_INVOKABLE bool clearOperationHistory();
 
 signals:
-    void backupBusyChanged();
-    void backupStatusChanged();
-    void backupDirectoryChanged();
     void rebootFinished(bool success, const QString &message);
     void bootSelectionStateChanged();
     void bootSelectionFinished(const QString &kind, bool success, const QString &output);
@@ -182,13 +157,6 @@ protected:
     QString readOsName() const;
     QString toolProgram(const QString &toolId) const;
     QString resolveExecutable(const QString &program) const;
-    bool validateBackupPath(const QString &path, QString *canonicalPath = nullptr) const;
-    QString defaultBackupDirectory() const;
-    bool validateBackupDirectory(const QString &path, QString *canonicalPath = nullptr) const;
-    QString currentBackupRoot() const;
-    void setBackupBusy(bool busy);
-    void setBackupResult(const QString &status, const QString &path = QString(),
-                         const QString &state = QStringLiteral("idle"));
     void refreshResources();
     void refreshTopMemoryProcesses();
     void refreshNetworkState();
@@ -237,11 +205,4 @@ protected:
     bool m_controlCenterUpdateAvailable = false;
     QString m_controlCenterLatestVersion;
     QString m_controlCenterUpdateStatus;
-    QPointer<ProcessRunner> m_backupRunner;
-    bool m_backupBusy = false;
-    QString m_backupStatus;
-    QString m_backupPath;
-    QString m_backupState = QStringLiteral("idle");
-    QString m_backupDirectory;
-    QString m_backupPartialPath;
 };

@@ -3,9 +3,7 @@
 #include "SystemBackend.h"
 
 #include <QPointer>
-#include <QTemporaryDir>
 
-#include <memory>
 
 class SystemdJobCoordinator;
 
@@ -28,12 +26,6 @@ public:
     const QString &uefiEntriesError() const { return m_uefiError; }
     const QString &grubEntriesError() const { return m_grubError; }
 
-    bool createSnapshot(const QString &kind) override;
-    bool cancelSnapshot() override;
-    QVariantList backups() const override;
-    bool verifySnapshot(const QString &path) override;
-    bool restoreSnapshot(const QString &path) override;
-    bool deleteSnapshot(const QString &path) override;
     void requestReboot() override;
     Q_INVOKABLE void requestFirmwareReboot() override;
 
@@ -50,22 +42,11 @@ signals:
     void mutationRunningChanged();
 
 private:
-    bool appendBackupDestinationExclusions(const QString &kind, const QString &home,
-                                           const QString &backupRoot,
-                                           const QString &output,
-                                           const QString &partial,
-                                           QStringList *arguments,
-                                           QString *error) const;
-    QString archiveHelperPath() const;
-    bool prepareBackupWorkspace(QString *error);
-    void clearBackupWorkspace();
-    bool startCreatedArchiveValidation(const QString &output, const QString &partial);
     SystemdJobCoordinator *systemdJobs();
     bool startSystemdJob(const QString &service, const QString &action);
     void ensureBootRuntimeConnections();
     void syncBootAggregate();
 
-    std::unique_ptr<QTemporaryDir> m_backupWorkspace;
     SystemdJobCoordinator *m_systemdJobCoordinator = nullptr;
 
     QPointer<QProcess> m_uefiProcess;

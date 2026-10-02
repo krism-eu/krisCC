@@ -14,7 +14,7 @@ La navigazione principale ha sette sezioni operative:
 - **Software RPM**: ricerca, installati, aggiornabili, provenienza Base/Persistente/Layer non richiesti e piano delle transazioni tramite `rk`.
 - **Servizi & Rete**: servizi system/user, unità fallite, journal minimale filtrabile, controlli dei servizi comuni, NetworkManager, reconnect, flush DNS e identità Internet su richiesta.
 - **Sistema & Boot**: BootC/rk, stato Control Center, cronologia locale, reboot firmware, kernel arguments, gestione UEFI NVRAM/BootOrder, GRUB/BLS e viste storage.
-- **Backup & Recovery**: creazione, anteprima, verifica e ripristino degli snapshot `tar.gz`, più stato e recovery `rk`. Il restore valida in streaming tutti i membri e i tipi prima dell'estrazione.
+- **Backup & Recovery**: launcher per Back In Time per i backup personali, più stato e recovery `rk` di KrisOS.
 - **Comandi**: bookmark diagnostici read-only, azioni rapide, script Bash personali rootless e vista Cron in sola lettura.
 - **Strumenti & Fix**: riparazione audio, pulizia, diagnostica, support report e collegamenti agli strumenti esterni.
 
@@ -94,4 +94,4 @@ Repository: https://github.com/krism-eu/krisCC
 
 ## Test reale
 
-La CI verifica compilazione, caricamento QML/Kirigami, controlli DNF5 locali, spec RPM, installazione di staging e installazione/smoke dell'RPM. Per il pre-gate KrisOS45, durante Fedora 45 Branched `tests/f45-minimal-runtime.sh <rpm>` usa la base bootc Fedora 45 `:latest`, la sincronizza con i repository correnti e rifiuta qualsiasi sostituzione di un RPM già appartenente alla base sincronizzata; il digest verrà fissato alla stable. Prima di considerare una release definitiva vanno comunque provati sulla macchina reale: `rk plan/add/rm/sync`, autenticazione Polkit, ricerca RPM, apertura/gestione Flatpak tramite Discover, applicazione container esterna, Tools & Fix, servizi/rete, `bootc upgrade --check`, download/apply BootC, creazione/verifica/ripristino backup e selezione one-shot UEFI/GRUB quando gli strumenti sono presenti.
+La CI verifica compilazione, caricamento QML/Kirigami, controlli DNF5 locali, spec RPM, installazione di staging e installazione/smoke dell'RPM. Per il pre-gate KrisOS45, durante Fedora 45 Branched `tests/f45-minimal-runtime.sh <rpm>` usa la base bootc Fedora 45 `:latest`, la sincronizza con i repository correnti e rifiuta qualsiasi sostituzione di un RPM già appartenente alla base sincronizzata; il digest verrà fissato alla stable. Prima di considerare una release definitiva vanno comunque provati sulla macchina reale: `rk plan/add/rm/sync`, autenticazione Polkit, ricerca RPM, apertura/gestione Flatpak tramite Discover, applicazione container esterna, Tools & Fix, servizi/rete, `bootc upgrade --check`, download/apply BootC, apertura di Back In Time e selezione one-shot UEFI/GRUB quando gli strumenti sono presenti.
