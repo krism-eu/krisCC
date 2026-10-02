@@ -12,10 +12,12 @@ BuildRequires:  ninja-build
 BuildRequires:  qt6-qtbase-devel
 BuildRequires:  qt6-qtdeclarative-devel
 BuildRequires:  kf6-kirigami-devel
+BuildRequires:  kf6-kidletime-devel
 
 Requires:       qt6-qtbase
 Requires:       qt6-qtdeclarative
 Requires:       kf6-kirigami
+Requires:       kf6-kidletime
 Requires:       polkit
 Requires:       rpm
 Requires:       dnf5
@@ -25,6 +27,8 @@ Requires:       bootc
 Requires:       bash
 Requires:       /usr/bin/timeout
 Requires:       /usr/bin/systemctl
+Requires:       /usr/bin/systemd-run
+Requires:       /usr/bin/kscreen-doctor
 Requires:       /usr/bin/loginctl
 Requires:       /usr/bin/resolvectl
 Requires:       /usr/bin/journalctl
@@ -55,6 +59,7 @@ a dedicated external application.
 %{_libexecdir}/kriscc/bootc-status
 %{_libexecdir}/kriscc/cleanup-estimate
 %{_libexecdir}/kriscc/maintenance
+%{_libexecdir}/kriscc/energy-profile
 %{_datadir}/applications/krisCC.desktop
 %{_datadir}/polkit-1/actions/org.kriscc.controlcenter.policy
 %{_datadir}/metainfo/org.kriscc.KrisCC.metainfo.xml

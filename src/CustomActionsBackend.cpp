@@ -2,6 +2,7 @@
 #include "BashPromptConfig.h"
 #include "ProcessRunner.h"
 
+#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -9,6 +10,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
+#include <QProcess>
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <QSet>
@@ -655,6 +657,68 @@ bool CustomActionsBackend::resetBashPrompt()
     const QString path = QDir::home().filePath(QStringLiteral(".bashrc"));
     if (!BashPromptConfig::removeManagedBlock(path, &error)) {
         m_errorText = error;
+        emit stateChanged();
+        return false;
+    }
+
+    m_errorText.clear();
+    emit stateChanged();
+    return true;
+}
+
+
+bool CustomActionsBackend::setTemporaryEnergyProfile(const QString &profileId)
+{
+    static const QSet<QString> allowed = {
+        QStringLiteral("standard"),
+        QStringLiteral("60"),
+        QStringLiteral("180")
+    };
+
+    if (!allowed.contains(profileId)) {
+        m_errorText = tr("Profilo energia temporaneo non valido.");
+        emit stateChanged();
+        return false;
+    }
+
+    QString helper = qEnvironmentVariable("KRISCC_ENERGY_HELPER");
+    if (helper.isEmpty()) {
+        const QString sibling =
+            QDir(QCoreApplication::applicationDirPath())
+                .filePath(QStringLiteral("kriscc-energy-profile"));
+        if (QFileInfo(sibling).isExecutable())
+            helper = sibling;
+        else
+            helper = QStringLiteral("/usr/libexec/kriscc/energy-profile");
+    }
+
+    if (!QFileInfo(helper).isExecutable()) {
+        m_errorText = tr("Helper dei profili energia non disponibile.");
+        emit stateChanged();
+        return false;
+    }
+
+    QProcess process;
+    process.setProgram(helper);
+    process.setArguments({QStringLiteral("--apply"), profileId});
+    process.start();
+
+    if (!process.waitForStarted(3000)) {
+        m_errorText = tr("Impossibile avviare il profilo energia temporaneo.");
+        emit stateChanged();
+        return false;
+    }
+
+    if (!process.waitForFinished(10000)) {
+        process.kill();
+        process.waitForFinished(1000);
+        m_errorText = tr("Timeout durante l'applicazione del profilo energia.");
+        emit stateChanged();
+        return false;
+    }
+
+    if (process.exitStatus() != QProcess::NormalExit || process.exitCode() != 0) {
+        m_errorText = tr("Impossibile applicare il profilo energia temporaneo.");
         emit stateChanged();
         return false;
     }

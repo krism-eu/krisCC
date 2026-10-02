@@ -258,6 +258,20 @@ private slots:
         QCOMPARE(file.readAll(), QByteArrayLiteral("export KEEP_ME=1\n"));
     }
 
+
+    void temporaryEnergyProfileUsesOnlyAllowlistedIds()
+    {
+        qputenv("KRISCC_ENERGY_HELPER", QByteArrayLiteral("/bin/true"));
+
+        CustomActionsBackend backend;
+        QVERIFY(backend.setTemporaryEnergyProfile(QStringLiteral("standard")));
+        QVERIFY(backend.setTemporaryEnergyProfile(QStringLiteral("60")));
+        QVERIFY(backend.setTemporaryEnergyProfile(QStringLiteral("180")));
+        QVERIFY(!backend.setTemporaryEnergyProfile(QStringLiteral("arbitrary")));
+
+        qunsetenv("KRISCC_ENERGY_HELPER");
+    }
+
     void refusesExistingDestination()
     {
         QTemporaryDir temp;

@@ -48,6 +48,7 @@ public:
     Q_INVOKABLE QString bashPromptStatus() const;
     Q_INVOKABLE bool applyBashPromptPreset(const QString &presetId);
     Q_INVOKABLE bool resetBashPrompt();
+    Q_INVOKABLE bool setTemporaryEnergyProfile(const QString &profileId);
     Q_INVOKABLE void cancel();
 
 signals:

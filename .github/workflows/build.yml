@@ -54,7 +54,7 @@ jobs:
       - name: Install build dependencies
         run: >-
           dnf -y --setopt=updates-testing.enabled=false install gcc-c++ cmake ninja-build gzip python3
-          qt6-qtbase-devel qt6-qtdeclarative-devel kf6-kirigami-devel
+          qt6-qtbase-devel qt6-qtdeclarative-devel kf6-kirigami-devel kf6-kidletime-devel
           bootc dnf5 dnf5-plugins rpm rpm-build tar qqc2-breeze-style
 
       - name: Configure
@@ -123,6 +123,7 @@ jobs:
           test -x stage/usr/libexec/kriscc/admin
           test -x stage/usr/libexec/kriscc/bootc-status
           test -x stage/usr/libexec/kriscc/maintenance
+          test -x stage/usr/libexec/kriscc/energy-profile
           test -f stage/usr/share/applications/krisCC.desktop
           test -f stage/usr/share/icons/hicolor/scalable/apps/krisCC.svg
           test -f stage/usr/share/polkit-1/actions/org.kriscc.controlcenter.policy

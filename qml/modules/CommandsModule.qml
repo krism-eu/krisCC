@@ -20,6 +20,7 @@ Kirigami.ScrollablePage {
     property string combinedTextPath: ""
     property string bashPromptState: CustomActionsBackend.bashPromptStatus()
     property string bashPromptFeedback: ""
+    property string energyProfileFeedback: ""
 
     property var bashPromptPresets: [
         { presetId: "readable", label: qsTr("krisCC leggibile"), preview: qsTr("riga vuota · utente@host · percorso · prompt su nuova riga") },
@@ -351,6 +352,49 @@ Kirigami.ScrollablePage {
                             visible: root.bashPromptFeedback.length > 0
                             type: Kirigami.MessageType.Positive
                             text: root.bashPromptFeedback
+                        }
+
+                        Kirigami.Separator {
+                            Layout.fillWidth: true
+                        }
+
+                        Kirigami.Heading {
+                            level: 3
+                            font.bold: true
+                            text: qsTr("Profili energia temporanei")
+                        }
+                        RowLayout {
+                            Layout.fillWidth: true
+                            Controls.Button {
+                                Layout.fillWidth: true
+                                text: qsTr("Standard")
+                                onClicked: {
+                                    if (CustomActionsBackend.setTemporaryEnergyProfile("standard"))
+                                        root.energyProfileFeedback = qsTr("Profilo Standard attivo.")
+                                }
+                            }
+                            Controls.Button {
+                                Layout.fillWidth: true
+                                text: qsTr("60")
+                                onClicked: {
+                                    if (CustomActionsBackend.setTemporaryEnergyProfile("60"))
+                                        root.energyProfileFeedback = qsTr("Profilo 60 attivo: schermo 5 min, sospensione 60 min.")
+                                }
+                            }
+                            Controls.Button {
+                                Layout.fillWidth: true
+                                text: qsTr("180")
+                                onClicked: {
+                                    if (CustomActionsBackend.setTemporaryEnergyProfile("180"))
+                                        root.energyProfileFeedback = qsTr("Profilo 180 attivo: schermo 3 min, sospensione 180 min.")
+                                }
+                            }
+                        }
+                        Kirigami.InlineMessage {
+                            Layout.fillWidth: true
+                            visible: root.energyProfileFeedback.length > 0
+                            type: Kirigami.MessageType.Information
+                            text: root.energyProfileFeedback
                         }
                     }
                 }
