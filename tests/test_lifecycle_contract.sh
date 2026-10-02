@@ -33,6 +33,10 @@ test "$(grep -Fc 'SystemBackend.requestReboot()' "$SYSTEM_QML")" -eq 1
 test "$(grep -Fc 'SystemBackend.requestFirmwareReboot()' "$SYSTEM_QML")" -eq 1
 
 # Internal personal backup is retired.
-! grep -Fq 'SystemBackend.backupBusy' "$MAIN_QML"
-! grep -Fq 'cancelSnapshot' "$MAIN_QML"
+if grep -Fq 'SystemBackend.backupBusy' "$MAIN_QML"; then
+    exit 1
+fi
+if grep -Fq 'cancelSnapshot' "$MAIN_QML"; then
+    exit 1
+fi
 grep -Fq 'if (root.mutationActive())' "$MAIN_QML"
