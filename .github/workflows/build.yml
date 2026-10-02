@@ -234,7 +234,7 @@ jobs:
         run: >-
           dnf -y --setopt=updates-testing.enabled=false install
           gcc-c++ cmake ninja-build python3
-          qt6-qtbase-devel qt6-qtdeclarative-devel kf6-kirigami-devel
+          qt6-qtbase-devel qt6-qtdeclarative-devel kf6-kirigami-devel kf6-kidletime-devel
           ShellCheck cppcheck libxml2 appstream desktop-file-utils
 
       - name: Semantic release contract
