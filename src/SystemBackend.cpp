@@ -596,9 +596,16 @@ SystemBackend::~SystemBackend()
 {
     if (m_internetIdentityReply && m_internetIdentityReply->isRunning())
         m_internetIdentityReply->abort();
+    const bool cleanupBackupPartial =
+        m_backupBusy || (m_backupRunner && m_backupRunner->running());
+
     if (m_backupRunner && m_backupRunner->running())
         m_backupRunner->cancel();
-    if (!m_backupPartialPath.isEmpty())
+
+    // A validated partial intentionally preserved after a final rename
+    // failure must survive application shutdown. Only an interrupted,
+    // still-active backup owns a disposable partial here.
+    if (cleanupBackupPartial && !m_backupPartialPath.isEmpty())
         QFile::remove(m_backupPartialPath);
 }
 
