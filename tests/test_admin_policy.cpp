@@ -133,9 +133,27 @@ private slots:
         QVERIFY(!AdminPolicy::resolve({QStringLiteral("boot-next-uefi"), QStringLiteral("-o")}).has_value());
         QVERIFY(!AdminPolicy::resolve({QStringLiteral("boot-delete-uefi"), QStringLiteral("00001")}).has_value());
         QVERIFY(!AdminPolicy::resolve({QStringLiteral("boot-order-uefi"), QStringLiteral("0001,0001")}).has_value());
+        QVERIFY(!AdminPolicy::resolve({QStringLiteral("boot-order-uefi"), QStringLiteral("0001, 0002")}).has_value());
+        QVERIFY(!AdminPolicy::resolve({QStringLiteral("boot-order-uefi"), QStringLiteral("0001,,0002")}).has_value());
+        QVERIFY(!AdminPolicy::resolve({QStringLiteral("boot-order-uefi"), QStringLiteral(",0001")}).has_value());
+        QVERIFY(!AdminPolicy::resolve({QStringLiteral("boot-order-uefi"), QStringLiteral("0001,")}).has_value());
+        QVERIFY(!AdminPolicy::resolve({QStringLiteral("boot-order-uefi"), QStringLiteral(" 0001")}).has_value());
+        QVERIFY(!AdminPolicy::resolve({QStringLiteral("boot-order-uefi"), QStringLiteral("0001 ")}).has_value());
         QVERIFY(!AdminPolicy::resolve({QStringLiteral("boot-next-grub"), QStringLiteral("--unrestricted")}).has_value());
         QVERIFY(!AdminPolicy::resolve({QStringLiteral("bootc-check"), QStringLiteral("--extra")}).has_value());
     }
+
+    void adminHelperIgnoresZombieAndDeadTasks()
+    {
+        const QString helperPath = QFINDTESTDATA("../src/AdminHelper.cpp");
+        QVERIFY2(!helperPath.isEmpty(), "AdminHelper source test data not found");
+        QFile file(helperPath);
+        QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
+        const QByteArray source = file.readAll();
+        QVERIFY(source.contains("const QByteArray &stateField = fields.at(0);"));
+        QVERIFY(source.contains("state == 'Z' || state == 'X' || state == 'x'"));
+    }
+
     void timeoutsAreBoundedByDomain()
     {
         const auto bootc = AdminPolicy::resolve({QStringLiteral("bootc-check")});

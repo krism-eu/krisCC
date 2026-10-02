@@ -3,10 +3,58 @@
 #include "AdminPolicy.h"
 
 #include <QFileInfo>
+#include <QRegularExpression>
 
 namespace {
 constexpr qsizetype kMaxOutput = 256 * 1024;
 constexpr qsizetype kMaxLineBuffer = 64 * 1024;
+struct AdminProtocolOutput {
+    QString output;
+    QString status;
+};
+
+bool adminStatusLine(const QString &line, QString *status = nullptr)
+{
+    static const QString prefix = QStringLiteral("KRISCC_ADMIN_STATUS ");
+    if (!line.startsWith(prefix))
+        return false;
+
+    const QString value = line.mid(prefix.size());
+    static const QRegularExpression pattern(
+        QStringLiteral("^(?:timeout|failed-to-start|descendants-alive|crashed|child [0-9]{1,3})$"));
+    if (!pattern.match(value).hasMatch())
+        return false;
+
+    if (status)
+        *status = value;
+    return true;
+}
+
+AdminProtocolOutput parseAdminOutput(const QString &raw)
+{
+    AdminProtocolOutput result;
+    QStringList visibleLines;
+    const QStringList lines = raw.split(QLatin1Char('\n'), Qt::KeepEmptyParts);
+    visibleLines.reserve(lines.size());
+
+    for (QString line : lines) {
+        if (line.endsWith(QLatin1Char('\r')))
+            line.chop(1);
+
+        QString status;
+        if (adminStatusLine(line, &status)) {
+            // The helper status is emitted only after the supervised command/group
+            // has stopped. The last valid marker therefore identifies the source
+            // of the exit code without conflating it with pkexec or child codes.
+            result.status = status;
+            continue;
+        }
+        visibleLines.append(line);
+    }
+
+    result.output = visibleLines.join(QLatin1Char('\n')).trimmed();
+    return result;
+}
 }
 
 PolkitHelper::PolkitHelper(QObject *parent)
@@ -58,28 +106,61 @@ void PolkitHelper::onProcessFinished(int exitCode, QProcess::ExitStatus status)
         return;
 
     consumeOutput(m_process->readAllStandardOutput(), true);
-    const bool success = status == QProcess::NormalExit && exitCode == 0;
-    QString output = m_allOutput.trimmed();
+    const AdminProtocolOutput protocol = parseAdminOutput(m_allOutput);
+
+    const QString childPrefix = QStringLiteral("child ");
+    bool childCodeOk = false;
+    const int protocolChildCode = protocol.status.startsWith(childPrefix)
+        ? protocol.status.mid(childPrefix.size()).toInt(&childCodeOk)
+        : -1;
+    const bool protocolMatchesExit =
+        protocol.status.isEmpty()
+        || (protocol.status == QStringLiteral("timeout") && exitCode == 124)
+        || ((protocol.status == QStringLiteral("failed-to-start")
+             || protocol.status == QStringLiteral("descendants-alive")
+             || protocol.status == QStringLiteral("crashed"))
+            && exitCode == 125)
+        || (childCodeOk && protocolChildCode == exitCode);
+    const bool success = status == QProcess::NormalExit && exitCode == 0
+        && protocolMatchesExit;
+    QString output = protocol.output;
 
     if (!success) {
-        if (status == QProcess::NormalExit && exitCode == 124)
+        if (status == QProcess::NormalExit && !protocolMatchesExit) {
+            output = tr("Risultato incoerente dall'helper amministrativo (codice %1).").arg(exitCode);
+        } else if (status == QProcess::NormalExit && protocol.status == QStringLiteral("timeout")) {
             output = tr("Tempo massimo superato: l'helper amministrativo ha interrotto l'operazione.");
-        else if (status == QProcess::NormalExit && exitCode == 125)
-            output = tr("L'helper amministrativo non è riuscito ad avviare o completare il comando.");
-        else if (status == QProcess::NormalExit && exitCode == 126)
+        } else if (status == QProcess::NormalExit
+                   && protocol.status == QStringLiteral("failed-to-start")) {
+            output = tr("L'helper amministrativo non è riuscito ad avviare il comando.");
+        } else if (status == QProcess::NormalExit
+                   && protocol.status == QStringLiteral("descendants-alive")) {
+            output = tr("Il comando amministrativo ha lasciato processi discendenti attivi ed è stato interrotto.");
+        } else if (status == QProcess::NormalExit
+                   && protocol.status == QStringLiteral("crashed")) {
+            output = tr("Il comando amministrativo è terminato in modo anomalo.");
+        } else if (status == QProcess::NormalExit
+                   && childCodeOk && protocolChildCode == exitCode) {
+            if (output.isEmpty())
+                output = tr("Comando amministrativo terminato con codice %1.").arg(exitCode);
+        } else if (status == QProcess::NormalExit && protocol.status.isEmpty()
+                   && exitCode == 126) {
             output = tr("Autenticazione annullata dall'utente.");
-        else if (status == QProcess::NormalExit && exitCode == 127)
+        } else if (status == QProcess::NormalExit && protocol.status.isEmpty()
+                   && exitCode == 127) {
             output = tr("Autorizzazione amministrativa non ottenuta oppure errore di pkexec.");
-        else if (output.isEmpty())
+        } else if (output.isEmpty()) {
             output = tr("Operazione terminata con codice %1.").arg(exitCode);
+        }
 
         output = userFacingOutput(output);
     }
 
     OperationLog::append(QStringLiteral("Amministrazione"), operationLabel(),
                          success ? QStringLiteral("success")
-                                 : (exitCode == 124 ? QStringLiteral("timeout")
-                                                    : QStringLiteral("error")));
+                                 : (protocol.status == QStringLiteral("timeout")
+                                        ? QStringLiteral("timeout")
+                                        : QStringLiteral("error")));
 
     m_process->deleteLater();
     m_process = nullptr;
@@ -153,12 +234,17 @@ void PolkitHelper::consumeOutput(const QByteArray &data, bool flushPartial)
         m_lineBuffer.remove(0, newline + 1);
         if (!lineData.isEmpty() && lineData.endsWith('\r'))
             lineData.chop(1);
-        if (!lineData.isEmpty())
-            emit line(userFacingOutput(QString::fromUtf8(lineData)));
+        if (!lineData.isEmpty()) {
+            const QString lineText = QString::fromUtf8(lineData);
+            if (!adminStatusLine(lineText))
+                emit line(userFacingOutput(lineText));
+        }
     }
 
     if (flushPartial && !m_lineBuffer.isEmpty()) {
-        emit line(userFacingOutput(QString::fromUtf8(m_lineBuffer)));
+        const QString lineText = QString::fromUtf8(m_lineBuffer);
+        if (!adminStatusLine(lineText))
+            emit line(userFacingOutput(lineText));
         m_lineBuffer.clear();
     }
 }

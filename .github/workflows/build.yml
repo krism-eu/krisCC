@@ -118,8 +118,10 @@ jobs:
           set -euo pipefail
           DESTDIR="$PWD/stage" cmake --install build --prefix /usr
           test -x stage/usr/bin/krisCC
+          test -d stage/usr/libexec/kriscc
           test -x stage/usr/libexec/kriscc/admin
           test -x stage/usr/libexec/kriscc/bootc-status
+          test -x stage/usr/libexec/kriscc/cleanup-estimate
           test -x stage/usr/libexec/kriscc/maintenance
           test -x stage/usr/libexec/kriscc/energy-profile
           test -f stage/usr/share/applications/krisCC.desktop
@@ -197,8 +199,10 @@ jobs:
           test "$(rpm -qp --qf '%{NAME}\n' "$rpm_file")" = "krisCC"
           test "$(rpm -qp --qf '%{VERSION}-%{RELEASE}\n' "$rpm_file")" = "${EXPECTED}.fc45"
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/bin/krisCC'
+          rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc'
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/admin'
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/bootc-status'
+          rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/cleanup-estimate'
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/maintenance'
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/libexec/kriscc/energy-profile'
           rpm -qpl "$rpm_file" | grep -Fxq '/usr/share/applications/krisCC.desktop'
@@ -244,8 +248,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          bash -n tests/e2e-readonly.sh
-          find tests -maxdepth 1 -type f -name '*.sh' -print0 | xargs -0 shellcheck -x
+          find tests src -maxdepth 1 -type f -name '*.sh' -print0 | xargs -0 -r bash -n
+          find tests src -maxdepth 1 -type f -name '*.sh' -print0 | xargs -0 -r shellcheck -x
 
       - name: XML AppStream and desktop metadata
         shell: bash
@@ -312,6 +316,7 @@ jobs:
           test "$(QT_QPA_PLATFORM=offscreen /usr/bin/krisCC --version)" = "krisCC ${VERSION}"
           test -x /usr/libexec/kriscc/admin
           test -x /usr/libexec/kriscc/bootc-status
+          test -x /usr/libexec/kriscc/cleanup-estimate
           test -x /usr/libexec/kriscc/maintenance
           ! /usr/libexec/kriscc/admin invalid-operation
           ! /usr/libexec/kriscc/maintenance trash-home

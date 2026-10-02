@@ -55,6 +55,7 @@ a dedicated external application.
 %license LICENSE
 %doc README.md
 %{_bindir}/krisCC
+%dir %{_libexecdir}/kriscc
 %{_libexecdir}/kriscc/admin
 %{_libexecdir}/kriscc/bootc-status
 %{_libexecdir}/kriscc/cleanup-estimate

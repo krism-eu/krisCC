@@ -45,13 +45,15 @@ bool bootToken(const QString &value)
 
 bool bootOrder(const QString &value)
 {
-    const QStringList tokens = value.split(QLatin1Char(','), Qt::SkipEmptyParts);
+    const QStringList tokens = value.split(QLatin1Char(','), Qt::KeepEmptyParts);
     if (tokens.isEmpty() || tokens.size() > 64)
         return false;
 
     QSet<QString> seen;
     for (const QString &token : tokens) {
-        const QString normalized = token.trimmed().toUpper();
+        if (token.isEmpty() || token != token.trimmed())
+            return false;
+        const QString normalized = token.toUpper();
         if (!bootToken(normalized) || seen.contains(normalized))
             return false;
         seen.insert(normalized);

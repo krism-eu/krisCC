@@ -13,6 +13,12 @@
 namespace {
 using ProcessMap = QHash<qint64, quint64>;
 
+void reportStatus(QTextStream &err, const QString &status)
+{
+    err << "KRISCC_ADMIN_STATUS " << status << '\n';
+    err.flush();
+}
+
 ProcessMap processesInGroup(qint64 pgid)
 {
     ProcessMap result;
@@ -36,6 +42,11 @@ ProcessMap processesInGroup(qint64 pgid)
             continue;
         const QList<QByteArray> fields = line.mid(closeParen + 2).split(' ');
         if (fields.size() <= 19)
+            continue;
+
+        const QByteArray &stateField = fields.at(0);
+        const char state = stateField.isEmpty() ? '\0' : stateField.at(0);
+        if (state == 'Z' || state == 'X' || state == 'x')
             continue;
 
         bool groupOk = false;
@@ -101,6 +112,7 @@ int runProgram(const AdminPolicy::Command &command)
     if (!process.waitForStarted(5000)) {
         err << "kriscc-admin: avvio fallito per " << command.program
             << ": " << process.errorString() << '\n';
+        reportStatus(err, QStringLiteral("failed-to-start"));
         return 125;
     }
 
@@ -138,8 +150,10 @@ int runProgram(const AdminPolicy::Command &command)
             if (leaderExitStatus != QProcess::NormalExit) {
                 err << "kriscc-admin: processo terminato in modo anomalo: "
                     << command.program << '\n';
+                reportStatus(err, QStringLiteral("crashed"));
                 return 125;
             }
+            reportStatus(err, QStringLiteral("child %1").arg(leaderExitCode));
             return leaderExitCode;
         }
 
@@ -153,6 +167,7 @@ int runProgram(const AdminPolicy::Command &command)
         }
         if (trackedGroupAlive(pgid, tracked))
             (void)signalTrackedGroup(pgid, &tracked, SIGKILL);
+        reportStatus(err, QStringLiteral("descendants-alive"));
         return 125;
     }
 
@@ -175,6 +190,7 @@ int runProgram(const AdminPolicy::Command &command)
         process.kill();
         process.waitForFinished(3000);
     }
+    reportStatus(err, QStringLiteral("timeout"));
     return 124;
 }
 
