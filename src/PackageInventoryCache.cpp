@@ -137,7 +137,17 @@ void PackageInventoryCache::ensureFresh(bool force)
     }
 
     if (!force && !expired()) {
-        QTimer::singleShot(0, this, [this] { emit refreshFinished(true, QString()); });
+        const quint64 requestEpoch = m_epoch;
+        QTimer::singleShot(0, this, [this, requestEpoch] {
+            // La cache può essere invalidata tra ensureFresh() e questo
+            // callback differito. Non pubblicare un falso successo:
+            // avvia invece un nuovo refresh reale.
+            if (requestEpoch != m_epoch || !m_ready) {
+                ensureFresh(false);
+                return;
+            }
+            emit refreshFinished(true, QString());
+        });
         return;
     }
 
