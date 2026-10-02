@@ -76,6 +76,14 @@ if(BUILD_TESTING)
     add_test(NAME process-runner COMMAND kriscc-test-process-runner)
     set_tests_properties(process-runner PROPERTIES TIMEOUT 15)
 
+    add_executable(kriscc-test-custom-actions
+        tests/test_custom_actions.cpp
+        src/CustomActionsBackend.cpp src/CustomActionsBackend.h
+        src/ProcessRunner.cpp src/ProcessRunner.h)
+    target_include_directories(kriscc-test-custom-actions PRIVATE src)
+    target_link_libraries(kriscc-test-custom-actions PRIVATE Qt6::Core Qt6::Test)
+    add_test(NAME custom-actions COMMAND kriscc-test-custom-actions)
+
     add_executable(kriscc-test-service-json tests/test_service_json.cpp src/ServiceJson.cpp src/ServiceJson.h)
     target_include_directories(kriscc-test-service-json PRIVATE src)
     target_link_libraries(kriscc-test-service-json PRIVATE Qt6::Core Qt6::Test)

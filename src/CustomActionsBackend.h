@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QString>
+#include <QUrl>
 #include <QVariantList>
 
 class ProcessRunner;
@@ -37,6 +38,7 @@ public:
     Q_INVOKABLE bool removeAction(const QString &id);
     Q_INVOKABLE bool setQuickAction(const QString &id, bool quick);
     Q_INVOKABLE bool runAction(const QString &id);
+    Q_INVOKABLE QString combineTextFiles(const QUrl &folderUrl);
     Q_INVOKABLE void cancel();
 
 signals:

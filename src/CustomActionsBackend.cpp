@@ -12,9 +12,12 @@
 #include <QSaveFile>
 #include <QSet>
 #include <QStandardPaths>
+#include <QStringConverter>
 #include <QUuid>
 
 #include <unistd.h>
+
+#include <algorithm>
 
 namespace {
 constexpr qsizetype kMaxActions = 100;
@@ -22,8 +25,19 @@ constexpr qsizetype kMaxQuickActions = 8;
 constexpr qsizetype kMaxName = 80;
 constexpr qsizetype kMaxDescription = 240;
 constexpr qsizetype kMaxScript = 64 * 1024;
+constexpr qsizetype kMaxCombinedTextBytes = 16 * 1024 * 1024;
 constexpr int kActionTimeoutMs = 30 * 60 * 1000;
 const QString kShell = QStringLiteral("/usr/bin/bash");
+
+bool isUtf8Text(const QByteArray &data)
+{
+    if (data.contains('\0'))
+        return false;
+
+    QStringDecoder decoder(QStringDecoder::Utf8);
+    decoder.decode(data);
+    return !decoder.hasError();
+}
 }
 
 CustomActionsBackend::CustomActionsBackend(QObject *parent)
@@ -444,6 +458,111 @@ bool CustomActionsBackend::runAction(const QString &id)
         return false;
     }
     return true;
+}
+
+QString CustomActionsBackend::combineTextFiles(const QUrl &folderUrl)
+{
+    auto fail = [this](const QString &message) {
+        m_errorText = message;
+        emit stateChanged();
+        return QString();
+    };
+
+    if (m_running)
+        return fail(tr("Attendi la fine del comando personale in esecuzione."));
+
+    if (!folderUrl.isLocalFile())
+        return fail(tr("Seleziona una cartella locale."));
+
+    const QFileInfo requested(folderUrl.toLocalFile());
+    if (!requested.exists() || !requested.isDir() || !requested.isReadable()
+        || requested.isSymLink()) {
+        return fail(tr("La cartella selezionata non è valida, leggibile o è un collegamento simbolico."));
+    }
+
+    const QString canonicalPath = requested.canonicalFilePath();
+    if (canonicalPath.isEmpty())
+        return fail(tr("Impossibile risolvere il percorso della cartella selezionata."));
+
+    const QFileInfo folderInfo(canonicalPath);
+    const QString folderName = folderInfo.fileName();
+    if (folderName.isEmpty())
+        return fail(tr("La radice del filesystem non può essere usata per questa operazione."));
+
+    const QString outputPath = QDir(folderInfo.absolutePath())
+                                   .filePath(folderName + QStringLiteral("-contenuto.txt"));
+    const QFileInfo outputInfo(outputPath);
+    if (outputInfo.exists() || outputInfo.isSymLink())
+        return fail(tr("Il file di destinazione esiste già: %1").arg(outputPath));
+
+    QDir sourceDir(canonicalPath);
+    QFileInfoList entries = sourceDir.entryInfoList(
+        QDir::Files | QDir::Readable | QDir::NoDotAndDotDot, QDir::NoSort);
+
+    std::sort(entries.begin(), entries.end(),
+              [](const QFileInfo &left, const QFileInfo &right) {
+        return QString::compare(left.fileName(), right.fileName(), Qt::CaseSensitive) < 0;
+    });
+
+    QByteArray combined;
+    qsizetype included = 0;
+
+    for (const QFileInfo &entry : entries) {
+        if (!entry.isFile() || !entry.isReadable() || entry.isSymLink())
+            continue;
+
+        if (entry.size() > kMaxCombinedTextBytes)
+            return fail(tr("Il file %1 supera il limite massimo consentito.").arg(entry.fileName()));
+
+        QFile input(entry.absoluteFilePath());
+        if (!input.open(QIODevice::ReadOnly))
+            continue;
+
+        const QByteArray data = input.readAll();
+        if (data.size() > kMaxCombinedTextBytes)
+            return fail(tr("Il file %1 supera il limite massimo consentito.").arg(entry.fileName()));
+
+        if (!isUtf8Text(data))
+            continue;
+
+        const QByteArray header =
+            QByteArrayLiteral("===== ") + entry.fileName().toUtf8() + QByteArrayLiteral(" =====\n");
+
+        qsizetype extra = header.size() + data.size() + 1;
+        if (!data.endsWith('\n'))
+            ++extra;
+
+        if (combined.size() + extra > kMaxCombinedTextBytes) {
+            return fail(tr("I file di testo superano complessivamente il limite di 16 MiB."));
+        }
+
+        combined += header;
+        combined += data;
+        if (!data.endsWith('\n'))
+            combined += '\n';
+        combined += '\n';
+        ++included;
+    }
+
+    if (included == 0)
+        return fail(tr("Nessun file di testo UTF-8 leggibile trovato nella cartella."));
+
+    QFile output(outputPath);
+    if (!output.open(QIODevice::WriteOnly | QIODevice::NewOnly))
+        return fail(tr("Impossibile creare il file di destinazione senza sovrascrivere dati esistenti."));
+
+    const qint64 written = output.write(combined);
+    const bool flushed = output.flush();
+    output.close();
+
+    if (written != combined.size() || !flushed) {
+        QFile::remove(outputPath);
+        return fail(tr("Scrittura del file di destinazione non riuscita."));
+    }
+
+    m_errorText.clear();
+    emit stateChanged();
+    return outputPath;
 }
 
 void CustomActionsBackend::appendOutput(const QByteArray &data)

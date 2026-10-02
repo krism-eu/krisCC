@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls as Controls
 import QtQuick.Controls.Basic as Basic
+import QtQuick.Dialogs
 import org.kde.kirigami as Kirigami
 import org.kriscc
 
@@ -16,6 +17,7 @@ Kirigami.ScrollablePage {
     property string pendingCustomName: ""
     property string deleteCustomId: ""
     property string deleteCustomName: ""
+    property string combinedTextPath: ""
 
     property var commands: [
         { id: "services-all", title: qsTr("Tutti i servizi"), command: "systemctl list-units --type=service --all --no-pager --plain", note: qsTr("Elenco completo dei servizi systemd, inclusi quelli inattivi.") },
@@ -233,6 +235,46 @@ Kirigami.ScrollablePage {
                         icon.name: "list-add"
                         enabled: !CustomActionsBackend.running
                         onClicked: editActionDialog.openNew()
+                    }
+                }
+
+                Kirigami.AbstractCard {
+                    Layout.fillWidth: true
+                    contentItem: ColumnLayout {
+                        spacing: Kirigami.Units.smallSpacing
+                        RowLayout {
+                            Layout.fillWidth: true
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 0
+                                Kirigami.Heading {
+                                    level: 3
+                                    font.bold: true
+                                    text: qsTr("Strumenti predefiniti")
+                                }
+                                Controls.Label {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                    opacity: UiMetrics.secondaryOpacity
+                                    text: qsTr("Crea un unico file di testo dai file UTF-8 leggibili presenti direttamente in una cartella. Ordina per nome, ignora sottocartelle, collegamenti simbolici e file binari, e non sovrascrive file esistenti.")
+                                }
+                            }
+                            Controls.Button {
+                                text: qsTr("Cartella → testo unico")
+                                icon.name: "document-new"
+                                enabled: !CustomActionsBackend.running
+                                onClicked: {
+                                    root.combinedTextPath = ""
+                                    combineFolderDialog.open()
+                                }
+                            }
+                        }
+                        Kirigami.InlineMessage {
+                            Layout.fillWidth: true
+                            visible: root.combinedTextPath.length > 0
+                            type: Kirigami.MessageType.Positive
+                            text: qsTr("Creato: %1").arg(root.combinedTextPath)
+                        }
                     }
                 }
 
@@ -562,6 +604,14 @@ Kirigami.ScrollablePage {
                     }
                 }
             }
+        }
+    }
+
+    FolderDialog {
+        id: combineFolderDialog
+        title: qsTr("Scegli la cartella con i file di testo")
+        onAccepted: {
+            root.combinedTextPath = CustomActionsBackend.combineTextFiles(selectedFolder)
         }
     }
 
