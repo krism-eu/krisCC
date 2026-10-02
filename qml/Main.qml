@@ -173,7 +173,8 @@ Kirigami.ApplicationWindow {
                                 Controls.Label {
                                     Layout.fillWidth: true
                                     text: modelData.label
-                                    font.bold: parent.parent.checked
+                                    font.bold: true
+                                    font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
                                     color: parent.parent.checked
                                            ? Kirigami.Theme.highlightColor
                                            : Kirigami.Theme.textColor
