@@ -29,6 +29,7 @@ require("KRISCC_RELEASE" not in version_cfg,
 cmake = read("CMakeLists.txt")
 spec = read("packaging/krisCC.spec")
 workflow = read(".github/workflows/build.yml")
+promote_workflow = read(".github/workflows/promote-stable.yml")
 main_cpp = read("src/main.cpp")
 polkit_cpp = read("src/PolkitHelper.cpp")
 admin_cpp = read("src/AdminHelper.cpp")
@@ -98,20 +99,24 @@ require('KrisCCVersion.cmake' in workflow
         and workflow.count("container: fedora:45") == 3
         and "container: fedora:44" not in workflow,
         "CI RPM identity is not derived from canonical X.Y.Z with fixed Release 1")
-require('echo "source_zip=krisCC-${vr}-source.zip"' in workflow
-        and 'echo "source_txt=krisCC-${vr}-source.txt"' in workflow,
-        "CI source bundle identity is not derived from canonical version+release")
+require('echo "source_txt=krisCC-${vr}-source.txt"' in workflow,
+        "CI source TXT identity is not derived from canonical version+release")
+require('source_zip' not in workflow.lower()
+        and '-source.zip' not in workflow.lower()
+        and 'source_zip' not in promote_workflow.lower()
+        and '-source.zip' not in promote_workflow.lower(),
+        "retired repository source ZIP is still generated, published, or promoted")
 require('VERSION: ${{ steps.identity.outputs.version }}' in workflow
         and '"krisCC ${VERSION}"' in workflow,
         "CI does not verify the public X.Y.Z application version")
 require('fetch-depth: 1' in workflow
         and 'python3 tools/source_snapshot.py' in workflow
-        and 'git archive' in workflow
-        and '--format=zip' in workflow,
-        "CI exact-source snapshot contract is incomplete")
-require('sha256sum "$RPM" "$SOURCE_ZIP" "$SOURCE_TXT" > SHA256SUMS' in workflow
-        and 'test "$(wc -l < SHA256SUMS)" -eq 3' in workflow,
-        "RPM/source ZIP/source TXT are not covered by one three-entry SHA256SUMS")
+        and 'git archive' not in workflow
+        and '--format=zip' not in workflow,
+        "CI exact-source TXT snapshot contract is incomplete or source ZIP generation returned")
+require('sha256sum "$RPM" "$SOURCE_TXT" > SHA256SUMS' in workflow
+        and 'test "$(wc -l < SHA256SUMS)" -eq 2' in workflow,
+        "RPM/source TXT are not covered by one two-entry SHA256SUMS")
 require(f'<release version="{VERSION}"' in read("data/org.kriscc.KrisCC.metainfo.xml"),
         "AppStream release is stale")
 

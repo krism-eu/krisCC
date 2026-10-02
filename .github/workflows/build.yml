@@ -25,7 +25,6 @@ jobs:
       release: ${{ steps.identity.outputs.release }}
       version_release: ${{ steps.identity.outputs.version_release }}
       rpm: ${{ steps.identity.outputs.rpm }}
-      source_zip: ${{ steps.identity.outputs.source_zip }}
       source_txt: ${{ steps.identity.outputs.source_txt }}
     steps:
       - name: Install checkout dependency
@@ -48,7 +47,6 @@ jobs:
           echo "release=$release" >> "$GITHUB_OUTPUT"
           echo "version_release=$vr" >> "$GITHUB_OUTPUT"
           echo "rpm=krisCC-${vr}.fc45.x86_64.rpm" >> "$GITHUB_OUTPUT"
-          echo "source_zip=krisCC-${vr}-source.zip" >> "$GITHUB_OUTPUT"
           echo "source_txt=krisCC-${vr}-source.txt" >> "$GITHUB_OUTPUT"
 
       - name: Install build dependencies
@@ -160,11 +158,10 @@ jobs:
             awk -v f="$RPM" '$2 == f { found++ } END { exit(found == 1 ? 0 : 1) }' SHA256SUMS
           ) 2>&1 | tee "$GITHUB_WORKSPACE/artifacts/logs/rpmbuild.log"
 
-      - name: Build exact source bundle
+      - name: Build exact source snapshot
         env:
           VERSION_RELEASE: ${{ steps.identity.outputs.version_release }}
           RPM: ${{ steps.identity.outputs.rpm }}
-          SOURCE_ZIP: ${{ steps.identity.outputs.source_zip }}
           SOURCE_TXT: ${{ steps.identity.outputs.source_txt }}
         shell: bash
         run: |
@@ -177,21 +174,14 @@ jobs:
             --display-ref "$display_ref" \
             --version "$VERSION_RELEASE" \
             --output "artifacts/source/$SOURCE_TXT"
-          git archive \
-            --format=zip \
-            --prefix="krisCC-${VERSION_RELEASE}/" \
-            --output="artifacts/source/$SOURCE_ZIP" \
-            "$GITHUB_SHA"
           grep -Fxq "# commit: $GITHUB_SHA" "artifacts/source/$SOURCE_TXT"
           grep -Fxq "# version-release: $VERSION_RELEASE" "artifacts/source/$SOURCE_TXT"
-          python3 -m zipfile -t "artifacts/source/$SOURCE_ZIP"
           cp "artifacts/rpm/$RPM" "artifacts/release/$RPM"
-          cp "artifacts/source/$SOURCE_ZIP" "artifacts/release/$SOURCE_ZIP"
           cp "artifacts/source/$SOURCE_TXT" "artifacts/release/$SOURCE_TXT"
           (
             cd artifacts/release
-            sha256sum "$RPM" "$SOURCE_ZIP" "$SOURCE_TXT" > SHA256SUMS
-            test "$(wc -l < SHA256SUMS)" -eq 3
+            sha256sum "$RPM" "$SOURCE_TXT" > SHA256SUMS
+            test "$(wc -l < SHA256SUMS)" -eq 2
             sha256sum -c SHA256SUMS
           )
 
@@ -216,7 +206,7 @@ jobs:
           rpm -qpR "$rpm_file" | grep -Eq '^polkit([[:space:]<=>]|$)'
           ! rpm -qp --provides "$rpm_file" | grep -Eq '^(kcc|k-controlc)([[:space:]=]|$)'
           (cd artifacts/rpm && sha256sum -c SHA256SUMS)
-          # Record the actual binary RPM payload separately from the source bundles.
+          # Record the actual binary RPM payload separately from the source snapshot.
           {
             stat --printf='Binary RPM bytes: %s\n' "$rpm_file"
             rpm -qp --qf 'Installed bytes: %{SIZE}\nPayload compressor: %{PAYLOADCOMPRESSOR}\n' "$rpm_file"
@@ -344,16 +334,14 @@ jobs:
         id: component
         env:
           RPM: ${{ needs.build-fedora.outputs.rpm }}
-          SOURCE_ZIP: ${{ needs.build-fedora.outputs.source_zip }}
           SOURCE_TXT: ${{ needs.build-fedora.outputs.source_txt }}
         shell: bash
         run: |
           set -euo pipefail
           cd artifacts/release
           sha256sum -c SHA256SUMS
-          test "$(wc -l < SHA256SUMS)" -eq 3
+          test "$(wc -l < SHA256SUMS)" -eq 2
           test -f "$RPM"
-          test -f "$SOURCE_ZIP"
           test -f "$SOURCE_TXT"
           base="$RPM"
           if [[ ! "$base" =~ ^krisCC-([0-9]+\.[0-9]+\.[0-9]+)-([0-9]+)\.fc45\.x86_64\.rpm$ ]]; then
@@ -365,7 +353,6 @@ jobs:
           grep -Fxq "# commit: $GITHUB_SHA" "$SOURCE_TXT"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           echo "rpm=$RPM" >> "$GITHUB_OUTPUT"
-          echo "source_zip=$SOURCE_ZIP" >> "$GITHUB_OUTPUT"
           echo "source_txt=$SOURCE_TXT" >> "$GITHUB_OUTPUT"
 
       - name: Publish or verify component release
@@ -373,7 +360,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.component.outputs.tag }}
           RPM: ${{ steps.component.outputs.rpm }}
-          SOURCE_ZIP: ${{ steps.component.outputs.source_zip }}
           SOURCE_TXT: ${{ steps.component.outputs.source_txt }}
         shell: bash
         run: |
@@ -390,10 +376,10 @@ jobs:
             main_tree="$(gh api "repos/$GITHUB_REPOSITORY/git/commits/$GITHUB_SHA" --jq '.tree.sha')"
             test "$release_tree" = "$main_tree"
             gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
-              -p "$RPM" -p "$SOURCE_ZIP" -p "$SOURCE_TXT" -p SHA256SUMS -D "$tmp"
+              -p "$RPM" -p "$SOURCE_TXT" -p SHA256SUMS -D "$tmp"
             (
               cd "$tmp"
-              test "$(wc -l < SHA256SUMS)" -eq 3
+              test "$(wc -l < SHA256SUMS)" -eq 2
               sha256sum -c SHA256SUMS
               grep -Fxq "# commit: $release_target_sha" "$SOURCE_TXT"
               test "$(rpm -qp --qf '%{NAME}' "$RPM")" = 'krisCC'
@@ -408,5 +394,5 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "krisCC $TAG" \
             --prerelease \
-            --notes "CI-tested krisCC candidate built from $GITHUB_SHA. RPM, source ZIP and combined source TXT are checksummed together. Stable promotion requires KrisOS host acceptance." \
-            "$RPM" "$SOURCE_ZIP" "$SOURCE_TXT" SHA256SUMS
+            --notes "CI-tested krisCC candidate built from $GITHUB_SHA. RPM and combined source TXT are checksummed together. Stable promotion requires KrisOS host acceptance." \
+            "$RPM" "$SOURCE_TXT" SHA256SUMS
