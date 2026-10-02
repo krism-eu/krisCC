@@ -107,15 +107,15 @@ QString presetBlock(const QString &presetId)
 
     if (presetId == QStringLiteral("readable")) {
         ps1 = QStringLiteral(
-            "PS1='\\\\n\\\\[\\\\e[1;36m\\\\]\\\\u@\\\\h\\\\[\\\\e[0m\\\\] "
-            "\\\\[\\\\e[1;34m\\\\]\\\\w\\\\[\\\\e[0m\\\\]\\\\n\\\\$ '");
+            "PS1='\\n\\[\\e[1;36m\\]\\u@\\h\\[\\e[0m\\] "
+            "\\[\\e[1;34m\\]\\w\\[\\e[0m\\]\\n\\$ '");
     } else if (presetId == QStringLiteral("compact")) {
         ps1 = QStringLiteral(
-            "PS1='\\\\[\\\\e[1;36m\\\\]\\\\u@\\\\h\\\\[\\\\e[0m\\\\]:"
-            "\\\\[\\\\e[1;34m\\\\]\\\\w\\\\[\\\\e[0m\\\\]\\\\$ '");
+            "PS1='\\[\\e[1;36m\\]\\u@\\h\\[\\e[0m\\]:"
+            "\\[\\e[1;34m\\]\\w\\[\\e[0m\\]\\$ '");
     } else if (presetId == QStringLiteral("minimal")) {
         ps1 = QStringLiteral(
-            "PS1='\\\\n\\\\[\\\\e[1;34m\\\\]\\\\w\\\\[\\\\e[0m\\\\]\\\\n\\\\$ '");
+            "PS1='\\n\\[\\e[1;34m\\]\\w\\[\\e[0m\\]\\n\\$ '");
     } else {
         return {};
     }

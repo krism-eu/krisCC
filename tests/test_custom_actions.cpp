@@ -155,8 +155,10 @@ private slots:
         QVERIFY(data.contains("export KEEP_ME=1"));
         QVERIFY(data.contains("# >>> krisCC prompt >>>"));
         QVERIFY(data.contains("# <<< krisCC prompt <<<"));
-        QVERIFY(data.contains("\\\\u@\\\\h"));
-        QVERIFY(data.contains("\\\\w"));
+        QVERIFY(data.contains("\\u@\\h"));
+        QVERIFY(data.contains("\\w"));
+        QVERIFY(!data.contains("\\\\u@\\\\h"));
+        QVERIFY(!data.contains("\\\\w"));
     }
 
     void bashPromptReplacesExistingManagedBlock()
