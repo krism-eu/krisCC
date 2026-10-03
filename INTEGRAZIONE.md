@@ -1,6 +1,6 @@
 # Integrazione krisCC in KrisOS / Fedora bootc
 
-krisCC 0.8.1 è un'applicazione standalone Qt 6/Kirigami pensata per uso personale su Fedora bootc. Non duplica Plasma System Settings: integra solo le funzioni specifiche del sistema e gli strumenti di manutenzione che è utile avere in un unico posto.
+krisCC 0.8.2 è un'applicazione standalone Qt 6/Kirigami pensata per uso personale su Fedora bootc. Non duplica Plasma System Settings: integra solo le funzioni specifiche del sistema e gli strumenti di manutenzione che è utile avere in un unico posto.
 
 ## Runtime
 
@@ -44,10 +44,12 @@ Non aggiungere wrapper shell generici. `rk sync/add/rm/forget` resta il gate pri
 Il repository produce esclusivamente l'RPM `krisCC`. Il flusso di release previsto è:
 
 ```text
-krisCC source -> Fedora 45 CI/test -> RPM fc45 + SHA256 -> build KrisOS45 -> immagine BootC
+main -> Fedora 45 CI/test -> release testing -> acceptance KrisOS -> stable vX.Y.Z -> build KrisOS45
 ```
 
-KrisOS deve consumare l'artefatto RPM già testato e identificarlo con un digest/hash verificato. La build dell'OS non deve fare un `git fetch` di krisCC per ricostruire implicitamente un secondo artefatto a partire da un repository esterno.
+La release GitHub `testing` è un canale mutabile aggiornato automaticamente solo dopo un push su `main` completamente verde. Contiene l'RPM, il source TXT dell'esatto commit e `SHA256SUMS`. Gli stessi tre file restano anche nell'artefatto Actions della build per 30 giorni. La promozione stable richiede il commit realmente provato, recupera l'artefatto della build verde di quel commit e crea `vX.Y.Z` senza ricostruire nulla.
+
+KrisOS deve consumare l'artefatto RPM stable già testato e identificarlo con un digest/hash verificato. La build dell'OS non deve fare un `git fetch` di krisCC per ricostruire implicitamente un secondo artefatto a partire da un repository esterno.
 
 L'ordine resta importante: **`krisCC` deve essere installato prima che KrisOS generi `/usr/share/krisos/owned-packages.txt` e `owned-nevra.txt`**. In questo modo viene classificato correttamente come pacchetto della base immutabile e `rk` non proverà mai a trattarlo come pacchetto persistente dell'overlay.
 

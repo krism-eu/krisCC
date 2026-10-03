@@ -224,20 +224,20 @@ Queste regole hanno precedenza sulla comodità di implementare rapidamente una n
 
 ## 13. Ciclo di release
 
-La versione pubblica segue esclusivamente `X.Y.Z`. Ogni nuova candidata cambia `Z`; il campo RPM `Release` resta `1` e non fa parte della versione mostrata, del tag o del nome della linea. I tag sono `vX.Y.Z`.
+La versione pubblica segue esclusivamente `X.Y.Z`; il campo RPM `Release` resta `1`. Il bump `X.Y.Z` avviene una sola volta all'inizio del ciclo destinato alla prossima stable: le correzioni successive dello stesso ciclo aggiornano il canale di test senza introdurre altre versioni intermedie.
 
-Il ramo di integrazione corrente usa il nome breve `trial/X.Y` (per esempio `0.7`). `main` resta la linea ufficiale dopo acceptance. I rami `stable/X.Y` sono fotografie congelate di una linea precedente, non rami di manutenzione continua.
-
-Una release segue questo percorso:
+`main` è la linea ufficiale corrente. Una release segue questo percorso:
 
 ```text
-main -> CI completa -> RPM candidato immutabile -> acceptance host KrisOS -> promozione stable dello stesso artefatto
+main -> CI completa -> testing automatica -> acceptance host KrisOS -> stable vX.Y.Z dello stesso artefatto
 ```
 
-La promozione stable non deve ricompilare il pacchetto. Deve verificare checksum, identità EVR e appartenenza del commit a `main`, quindi cambiare soltanto lo stato della release già validata.
+Dopo un push su `main` completamente verde, la release mutabile `testing` viene sostituita con il piccolo bundle prodotto da quella build: RPM, source TXT dell'esatto commit e `SHA256SUMS`. Lo stesso bundle resta nell'artefatto Actions per 30 giorni.
 
-Una vecchia stable resta disponibile tramite tag, release e ramo congelato. Non si introducono fallback nel codice corrente solo per mantenerla compatibile.
-# Manutenzione 0.8.1: backend di sistema
+La promozione stable non ricompila nulla. Richiede il commit realmente provato, individua la build `push` riuscita di quel commit, scarica il relativo artefatto Actions, verifica checksum, identità EVR e appartenenza del commit a `main`, quindi crea `vX.Y.Z` con quei byte esatti. Se la stable esiste già, è accettato soltanto il caso idempotente in cui commit e artefatti coincidono.
+
+Una vecchia stable resta disponibile tramite tag e release. Non si introducono fallback nel codice corrente solo per mantenerla compatibile.
+# Manutenzione 0.8.2: backend di sistema
 
 `SystemBackend` espone l'interfaccia Qt e le funzioni comuni. Le sette operazioni
 di lettura UEFI/GRUB e gestione servizi sostituite da `SystemBackendRuntime`

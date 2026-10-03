@@ -1,5 +1,5 @@
 Name:           krisCC
-Version:        0.8.1
+Version:        0.8.2
 Release:        1%{?dist}
 Summary:        krisCC personal control center for KrisOS and Fedora bootc
 License:        MIT
@@ -67,6 +67,11 @@ a dedicated external application.
 %{_datadir}/icons/hicolor/scalable/apps/krisCC.svg
 
 %changelog
+* Sat Oct 03 2026 krism-eu - 0.8.2-1
+- Simplify releases to one automatic testing channel and exact-artifact stable promotion
+- Keep only the binary RPM, exact source TXT and SHA256SUMS in the CI handoff artifact
+- Include the final 0.8.1 hardening fixes in the next tested stable release
+
 * Wed Sep 30 2026 krism-eu - 0.8.1-1
 - Keep common-service action columns aligned when Wi-Fi has no journal action
 - Accept service, socket and timer units for journal viewing without widening service controls

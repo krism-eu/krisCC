@@ -13,6 +13,9 @@
   <provides><binary>krisCC</binary></provides>
   <categories><category>Settings</category><category>System</category></categories>
   <releases>
+    <release version="0.8.2" date="2026-10-03">
+      <description><p>Release-flow simplification with an automatic testing channel, exact tested-artifact stable promotion, slimmer CI handoff artifacts and the latest privileged-helper hardening fixes.</p></description>
+    </release>
     <release version="0.8.1" date="2026-09-30">
       <description><p>Final 0.8 refinement with aligned common-service controls, journal support for service/socket/timer units, documented systemd JSON capability and stronger streaming regression coverage.</p></description>
     </release>

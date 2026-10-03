@@ -117,6 +117,27 @@ require('fetch-depth: 1' in workflow
 require('sha256sum "$RPM" "$SOURCE_TXT" > SHA256SUMS' in workflow
         and 'test "$(wc -l < SHA256SUMS)" -eq 2' in workflow,
         "RPM/source TXT are not covered by one two-entry SHA256SUMS")
+require('rpmbuild -bb' in workflow
+        and 'artifacts/srpm' not in workflow
+        and 'krisCC-stage.tar.gz' not in workflow
+        and 'path: artifacts/release/' in workflow
+        and 'name: krisCC-release-${{ github.sha }}' in workflow,
+        "CI artifact handoff must contain only the exact RPM/source/checksum release bundle")
+require("publish-testing:" in workflow
+        and "github.event_name == 'push' && github.ref == 'refs/heads/main'" in workflow
+        and 'gh release create testing' in workflow
+        and 'gh release delete testing' in workflow
+        and '--cleanup-tag --yes' in workflow
+        and 'publish_candidate' not in workflow,
+        "main must update one automatic mutable testing release only after all gates pass")
+require('tested_commit:' in promote_workflow
+        and 'gh run list' in promote_workflow
+        and '--commit "$tested_sha"' in promote_workflow
+        and 'gh run download "$RUN_ID"' in promote_workflow
+        and 'krisCC-release-$TESTED_SHA' in promote_workflow
+        and 'grep -Fxq "# commit: $TESTED_SHA"' in promote_workflow
+        and 'gh release create "$TAG"' in promote_workflow,
+        "stable promotion must reuse the exact successful CI artifact selected by tested commit")
 require(f'<release version="{VERSION}"' in read("data/org.kriscc.KrisCC.metainfo.xml"),
         "AppStream release is stale")
 

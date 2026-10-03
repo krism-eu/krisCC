@@ -40,23 +40,24 @@ krisCC è parte della base immutabile di KrisOS: le release normali del control 
 
 ## Release e rami
 
-La versione pubblica di krisCC usa esclusivamente `X.Y.Z`. Ogni candidata successiva incrementa `Z`; non usiamo suffissi pubblici come `-2`, `-5` o simili. Il campo RPM `Release` resta fissato a `1` come metadato tecnico del formato RPM e non viene mostrato dall'app né usato nei tag. I tag candidati/stable sono quindi `vX.Y.Z`.
+La versione pubblica di krisCC usa esclusivamente `X.Y.Z`. Il campo RPM `Release` resta fissato a `1`: durante un ciclo di test non si inventano versioni intermedie e il numero `X.Y.Z` è già quello della prossima stable.
 
-- `0.8` è il ramo di sviluppo/acceptance della linea 0.8, derivato da 0.7.10;
-- `0.7` resta il ramo di integrazione/acceptance della linea 0.7;
-- `main` è la linea ufficiale corrente e riceve `0.8` solo dopo CI e acceptance test.
-- `stable/0.6` è una fotografia congelata della precedente linea 0.6 e punta a `v0.6.0-2`. Non riceve sviluppo ordinario né backport automatici.
-- ogni push e pull request verso `main` costruisce e verifica l'RPM in CI senza pubblicarlo automaticamente; un candidato prerelease viene pubblicato solo con dispatch esplicito sul `main` validato;
-- la promozione a stable avviene esplicitamente solo dopo l'acceptance test su un host KrisOS reale e riusa esattamente lo stesso RPM già verificato, senza rebuild.
+- `main` è la linea ufficiale corrente;
+- push e pull request verso `main` eseguono gli stessi gate di build, test, audit e RPM smoke;
+- dopo un **push su `main` completamente verde**, la release GitHub fissa `testing` viene aggiornata automaticamente con soli tre file: RPM, source TXT dell'esatto commit e `SHA256SUMS`;
+- il titolo e le note di `testing` riportano il commit esatto da provare sul KrisOS reale;
+- i normali artefatti Actions conservano per 30 giorni lo stesso piccolo bundle, così una successiva promozione può recuperare l'RPM esatto anche se nel frattempo `testing` è avanzata;
+- `Promote stable release` richiede il commit che è stato realmente provato e la conferma dell'acceptance test: recupera l'artefatto della build verde di quel commit, ne ricontrolla SHA256, metadati RPM e source TXT e crea `vX.Y.Z` **senza rebuild**;
+- se una stable `vX.Y.Z` esiste già, il workflow accetta soltanto il caso idempotente in cui commit e artefatti coincidono esattamente; non sovrascrive una stable divergente.
 
-In questo modo la vecchia linea resta recuperabile senza obbligarci a mantenerla in parallelo, mentre `main` rimane l'unico ramo di sviluppo supportato.
+Il bump `X.Y.Z` si fa quindi una sola volta all'inizio del ciclo destinato alla prossima stable. Le correzioni successive possono aggiornare `testing` senza ulteriori bump finché quella versione non viene promossa.
 
 ## Build locale
 
 Dipendenze Fedora:
 
 ```bash
-dnf install gcc-c++ cmake ninja-build qt6-qtbase-devel qt6-qtdeclarative-devel kf6-kirigami-devel
+dnf install gcc-c++ cmake ninja-build qt6-qtbase-devel qt6-qtdeclarative-devel kf6-kirigami-devel kf6-kidletime-devel
 cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ./build/krisCC
@@ -70,7 +71,7 @@ cmake --build build
 
 ## RPM e integrazione nell'immagine
 
-Lo spec RPM è `packaging/krisCC.spec` e produce **`krisCC-0.8.1-*.rpm`**. La CI Fedora 45 costruisce l'RPM, lo installa in un ambiente pulito, riesegue lo smoke test e produce `SHA256SUMS` dell'artefatto RPM.
+Lo spec RPM è `packaging/krisCC.spec` e produce **`krisCC-0.8.2-*.rpm`**. La CI Fedora 45 costruisce il solo RPM binario, genera il source TXT dell'esatto commit, verifica l'RPM in un ambiente pulito e crea un `SHA256SUMS` a due voci che copre entrambi. Il bundle Actions usato tra i job contiene solo questi tre file: non include più SRPM, stage tar.gz o copie dei log.
 
 Il flusso previsto per KrisOS è:
 
@@ -84,10 +85,10 @@ Esempio manuale:
 
 ```bash
 mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-git archive --format=tar.gz --prefix=krisCC-0.8.1/ \
-  -o ~/rpmbuild/SOURCES/krisCC-0.8.1.tar.gz HEAD
+git archive --format=tar.gz --prefix=krisCC-0.8.2/ \
+  -o ~/rpmbuild/SOURCES/krisCC-0.8.2.tar.gz HEAD
 cp packaging/krisCC.spec ~/rpmbuild/SPECS/krisCC.spec
-rpmbuild -ba ~/rpmbuild/SPECS/krisCC.spec
+rpmbuild -bb ~/rpmbuild/SPECS/krisCC.spec
 ```
 
 Repository: https://github.com/krism-eu/krisCC
