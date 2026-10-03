@@ -147,27 +147,23 @@ Kirigami.ApplicationWindow {
                                     Layout.preferredWidth: 22
                                     Layout.preferredHeight: 22
                                     source: modelData.icon
-                                    color: parent.parent.checked
-                                           ? Kirigami.Theme.highlightColor
-                                           : Kirigami.Theme.textColor
+                                    color: Kirigami.Theme.textColor
                                 }
                                 Controls.Label {
                                     Layout.fillWidth: true
                                     text: modelData.label
                                     font.bold: true
                                     font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
-                                    color: parent.parent.checked
-                                           ? Kirigami.Theme.highlightColor
-                                           : Kirigami.Theme.textColor
+                                    color: Kirigami.Theme.textColor
                                 }
                             }
 
                             background: Rectangle {
                                 radius: 9
                                 color: parent.checked
-                                     ? Qt.rgba(Kirigami.Theme.highlightColor.r,
-                                               Kirigami.Theme.highlightColor.g,
-                                               Kirigami.Theme.highlightColor.b, 0.12)
+                                     ? Qt.rgba(Kirigami.Theme.textColor.r,
+                                               Kirigami.Theme.textColor.g,
+                                               Kirigami.Theme.textColor.b, 0.09)
                                      : parent.hovered
                                        ? Qt.rgba(Kirigami.Theme.textColor.r,
                                                  Kirigami.Theme.textColor.g,
