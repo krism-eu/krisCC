@@ -84,6 +84,31 @@ private slots:
             badHex, QStringLiteral("system")).ok());
     }
 
+    void notFoundUnitsAreNotReportedAsInactiveServices()
+    {
+        const QByteArray json =
+            R"([{"unit":"legacy.service","load":"not-found","active":"inactive","sub":"dead","description":"legacy.service"}])";
+        const ServiceJsonResult result =
+            ServiceJson::parseUnitList(json, QStringLiteral("system"));
+        QVERIFY(result.ok());
+        QCOMPARE(result.rows.size(), 1);
+        const QVariantMap row = result.rows.first().toMap();
+        QCOMPARE(row.value(QStringLiteral("load")).toString(), QStringLiteral("not-found"));
+        QCOMPARE(row.value(QStringLiteral("active")).toString(), QStringLiteral("missing"));
+    }
+
+    void loadedStateIsPreserved()
+    {
+        const QByteArray json =
+            R"([{"unit":"demo.service","load":"loaded","active":"inactive","sub":"dead","description":"Demo"}])";
+        const ServiceJsonResult result =
+            ServiceJson::parseUnitList(json, QStringLiteral("system"));
+        QVERIFY(result.ok());
+        const QVariantMap row = result.rows.first().toMap();
+        QCOMPARE(row.value(QStringLiteral("load")).toString(), QStringLiteral("loaded"));
+        QCOMPARE(row.value(QStringLiteral("active")).toString(), QStringLiteral("inactive"));
+    }
+
     void unitFilesAreDistinctFromLoadedUnits()
     {
         const QByteArray json = R"([{"unit_file":"demo.service","state":"disabled"}])";
@@ -92,6 +117,7 @@ private slots:
         QCOMPARE(result.rows.size(), 1);
         const QVariantMap row = result.rows.first().toMap();
         QCOMPARE(row.value(QStringLiteral("unit")).toString(), QStringLiteral("demo.service"));
+        QCOMPARE(row.value(QStringLiteral("load")).toString(), QStringLiteral("not-loaded"));
         QCOMPARE(row.value(QStringLiteral("active")).toString(), QStringLiteral("not-loaded"));
         QCOMPARE(row.value(QStringLiteral("enabled")).toString(), QStringLiteral("disabled"));
     }

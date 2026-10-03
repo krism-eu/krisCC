@@ -54,6 +54,7 @@ ServiceJsonResult parse(const QByteArray &data, const QString &scope, bool files
                 result.error = QStringLiteral("Voce unit-file %1 senza stato valido.").arg(index);
                 return result;
             }
+            row.insert(QStringLiteral("load"), QStringLiteral("not-loaded"));
             row.insert(QStringLiteral("active"), QStringLiteral("not-loaded"));
             row.insert(QStringLiteral("sub"), QString());
             row.insert(QStringLiteral("description"), QString());
@@ -65,7 +66,20 @@ ServiceJsonResult parse(const QByteArray &data, const QString &scope, bool files
                 result.error = QStringLiteral("Voce unità %1 con campi obbligatori mancanti.").arg(index);
                 return result;
             }
-            row.insert(QStringLiteral("active"), object.value(QStringLiteral("active")).toString());
+
+            const QString load = object.value(QStringLiteral("load")).isString()
+                ? object.value(QStringLiteral("load")).toString()
+                : QStringLiteral("unknown");
+            const QString active = object.value(QStringLiteral("active")).toString();
+
+            row.insert(QStringLiteral("load"), load);
+            // A referenced-but-uninstalled unit is not an inactive service the
+            // user can manage. Expose a dedicated UI state instead of painting
+            // it as a failure/inactive service.
+            row.insert(QStringLiteral("active"),
+                       load == QStringLiteral("not-found")
+                           ? QStringLiteral("missing")
+                           : active);
             row.insert(QStringLiteral("sub"), object.value(QStringLiteral("sub")).toString());
             row.insert(QStringLiteral("description"), object.value(QStringLiteral("description")).toString());
             row.insert(QStringLiteral("enabled"), QStringLiteral("unknown"));
