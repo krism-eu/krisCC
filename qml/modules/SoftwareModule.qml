@@ -115,11 +115,20 @@ Kirigami.Page {
 
     function refreshCurrent() {
         root.listError = ""
+        if (!root.visible) {
+            upgradesModel.releaseResults()
+            return
+        }
         if (tabs.currentIndex === 1) installedModel.loadInstalled(root.installFilter)
         else if (tabs.currentIndex === 2) upgradesModel.loadUpgrades()
-        else if (tabs.currentIndex === 3) SoftwareBackend.refreshRepositories()
+        else {
+            upgradesModel.releaseResults()
+            if (tabs.currentIndex === 3)
+                SoftwareBackend.refreshRepositories()
+        }
     }
 
+    onVisibleChanged: root.refreshCurrent()
     Component.onCompleted: SoftwareBackend.refreshRepositories()
 
     PackageSearch { id: searchModel; onSearchError: function(message) { root.searchError = message } }

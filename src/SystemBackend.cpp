@@ -1137,26 +1137,36 @@ void SystemBackend::refreshResources()
     }
 
     qint64 totalKiB = -1;
-    qint64 availableKiB = -1;
+    qint64 freeKiB = -1;
+    qint64 buffersKiB = -1;
+    qint64 cachedKiB = -1;
+    qint64 reclaimableKiB = -1;
     QFile meminfo(QStringLiteral("/proc/meminfo"));
     if (meminfo.open(QIODevice::ReadOnly | QIODevice::Text)) {
         for (const QByteArray &rawLine : meminfo.readAll().split('\n')) {
             const QByteArray line = rawLine.simplified();
-            if (line.startsWith("MemTotal:")) {
-                const QList<QByteArray> parts = line.split(' ');
-                if (parts.size() >= 2)
-                    totalKiB = parts.at(1).toLongLong();
-            } else if (line.startsWith("MemAvailable:")) {
-                const QList<QByteArray> parts = line.split(' ');
-                if (parts.size() >= 2)
-                    availableKiB = parts.at(1).toLongLong();
-            }
+            const QList<QByteArray> parts = line.split(' ');
+            if (parts.size() < 2)
+                continue;
+            const qint64 valueKiB = parts.at(1).toLongLong();
+            if (line.startsWith("MemTotal:"))
+                totalKiB = valueKiB;
+            else if (line.startsWith("MemFree:"))
+                freeKiB = valueKiB;
+            else if (line.startsWith("Buffers:"))
+                buffersKiB = valueKiB;
+            else if (line.startsWith("Cached:"))
+                cachedKiB = valueKiB;
+            else if (line.startsWith("SReclaimable:"))
+                reclaimableKiB = valueKiB;
         }
     }
 
     const qint64 nextTotalMiB = totalKiB >= 0 ? totalKiB / 1024 : -1;
-    const qint64 nextUsedMiB = totalKiB >= 0 && availableKiB >= 0
-        ? qMax<qint64>(0, totalKiB - availableKiB) / 1024
+    const bool memorySampleComplete = totalKiB >= 0 && freeKiB >= 0
+        && buffersKiB >= 0 && cachedKiB >= 0 && reclaimableKiB >= 0;
+    const qint64 nextUsedMiB = memorySampleComplete
+        ? qMax<qint64>(0, totalKiB - freeKiB - buffersKiB - cachedKiB - reclaimableKiB) / 1024
         : -1;
     const double nextTemperature = readCpuTemperature();
 

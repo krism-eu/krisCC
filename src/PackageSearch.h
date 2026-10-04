@@ -38,6 +38,7 @@ public:
     Q_INVOKABLE void search(const QString &term);
     Q_INVOKABLE void loadInstalled(const QString &filter = QString());
     Q_INVOKABLE void loadUpgrades();
+    Q_INVOKABLE void releaseResults();
     Q_INVOKABLE void setLocalFilter(const QString &text);
     Q_INVOKABLE void refreshInventory();
     static void invalidateSharedInventory();

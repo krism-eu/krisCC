@@ -5,6 +5,7 @@
 #include <QDBusInterface>
 #include <QDebug>
 #include <QGuiApplication>
+#include <QPalette>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QTimer>
@@ -28,6 +29,9 @@
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
+    QPalette appPalette = app.palette();
+    appPalette.setColor(QPalette::HighlightedText, Qt::black);
+    app.setPalette(appPalette);
     QCoreApplication::setOrganizationName(QStringLiteral("krisCC"));
     QCoreApplication::setApplicationName(QStringLiteral("krisCC"));
     QCoreApplication::setApplicationVersion(QStringLiteral(KRISCC_VERSION));

@@ -163,6 +163,19 @@ void PackageSearch::loadUpgrades()
     requestInventory(PendingQuery::Upgrades, QString(), forceRefresh);
 }
 
+void PackageSearch::releaseResults()
+{
+    ++m_generation;
+    stopActiveProcess();
+    m_pendingQuery = PendingQuery::None;
+    m_pendingValue.clear();
+    clearResults();
+    m_results.squeeze();
+    m_sourceResults.squeeze();
+    setSearching(false);
+    m_loadedUpgradesOnce = false;
+}
+
 void PackageSearch::startRepoQuery(const QString &term)
 {
     const quint64 generation = m_generation;
